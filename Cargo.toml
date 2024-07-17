@@ -1,0 +1,91 @@
+[package]
+name = "trevm"
+version = "0.1.0"
+rust-version = "1.79.0"
+edition = "2021"
+authors = ["init4"]
+homepage = "https://github.com/init4tech/trevm"
+repository = "https://github.com/init4tech/trevm"
+license = "MIT OR Apache-2.0"
+description = "A typestate API wrapper for the revm EVM implementation"
+
+[lints.rust]
+missing-debug-implementations = "warn"
+missing-docs = "warn"
+unreachable-pub = "warn"
+unused-must-use = "deny"
+rust-2018-idioms = "deny"
+unnameable-types = "warn"
+
+[lints.rustdoc]
+all = "warn"
+
+[lints.clippy]
+missing-const-for-fn = "warn"
+use-self = "warn"
+option-if-let-else = "warn"
+redundant-clone = "warn"
+
+[dependencies]
+alloy-consensus = { version = "0.2", features = ["k256"] }
+alloy-eips = "0.2.0"
+alloy-primitives = "0.7.6"
+alloy-sol-types = "0.7.7"
+revm = { version = "12.0.0", default-features = false, features = ["std"] }
+zenith-types = "0.2.2"
+
+[dev-dependencies]
+revm = { version = "12.0.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
+tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
+
+# alloydb
+alloy-provider = "0.2"
+alloy-transport = "0.2"
+
+alloy-signer = { version = "0.1", default-features = false }
+alloy-signer-local = { version = "0.1", default-features = false }
+
+alloy-rlp = { version = "0.3", default-features = false }
+
+
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+
+
+# misc
+eyre = "0.6"
+
+[features]
+default = [
+    "revm/std",
+    "revm/c-kzg",
+    "revm/blst",
+    "revm/portable",
+    "revm/secp256k1"
+]
+
+test-utils = ["revm/test-utils"]
+
+
+secp256k1 = ["revm/secp256k1"]
+c-kzg = ["revm/c-kzg"]
+blst = ["revm/blst"]
+
+portable = ["revm/portable"]
+
+dev = [
+    "memory_limit",
+    "optional_balance_check",
+    "optional_block_gas_limit",
+    "optional_eip3607",
+    "optional_gas_refund",
+    "optional_no_base_fee",
+    "optional_beneficiary_reward",
+]
+
+memory_limit = ["revm/memory_limit"]
+optional_balance_check = ["revm/optional_balance_check"]
+optional_beneficiary_reward = ["revm/optional_beneficiary_reward"]
+optional_block_gas_limit = ["revm/optional_block_gas_limit"]
+optional_eip3607 = ["revm/optional_eip3607"]
+optional_gas_refund = ["revm/optional_gas_refund"]
+optional_no_base_fee = ["revm/optional_no_base_fee"]
