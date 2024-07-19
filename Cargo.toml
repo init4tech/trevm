@@ -1,6 +1,7 @@
 [package]
 name = "trevm"
 version = "0.1.0"
+rust-version = "1.79.0"
 edition = "2021"
 authors = ["Init4 LLC"]
 homepage = "https://github.com/init4tt/trevm"
@@ -16,6 +17,18 @@ unused-must-use = "deny"
 rust-2018-idioms = "deny"
 unnameable-types = "warn"
 
+[lints.rustdoc]
+all = "warn"
+
+[lints.clippy]
+missing-const-for-fn = "warn"
+use-self = "warn"
+option-if-let-else = "warn"
+redundant-clone = "warn"
+
+[metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 alloy-consensus = { version = "0.1", features = ["k256"] }

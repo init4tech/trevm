@@ -926,10 +926,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
     //
     // TODO: make it recoverable
-    pub fn apply_txns<'b, I, T>(
-        self,
-        txns: I,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, EVMError<Db::Error>>
+    pub fn apply_txns<'b, I, T>(self, txns: I) -> Result<Self, EVMError<Db::Error>>
     where
         I: IntoIterator<Item = &'b T>,
         T: Tx + 'b,
@@ -968,7 +965,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         self,
         txns: I,
         mut f: F,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, EVMError<Db::Error>>
+    ) -> Result<Self, EVMError<Db::Error>>
     where
         I: IntoIterator<Item = &'b T>,
         T: Tx + 'b,
@@ -1030,7 +1027,7 @@ impl<'a, Ext, Db: Database, E> AsRef<EvmNeedsTx<'a, Ext, Db>> for TransactedErro
 
 impl<'a, Ext, Db: Database, E> TransactedError<'a, Ext, Db, E> {
     /// Create a new `TransactedError`.
-    pub fn new(evm: EvmNeedsTx<'a, Ext, Db>, error: E) -> Self {
+    pub const fn new(evm: EvmNeedsTx<'a, Ext, Db>, error: E) -> Self {
         Self { evm, error }
     }
 
@@ -1042,7 +1039,7 @@ impl<'a, Ext, Db: Database, E> TransactedError<'a, Ext, Db, E> {
     }
 
     /// Get a reference to the error.
-    pub fn error(&self) -> &E {
+    pub const fn error(&self) -> &E {
         &self.error
     }
 
@@ -1079,12 +1076,12 @@ impl<'a, Ext, Db: Database> TransactedError<'a, Ext, Db> {
     /// Check if the error is a transaction error. This is provided as a
     /// convenience function for common cases, as Transaction errors should
     /// usually be discarded.
-    pub fn is_transaction_error(&self) -> bool {
+    pub const fn is_transaction_error(&self) -> bool {
         matches!(self.error, EVMError::Transaction(_))
     }
 
     /// Fallible cast to a [`InvalidTransaction`].
-    pub fn as_transaction_err(&self) -> Option<&InvalidTransaction> {
+    pub const fn as_transaction_err(&self) -> Option<&InvalidTransaction> {
         match &self.error {
             EVMError::Transaction(err) => Some(err),
             _ => None,
@@ -1184,7 +1181,7 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
     }
 
     /// Get a reference to the state.
-    pub fn state(&self) -> &EvmState {
+    pub const fn state(&self) -> &EvmState {
         &self.result.state
     }
 
