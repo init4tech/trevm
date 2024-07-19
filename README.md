@@ -1,6 +1,7 @@
 ## Trevm
 
-⚠️ Trevm is **experimental** ⚠️
+⚠️ Trevm is **experimental** software and not considered ready for production
+use. ⚠️
 
 Trevm is a [typestate] API wrapper for [revm]. It provides an ergonomic way to
 interact with the revm API, shortcuts for common tasks, and straightforward API
@@ -25,6 +26,12 @@ Trevm is useful for:
 - block builders
 - searchers
 - any other transaction simulation usecase
+
+## Limitations
+
+Trevm is a work in progress and is not feature complete. In particular, trevm
+does not currently have lifecycle support for blocks before Shanghai. This means
+it cannot produce correct post-block states for blocks before Shanghai.
 
 ### The Trevm State Machine
 

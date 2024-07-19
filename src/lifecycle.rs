@@ -44,6 +44,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for Shanghai
         &mut self,
         mut trevm: EvmNeedsTx<'a, Ext, Db>,
     ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
+        // We need to apply the withdrawals by incrementing the balances of the
+        // respective accounts, then committing the changes to the database.
         let mut changes = HashMap::new();
 
         let increments = self
