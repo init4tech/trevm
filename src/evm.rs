@@ -1,7 +1,7 @@
 use crate::{
     syscall::{SystemCall, CONSOLIDATION_REQUEST_BYTES, WITHDRAWAL_REQUEST_BYTES},
     Block, BlockOutput, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
-    EvmReady, HasCfg, HasOutputs, NeedsBlock, PostTx, PostflightResult, Tx,
+    EvmReady, HasCfg, HasOutputs, Lifecycle, NeedsBlock, PostTx, PostflightResult, Tx,
 };
 use alloy_consensus::{Receipt, Request};
 use alloy_eips::{
@@ -559,7 +559,11 @@ impl<'a, Ext, Db: Database, State: NeedsBlock> Trevm<'a, Ext, Db, State> {
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
     }
+}
 
+impl<'a, Ext, Db: Database + DatabaseCommit, EvmState: NeedsBlock>
+    Trevm<'a, Ext, State<Db>, EvmState>
+{
     /// Open a block, apply some logic, and return the EVM ready for the next
     /// transaction.
     ///
@@ -568,13 +572,16 @@ impl<'a, Ext, Db: Database, State: NeedsBlock> Trevm<'a, Ext, Db, State> {
     ///
     /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
-    pub fn open_block<B, D, E>(self, filler: &B, f: D) -> Result<EvmNeedsTx<'a, Ext, Db>, E>
+    pub fn open_block<B, L>(
+        self,
+        filler: &B,
+        lifecycle: &mut L,
+    ) -> Result<EvmNeedsTx<'a, Ext, State<Db>>, TransactedError<'a, Ext, State<Db>>>
     where
         B: Block,
-        D: FnOnce(EvmNeedsTx<'a, Ext, Db>) -> Result<EvmNeedsTx<'a, Ext, Db>, E>,
-        E: From<EVMError<Db::Error>>,
+        L: Lifecycle<'a, Ext, Db>,
     {
-        f(self.fill_block(filler))
+        lifecycle.open_block(self, filler)
     }
 }
 
@@ -658,22 +665,6 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         self.inner.as_mut().block_mut().clear();
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
-    }
-
-    /// Close the current block, applying some logic, and returning the EVM
-    /// ready for the next block.
-    ///
-    /// This is intended to be used for post-block logic, such as applying
-    /// post-block hooks introduced in [EIP-7002] or [EIP-7251].
-    ///
-    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    pub fn close_block<F, E>(self, f: F) -> Result<EvmNeedsNextBlock<'a, Ext, Db>, E>
-    where
-        F: FnOnce(Self) -> Result<Self, E>,
-        E: From<EVMError<Db::Error>>,
-    {
-        f(self).map(Self::clear_block)
     }
 
     /// Fill the transaction environment.
@@ -974,6 +965,26 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         }
 
         Ok(evm)
+    }
+}
+
+impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, State<Db>> {
+    /// Close the current block, applying some logic, and returning the EVM
+    /// ready for the next block.
+    ///
+    /// This is intended to be used for post-block logic, such as applying
+    /// post-block hooks introduced in [EIP-7002] or [EIP-7251].
+    ///
+    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+    pub fn close_block<L>(
+        self,
+        lifecycle: &mut L,
+    ) -> Result<EvmNeedsNextBlock<'a, Ext, State<Db>>, TransactedError<'a, Ext, State<Db>>>
+    where
+        L: Lifecycle<'a, Ext, Db>,
+    {
+        lifecycle.close_block(self).map(EvmNeedsTx::clear_block)
     }
 }
 
