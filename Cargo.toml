@@ -10,7 +10,9 @@ description = "A typestate API wrapper for the revm EVM implementation"
 
 [dependencies]
 alloy-consensus = { version = "0.1", features = ["k256"] }
+alloy-eips = "0.1.0"
 alloy-primitives = "0.7.6"
+alloy-sol-types = "0.7.7"
 revm = { version = "11.0.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]

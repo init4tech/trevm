@@ -25,15 +25,6 @@
 //!
 //! ## Quickstart
 //!
-//! We strongly recommend using the type aliases:
-//! - [`Trevm`] for the EVM typestate machine.
-//! - [`EvmNeedsCfg`] for the initial state.
-//! - [`EvmNeedsFirstBlock`] for the state after configuring the EVM.
-//! - [`EvmNeedsTx`] for the state after opening a block.
-//! - [`EvmReady`] for the state after filling a transaction.
-//! - [`Transacted`] for the state after executing a transaction.
-//! - [`EvmNeedsNextBlock`] for the state after closing a block.
-//!
 //! To get started, use a [`revm::EvmBuilder`] to configure the EVM, then call
 //! [`TrevmBuilder::build_trevm`] to construct the [`Trevm`] instance. From
 //! there, you should do the following:
@@ -46,6 +37,20 @@
 //!   [`Transacted::discard`].
 //! - Call [`Trevm::close_block`] to close the block.
 //! - Then call [`Trevm::finish`] to get the outputs.
+//!
+//! When writing your code, we strongly recommend using the aliases:
+//!
+//! - [`Trevm`] for the EVM typestate machine in no specific state.
+//! - [`EvmNeedsCfg`] for the initial state.
+//! - [`EvmNeedsFirstBlock`] for the state after configuring the EVM.
+//! - [`EvmNeedsTx`] for the state after opening a block.
+//! - [`EvmReady`] for the state after filling a transaction.
+//! - [`Transacted`] for the state after executing a transaction.
+//! - [`EvmNeedsNextBlock`] for the state after closing a block.
+//!
+//! We also recommend defining concrete types for `Ext` and `Db` whenever
+//! possible, to simplify your code and remove bounds. Most users will want
+//! `()` for `Ext`, unless specifically using an inspector or a customized EVM.
 //!
 //! ### Extending Trevm
 //!
@@ -60,24 +65,24 @@
 //!
 //! Trevm passes through most feature flags from revm:
 //!
-//! - c-kzg - Enable KZG precompiles as specced for [EIP-4844].
-//! - blst - Enable BLST precompiles as speced for [EIP-2537].
-//! - portable - Compiles BLST in portable mode.
-//! - secp256k1 - Use libsecp256k1 for ecrecover (default is k256).
+//! - `c-kzg` - Enable KZG precompiles as specced for [EIP-4844].
+//! - `blst` - Enable BLST precompiles as speced for [EIP-2537].
+//! - `portable` - Compiles BLST in portable mode.
+//! - `secp256k1` - Use libsecp256k1 for ecrecover (default is k256).
 //!
 //! Cfg features:
-//! - memory_limit - Allow users to limit callframe memory usage.
-//! - optional_balance_check - Allow transacting with insufficient balance.
-//! - optional_block_gas_limit - Allow transactions that exceed the block gas
+//! - `memory_limit` - Allow users to limit callframe memory usage.
+//! - `optional_balance_check` - Allow transacting with insufficient balance.
+//! - `optional_block_gas_limit` - Allow transactions that exceed the block gas
 //!   limit.
-//! - optional_eip3607 - Allow transactions whose sender account has contract
+//! - `optional_eip3607` - Allow transactions whose sender account has contract
 //!   code.
-//! - optional_gas_refund - Allow disabling gas refunds, as in Avalanche.
-//! - optional_no_base_fee - Allow disabling basefee checks.
-//! - optional_beneficiary_reward - Allow disabling fees and rewards paid to
+//! - `optional_gas_refund` - Allow disabling gas refunds, as in Avalanche.
+//! - `optional_no_base_fee` - Allow disabling basefee checks.
+//! - `optional_beneficiary_reward` - Allow disabling fees and rewards paid to
 //!   the block beneficiary.
 //!
-//! - dev - Enable all Cfg features.
+//! - `dev` - Enable all Cfg features.
 //!
 //! ### Testing using Trevm
 //!
@@ -86,7 +91,7 @@
 //! for directly modifying the state of the EVM.
 //!
 //! During testing you can use
-//! - get/set balance, nonce, codehash
+//! - set balance, nonce, codehash for any account
 //! - a single-function setup for a blank EVM
 //! - pre-funding for any number of accounts
 //!
@@ -159,6 +164,9 @@ pub use evm::{Transacted, TransactedError, Trevm};
 mod fill;
 pub use fill::{Block, Cfg, Tx};
 
+mod lifecycle;
+pub use lifecycle::Lifecycle;
+
 mod output;
 pub use output::BlockOutput;
 
@@ -168,6 +176,8 @@ pub use postflight::{PostTx, PostflightResult};
 mod states;
 pub(crate) use states::sealed::*;
 pub use states::{EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady};
+
+pub mod syscall;
 
 #[cfg(feature = "test-utils")]
 pub mod test_utils;

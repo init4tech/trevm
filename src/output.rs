@@ -1,58 +1,110 @@
-use alloy_consensus::Receipt;
-use alloy_primitives::Address;
+use alloy_consensus::{Receipt, Request, TxReceipt};
+use alloy_primitives::{Address, Log};
+use alloy_sol_types::SolEvent;
+
+use crate::syscall::{DepositEvent, MAINNET_DEPOSIT_ADDRESS};
 
 /// Information externalized during block execution.
 ///
 /// Requests are not handled here, as they require outside configuration in the
 /// form of the deposit address.
 #[derive(Debug, Clone, Default)]
-pub struct BlockOutput<T = Receipt> {
+pub struct BlockOutput<T: TxReceipt = Receipt> {
     /// The receipts of the transactions in the block, in order.
     receipts: Vec<T>,
-    /// The cumulative gas used in the block.
-    cumulative_gas_used: u128,
+
     /// The senders of the transactions in the block, in order.
     senders: Vec<Address>,
+
+    /// Requests made during post-block hooks.
+    requests: Vec<Request>,
 }
 
-impl<T> BlockOutput<T> {
+impl<T: TxReceipt> BlockOutput<T> {
     /// Create a new block output with memory allocated to hold `capacity`
     /// transaction outcomes.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             receipts: Vec::with_capacity(capacity),
-            cumulative_gas_used: 0,
             senders: Vec::with_capacity(capacity),
+            requests: Vec::with_capacity(capacity),
         }
     }
 
-    /// Returns the receipts of the transactions in the block.
+    /// Get a reference to the receipts of the transactions in the block.
     pub fn receipts(&self) -> &[T] {
         &self.receipts
     }
 
-    /// Push a receipt onto the list of receipts.
-    pub fn push_receipt(&mut self, receipt: T) {
-        self.receipts.push(receipt);
+    /// Get an iterator over the logs of the transactions in the block.
+    pub fn logs(&self) -> impl Iterator<Item = &Log> {
+        self.receipts.iter().flat_map(|r| r.logs())
     }
 
-    /// Returns the cumulative gas used in the block.
-    pub fn cumulative_gas_used(&self) -> u128 {
-        self.cumulative_gas_used
-    }
-
-    /// Consume gas from the block, incrementing the cumulative gas used.
-    pub fn consume_gas(&mut self, gas: u128) {
-        self.cumulative_gas_used += gas;
-    }
-
-    /// Returns the senders of the transactions in the block.
+    /// Get a reference the senders of the transactions in the block.
     pub fn senders(&self) -> &[Address] {
         &self.senders
     }
 
+    /// Get a reference the requests of the transactions in the block.
+    pub fn requests(&self) -> &[Request] {
+        &self.requests
+    }
+
+    /// Get the cumulative gas used in the block.
+    pub fn cumulative_gas_used(&self) -> u128 {
+        self.receipts().last().map(TxReceipt::cumulative_gas_used).unwrap_or_default()
+    }
+
+    fn find_deposit_logs(&mut self, log: &Log) {
+        if log.address == MAINNET_DEPOSIT_ADDRESS {
+            // We assume that the log is valid because it was emitted by the
+            // deposit contract.
+            let decoded_log = DepositEvent::decode_log(log, false).expect("invalid log");
+            let deposit = crate::syscall::parse_deposit_from_log(&decoded_log);
+            self.push_request(Request::DepositRequest(deposit));
+        }
+    }
+
+    /// Accumulate the result of a transaction execution.
+    pub fn push_result(&mut self, receipt: T, sender: Address, parse_deposits: bool) {
+        if parse_deposits {
+            for log in receipt.logs() {
+                self.find_deposit_logs(log);
+            }
+        }
+        self.push_receipt(receipt);
+        self.push_sender(sender);
+    }
+
+    /// Push a request onto the list of requests.
+    pub fn push_request(&mut self, request: Request) {
+        self.requests.push(request);
+    }
+
+    /// Extend the list of requests with a vector of requests.
+    pub fn extend_requests(&mut self, requests: Vec<Request>) {
+        self.requests.extend(requests);
+    }
+
+    /// Push a receipt onto the list of receipts.
+    fn push_receipt(&mut self, receipt: T) {
+        self.receipts.push(receipt);
+    }
+
     /// Push a sender onto the list of senders.
-    pub fn push_sender(&mut self, sender: Address) {
+    fn push_sender(&mut self, sender: Address) {
         self.senders.push(sender);
+    }
+
+    /// Pop a receipt from the list of receipts. This is discouraged as it
+    /// may lead to [`BlockOutput`] being out of sync with the block.
+    ///
+    /// It is primarily used for post-execution cleanup of [`SystemCall`] runs.
+    ///
+    /// [`SystemCall`]: crate::syscall::SystemCall
+    pub fn pop_tx_unchecked(&mut self) -> Option<T> {
+        let _ = self.senders.pop();
+        self.receipts.pop()
     }
 }

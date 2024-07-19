@@ -1,18 +1,25 @@
 use crate::{
+    syscall::{SystemCall, CONSOLIDATION_REQUEST_BYTES, WITHDRAWAL_REQUEST_BYTES},
     Block, BlockOutput, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
     EvmReady, HasCfg, HasOutputs, NeedsBlock, PostTx, PostflightResult, Tx,
 };
-use alloy_consensus::Receipt;
-use alloy_primitives::{Address, U256};
+use alloy_consensus::{Receipt, Request};
+use alloy_eips::{
+    eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE},
+    eip7002::WithdrawalRequest,
+    eip7251::ConsolidationRequest,
+};
+use alloy_primitives::{Address, Bytes, B256, U256};
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState},
     primitives::{
-        AccountInfo, Bytecode, EVMError, ExecutionResult, InvalidTransaction, ResultAndState,
-        SpecId,
+        Account, AccountInfo, Bytecode, EVMError, EvmState, EvmStorageSlot, ExecutionResult,
+        InvalidTransaction, ResultAndState, SpecId, BLOCKHASH_SERVE_WINDOW,
     },
     Database, DatabaseCommit, DatabaseRef, Evm, State,
 };
 use std::{
+    collections::HashMap,
     convert::Infallible,
     fmt::{self, Debug},
     marker::PhantomData,
@@ -571,8 +578,9 @@ impl<'a, Ext, Db: Database, State: HasOutputs> Trevm<'a, Ext, Db, State> {
         self.outputs.last().expect("never empty")
     }
 
-    /// Get the current block;s outputs.
-    fn current_output_mut(&mut self) -> &mut BlockOutput {
+    /// Get the current block's outputs. Modification is discouraged as it may
+    /// lead to inconsistent state or invalid execution.
+    pub fn current_output_mut_unchecked(&mut self) -> &mut BlockOutput {
         self.outputs.last_mut().expect("never empty")
     }
 }
@@ -601,26 +609,31 @@ impl<'a, Ext, Db: Database, Missing: HasOutputs> Trevm<'a, Ext, State<Db>, Missi
 // --- NEEDS FIRST TX
 
 impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
-    /// Accumulate the result of a transaction.
-    fn accumulate_result(&mut self, ResultAndState { result, state }: ResultAndState)
+    fn commit_state(&mut self, state: EvmState)
     where
         Db: DatabaseCommit,
     {
         self.inner.db_mut().commit(state);
+    }
 
+    /// Accumulate the result of a transaction.
+    fn push_to_outputs(&mut self, result: ExecutionResult)
+    where
+        Db: DatabaseCommit,
+    {
         let sender = self.inner.tx().caller;
-        let outputs = self.current_output_mut();
-        outputs.consume_gas(result.gas_used() as u128);
+        let cumulative_gas_used =
+            self.current_output().cumulative_gas_used().saturating_add(result.gas_used() as u128);
 
         // Must be created after use_block_gas
         let receipt = Receipt {
             status: result.is_success().into(),
-            cumulative_gas_used: outputs.cumulative_gas_used(),
+            cumulative_gas_used,
             logs: result.into_logs(),
         };
 
-        outputs.push_receipt(receipt);
-        outputs.push_sender(sender);
+        let parse_deposits = self.spec_id() >= SpecId::PRAGUE;
+        self.current_output_mut_unchecked().push_result(receipt, sender, parse_deposits);
     }
 
     /// Clear the current block environment.
@@ -668,6 +681,191 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         filler: &T,
     ) -> Result<Transacted<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
         self.fill_tx(filler).execute_tx()
+    }
+
+    /// Apply the pre-block logic for [EIP-2935]. This logic was introduced in
+    /// Prague and updates historical block hashes in a special system
+    /// contract. Unlike other system transactions, this is NOT modeled as a transaction.
+    ///
+    /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
+    pub fn apply_eip2935(mut self) -> Result<Self, TransactedError<'a, Ext, Db>>
+    where
+        Db: DatabaseCommit,
+    {
+        if self.spec_id() < SpecId::PRAGUE || self.inner.block().number.is_zero() {
+            return Ok(self);
+        }
+
+        let mut account: Account = match self.inner.db_mut().basic(HISTORY_STORAGE_ADDRESS) {
+            Ok(Some(account)) => account,
+            Ok(None) => AccountInfo {
+                nonce: 1,
+                code: Some(Bytecode::new_raw(HISTORY_STORAGE_CODE.clone())),
+                ..Default::default()
+            },
+            Err(error) => {
+                return Err(TransactedError { evm: self, error: EVMError::Database(error) })
+            }
+        }
+        .into();
+
+        let block_num = self.inner.block().number.as_limbs()[0];
+        let prev_block = block_num.saturating_sub(1);
+
+        // Update the EVM state with the new value.
+        {
+            let slot = U256::from(block_num % BLOCKHASH_SERVE_WINDOW as u64);
+            let current_hash = match self.inner.db_mut().storage(HISTORY_STORAGE_ADDRESS, slot) {
+                Ok(current_hash) => current_hash,
+                Err(error) => {
+                    return Err(TransactedError { evm: self, error: EVMError::Database(error) })
+                }
+            };
+            let parent_block_hash = match self.inner.db_mut().block_hash(prev_block) {
+                Ok(parent_block_hash) => parent_block_hash,
+                Err(error) => {
+                    return Err(TransactedError { evm: self, error: EVMError::Database(error) })
+                }
+            };
+
+            // Insert the state change for the slot
+            let value = EvmStorageSlot::new_changed(current_hash, parent_block_hash.into());
+
+            account.storage.insert(slot, value);
+        }
+
+        // Mark the account as touched and commit the state change
+        account.mark_touch();
+        self.inner.db_mut().commit(HashMap::from([(HISTORY_STORAGE_ADDRESS, account)]));
+
+        Ok(self)
+    }
+
+    /// Apply a system transaction as specified in [EIP-4788], [EIP-7002], or
+    /// [EIP-7251]. This function will execute the system transaction and apply
+    /// the result if non-error, cleaning up any extraneous state changes, and
+    /// restoring the block environment.
+    ///
+    /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+    pub fn execute_system_tx(
+        mut self,
+        syscall: &SystemCall,
+    ) -> Result<Transacted<'a, Ext, Db>, TransactedError<'a, Ext, Db>>
+    where
+        Db: DatabaseCommit,
+    {
+        let limit = U256::from(self.inner.tx().gas_limit);
+        let old_gas_limit = std::mem::replace(&mut self.inner.block_mut().gas_limit, limit);
+        let old_base_fee = std::mem::replace(&mut self.inner.block_mut().basefee, U256::ZERO);
+
+        let trevm = self.fill_tx(syscall);
+        let result = trevm.execute_tx();
+
+        // Cleanup the syscall. For an error we need to reset the block env.
+        // For a success, we need to also remove fees, the system caller nonce,
+        // and the system caller account.
+        let trevm = result
+            .map(|t| t.cleanup_syscall(syscall, old_gas_limit, old_base_fee))
+            .map_err(|e| e.cleanup_syscall(old_gas_limit, old_base_fee))?;
+
+        // apply result, remove receipt from block outputs.
+        Ok(trevm)
+    }
+
+    /// Apply a system transaction as specified in [EIP-4788]. The EIP-4788
+    /// pre-block action was introduced in Cancun, and calls the beacon root
+    /// contract to update the historical beacon root.
+    ///
+    /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+    pub fn apply_eip4788(
+        self,
+        parent_beacon_root: B256,
+    ) -> Result<Self, TransactedError<'a, Ext, Db>>
+    where
+        Db: DatabaseCommit,
+    {
+        if self.spec_id() < SpecId::CANCUN {
+            return Ok(self);
+        }
+        self.execute_system_tx(&SystemCall::eip4788(parent_beacon_root)).map(Transacted::apply_sys)
+    }
+
+    /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
+    /// post-block action was introduced in Prague, and calls the withdrawal
+    /// request contract to process withdrawal requests.
+    ///
+    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+    pub fn apply_eip7002(self) -> Result<Self, TransactedError<'a, Ext, Db>>
+    where
+        Db: DatabaseCommit,
+    {
+        if self.spec_id() < SpecId::PRAGUE {
+            return Ok(self);
+        }
+        let mut res = self.execute_system_tx(&SystemCall::eip7002())?;
+
+        // We make assumptions here:
+        // - The system transaction never reverts.
+        // - The system transaction always has an output.
+        // - The system contract produces correct output.
+        // - The output is a list of withdrawal requests.
+        // - The output does not contain incomplete requests.
+
+        let Some(output) = res.output() else { panic!("no output") };
+        let reqs = output
+            .chunks_exact(WITHDRAWAL_REQUEST_BYTES)
+            .map(|chunk| {
+                let mut req: WithdrawalRequest = Default::default();
+
+                req.source_address.copy_from_slice(&chunk[0..20]);
+                req.validator_pubkey.copy_from_slice(&chunk[20..68]);
+                req.amount = u64::from_be_bytes(chunk[68..76].try_into().unwrap());
+
+                Request::WithdrawalRequest(req)
+            })
+            .collect();
+        res.evm.current_output_mut_unchecked().extend_requests(reqs);
+
+        Ok(res.apply_sys())
+    }
+
+    /// Apply a system transaction as specified in [EIP-7251]. The EIP-7251
+    /// post-block action calls the consolidation request contract to process
+    pub fn apply_eip7251(self) -> Result<Self, TransactedError<'a, Ext, Db>>
+    where
+        Db: DatabaseCommit,
+    {
+        if self.spec_id() < SpecId::PRAGUE {
+            return Ok(self);
+        }
+
+        let mut res = self.execute_system_tx(&SystemCall::eip7251())?;
+
+        // We make assumptions here:
+        // - The system transaction never reverts.
+        // - The system transaction always has an output.
+        // - The system contract produces correct output.
+        // - The output is a list of consolidation requests.
+        // - The output does not contain incomplete requests.
+
+        let Some(output) = res.output() else { panic!("no output") };
+        let reqs = output
+            .chunks_exact(CONSOLIDATION_REQUEST_BYTES)
+            .map(|chunk| {
+                let mut req: ConsolidationRequest = Default::default();
+
+                req.source_address.copy_from_slice(&chunk[0..20]);
+                req.source_pubkey.copy_from_slice(&chunk[20..68]);
+                req.target_pubkey.copy_from_slice(&chunk[68..116]);
+
+                Request::ConsolidationRequest(req)
+            })
+            .collect();
+        res.evm.current_output_mut_unchecked().extend_requests(reqs);
+
+        Ok(res.apply_sys())
     }
 
     /// Run a transaction and apply the result if non-error. Shortcut for
@@ -816,6 +1014,18 @@ impl<'a, Ext, Db: Database, E> AsRef<EvmNeedsTx<'a, Ext, Db>> for TransactedErro
 }
 
 impl<'a, Ext, Db: Database, E> TransactedError<'a, Ext, Db, E> {
+    /// Create a new `TransactedError`.
+    pub fn new(evm: EvmNeedsTx<'a, Ext, Db>, error: E) -> Self {
+        Self { evm, error }
+    }
+
+    /// Clean up the system call, restoring the block env.
+    fn cleanup_syscall(mut self, old_gas_limit: U256, old_base_fee: U256) -> Self {
+        self.evm.inner.block_mut().gas_limit = old_gas_limit;
+        self.evm.inner.block_mut().basefee = old_base_fee;
+        self
+    }
+
     /// Get a reference to the error.
     pub fn error(&self) -> &E {
         &self.error
@@ -922,9 +1132,51 @@ impl<'a, Ext, Db: Database> AsRef<ExecutionResult> for Transacted<'a, Ext, Db> {
 }
 
 impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
+    /// Clean up the system call, removing the system caller and fees, and
+    /// restoring the block environment.
+    fn cleanup_syscall(
+        mut self,
+        syscall: &SystemCall,
+        old_gas_limit: U256,
+        old_base_fee: U256,
+    ) -> Self {
+        // Restore the gas limit and base fee
+        self.evm.inner.block_mut().gas_limit = old_gas_limit;
+        self.evm.inner.block_mut().basefee = old_base_fee;
+
+        // Remove the system caller and fees from the state
+        let coinbase = self.evm.inner.block().coinbase;
+        let state = self.state_mut_unchecked();
+        state.remove(&syscall.caller);
+        state.remove(&coinbase);
+
+        self
+    }
+
     /// Get a reference to the result.
     pub fn result(&self) -> &ExecutionResult {
         self.as_ref()
+    }
+
+    /// Get a mutable reference to the result. Modification of the result is
+    /// discouraged, as it may lead to inconsistent state.
+    ///
+    /// This is primarily intended for use in [`SystemCall`] execution.
+    ///
+    /// [`SystemCall`]: crate::syscall::SystemCall
+    pub fn result_mut_unchecked(&mut self) -> &mut ExecutionResult {
+        &mut self.result.result
+    }
+
+    /// Get a reference to the state.
+    pub fn state(&self) -> &EvmState {
+        &self.result.state
+    }
+
+    /// Get a mutable reference to the state. Modification of the state is
+    /// discouraged, as it may lead to inconsistent state.
+    pub fn state_mut_unchecked(&mut self) -> &mut EvmState {
+        &mut self.result.state
     }
 
     /// Get a reference to the result and state.
@@ -932,6 +1184,38 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
         self.as_ref()
     }
 
+    /// Get a mutable reference to the result and state. Modification of the
+    /// result and state is discouraged, as it may lead to inconsistent state.
+    ///
+    /// This is primarily intended for use in [`SystemCall`] execution.
+    ///
+    /// [`SystemCall`]: crate::syscall::SystemCall
+    pub fn result_and_state_mut_unchecked(&mut self) -> &mut ResultAndState {
+        &mut self.result
+    }
+
+    /// Get the output of the transaction. This is the return value of the
+    /// outermost callframe.
+    pub fn output(&self) -> Option<&Bytes> {
+        self.result().output()
+    }
+
+    /// Get the output of the transaction, and decode it as the return value of
+    /// a [`SolCall`]. If `validate` is true, the output will be type- and
+    /// range-checked.
+    ///
+    /// [`SolCall`]: alloy_sol_types::SolCall
+    pub fn output_sol<T: alloy_sol_types::SolCall>(
+        &self,
+        validate: bool,
+    ) -> Option<alloy_sol_types::Result<T::Return>>
+    where
+        T::Return: alloy_sol_types::SolType,
+    {
+        self.output().map(|output| T::abi_decode_returns(output, validate))
+    }
+
+    /// Get the gas used by the transaction.
     pub fn gas_used(&self) -> u64 {
         self.result.result.gas_used()
     }
@@ -953,11 +1237,28 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit> Transacted<'a, Ext, Db> {
-    /// Apply the state changes and return the EVM.
+    /// Apply the state changes, update the [`BlockOutput`], and return the EVM.
     pub fn apply(self) -> EvmNeedsTx<'a, Ext, Db> {
         let (mut evm, result) = self.into_parts();
 
-        evm.accumulate_result(result);
+        evm.commit_state(result.state);
+        evm.push_to_outputs(result.result);
+
+        evm
+    }
+
+    /// Apply the state changes, do not update the [`BlockOutput`], and return
+    /// the EVM. This is useful for system transactions like those specified in
+    /// [EIP-4788], [EIP-7002], or [EIP-7251], and should not generally be used
+    /// outside of those contexts.
+    ///
+    /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+    pub fn apply_sys(self) -> EvmNeedsTx<'a, Ext, Db> {
+        let (mut evm, result) = self.into_parts();
+
+        evm.commit_state(result.state);
 
         evm
     }
@@ -1015,3 +1316,28 @@ impl<'a, Ext, Db: Database + DatabaseCommit> Transacted<'a, Ext, Db> {
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
+// Some code above is reproduced from `reth`. It is reused here under the MIT
+// license.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2022-2024 Reth Contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
