@@ -8,6 +8,8 @@ use revm::{
     Database, DatabaseCommit,
 };
 
+/// A trait for defining EVM actions that take place before or after execution
+/// of a block.
 pub trait Lifecycle<'a, Ext, Db: Database + DatabaseCommit> {
     /// Apply pre-block logic, and prep the EVM for the first user transaction.
     fn open_block<EvmState: NeedsBlock, B: Block>(
