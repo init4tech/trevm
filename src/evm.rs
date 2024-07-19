@@ -559,11 +559,7 @@ impl<'a, Ext, Db: Database, State: NeedsBlock> Trevm<'a, Ext, Db, State> {
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
     }
-}
 
-impl<'a, Ext, Db: Database + DatabaseCommit, EvmState: NeedsBlock>
-    Trevm<'a, Ext, State<Db>, EvmState>
-{
     /// Open a block, apply some logic, and return the EVM ready for the next
     /// transaction.
     ///
@@ -576,10 +572,11 @@ impl<'a, Ext, Db: Database + DatabaseCommit, EvmState: NeedsBlock>
         self,
         filler: &B,
         lifecycle: &mut L,
-    ) -> Result<EvmNeedsTx<'a, Ext, State<Db>>, TransactedError<'a, Ext, State<Db>>>
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>>
     where
         B: Block,
         L: Lifecycle<'a, Ext, Db>,
+        Db: DatabaseCommit,
     {
         lifecycle.open_block(self, filler)
     }
@@ -665,6 +662,25 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         self.inner.as_mut().block_mut().clear();
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
+    }
+
+    /// Close the current block, applying some logic, and returning the EVM
+    /// ready for the next block.
+    ///
+    /// This is intended to be used for post-block logic, such as applying
+    /// post-block hooks introduced in [EIP-7002] or [EIP-7251].
+    ///
+    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+    pub fn close_block<L>(
+        self,
+        lifecycle: &mut L,
+    ) -> Result<EvmNeedsNextBlock<'a, Ext, Db>, TransactedError<'a, Ext, Db>>
+    where
+        L: Lifecycle<'a, Ext, Db>,
+        Db: DatabaseCommit,
+    {
+        lifecycle.close_block(self).map(EvmNeedsTx::clear_block)
     }
 
     /// Fill the transaction environment.
@@ -965,26 +981,6 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         }
 
         Ok(evm)
-    }
-}
-
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, State<Db>> {
-    /// Close the current block, applying some logic, and returning the EVM
-    /// ready for the next block.
-    ///
-    /// This is intended to be used for post-block logic, such as applying
-    /// post-block hooks introduced in [EIP-7002] or [EIP-7251].
-    ///
-    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    pub fn close_block<L>(
-        self,
-        lifecycle: &mut L,
-    ) -> Result<EvmNeedsNextBlock<'a, Ext, State<Db>>, TransactedError<'a, Ext, State<Db>>>
-    where
-        L: Lifecycle<'a, Ext, Db>,
-    {
-        lifecycle.close_block(self).map(EvmNeedsTx::clear_block)
     }
 }
 
