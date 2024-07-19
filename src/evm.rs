@@ -251,6 +251,14 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>
     }
 }
 
+impl<'a, Ext, Db: Database, EvmState> Trevm<'a, Ext, State<Db>, EvmState> {
+    /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
+    /// hardfork.
+    pub fn set_state_clear_flag(&mut self, flag: bool) {
+        self.inner.db_mut().set_state_clear_flag(flag)
+    }
+}
+
 // --- NEEDS CFG
 
 impl<'a, Ext, Db: Database> EvmNeedsCfg<'a, Ext, Db> {

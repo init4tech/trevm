@@ -1,7 +1,10 @@
 use crate::{Block, EvmNeedsTx, NeedsBlock, TransactedError, Trevm};
 use alloy_eips::eip4895::Withdrawal;
 use alloy_primitives::B256;
-use revm::{primitives::EVMError, Database, DatabaseCommit, State};
+use revm::{
+    primitives::{EVMError, SpecId},
+    Database, DatabaseCommit, State,
+};
 
 pub trait Lifecycle<'a, Ext, Db: Database + DatabaseCommit> {
     /// Apply pre-block logic, and prep the EVM for the first user transaction.
@@ -29,9 +32,11 @@ pub struct ShanghaiLifecycle<'a> {
 impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for ShanghaiLifecycle<'_> {
     fn open_block<EvmState: NeedsBlock, B: Block>(
         &mut self,
-        trevm: Trevm<'a, Ext, State<Db>, EvmState>,
+        mut trevm: Trevm<'a, Ext, State<Db>, EvmState>,
         b: &B,
     ) -> Result<EvmNeedsTx<'a, Ext, State<Db>>, TransactedError<'a, Ext, State<Db>>> {
+        let flag = trevm.spec_id() >= SpecId::SPURIOUS_DRAGON;
+        trevm.inner_mut_unchecked().db_mut().set_state_clear_flag(flag);
         Ok(trevm.fill_block(b))
     }
 
