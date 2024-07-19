@@ -14,7 +14,19 @@ alloy-primitives = "0.7.6"
 revm = { version = "11.0.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-revm = { version = "11.0.0", features = ["test-utils"] }
+revm = { version = "11.0.0", features = ["test-utils", "serde-json", "alloydb", "std"] }
+tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
+alloy-sol-types = { version = "0.7.7", default-features = false, features = [
+    "std",
+] }
+
+# alloydb
+alloy-provider = { version = "0.1" }
+alloy-eips = { version = "0.1" }
+alloy-transport = { version = "0.1" }
+
+# misc
+eyre = "0.6"
 
 [features]
 default = [
