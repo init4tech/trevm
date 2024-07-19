@@ -8,6 +8,15 @@ repository = "https://github.com/init4tt/trevm"
 license = "MIT OR APACHE-2.0"
 description = "A typestate API wrapper for the revm EVM implementation"
 
+[lints.rust]
+missing-debug-implementations = "warn"
+missing-docs = "warn"
+unreachable-pub = "warn"
+unused-must-use = "deny"
+rust-2018-idioms = "deny"
+unnameable-types = "warn"
+
+
 [dependencies]
 alloy-consensus = { version = "0.1", features = ["k256"] }
 alloy-eips = "0.1.0"

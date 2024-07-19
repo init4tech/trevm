@@ -15,6 +15,8 @@ impl<'a, Ext, Db: Database, State> Trevm<'a, Ext, Db, State> {
         test_trevm()
     }
 
+    /// Make a new [`Trevm`], funding the provided accounts with the given
+    /// amounts.
     pub fn test_trevm_with_funds<'b, I>(i: I) -> EvmNeedsCfg<'static, (), InMemoryDB>
     where
         I: IntoIterator<Item = &'b (Address, U256)>,

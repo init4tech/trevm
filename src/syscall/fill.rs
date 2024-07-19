@@ -10,9 +10,13 @@ use revm::primitives::TxEnv;
 /// [`EIP-4788`]: https://eips.ethereum.org/EIPS/eip-4788
 /// [`EIP-7002`]: https://eips.ethereum.org/EIPS/eip-7002
 /// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SystemCall {
+    /// The caller address of the system call.
     pub caller: Address,
+    /// The target address of the system call.
     pub target: Address,
+    /// The input data of the system call.
     pub input: Bytes,
 }
 

@@ -2,9 +2,12 @@ pub(crate) mod sealed {
     macro_rules! states {
         ($($name:ident),+) => {
             $(
+
                 /// A state for the [`Trevm`].
                 ///
                 /// [`Trevm`]: crate::Trevm
+                #[allow(unnameable_types)]
+                #[derive(Debug)]
                 pub struct $name { _private: () }
             )*
         };
@@ -13,17 +16,21 @@ pub(crate) mod sealed {
     states!(NeedsCfg, NeedsFirstBlock, NeedsNextBlock, NeedsTx, Ready);
 
     /// Trait for states where block execution can be started.
+    #[allow(unnameable_types)]
     pub trait NeedsBlock {}
     impl NeedsBlock for NeedsFirstBlock {}
     impl NeedsBlock for NeedsNextBlock {}
 
     /// Trait for states where thcare outputs vec is non-empty.
+    #[allow(unnameable_types)]
     pub trait HasOutputs {}
     impl HasOutputs for NeedsNextBlock {}
     impl HasOutputs for NeedsTx {}
     impl HasOutputs for Ready {}
 
+    #[allow(unnameable_types)]
     pub trait HasCfg {}
+    #[allow(unnameable_types)]
     impl HasCfg for NeedsFirstBlock {}
     impl HasCfg for NeedsNextBlock {}
     impl HasCfg for NeedsTx {}

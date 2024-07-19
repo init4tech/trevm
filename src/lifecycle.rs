@@ -28,6 +28,7 @@ pub trait Lifecycle<'a, Ext, Db: Database + DatabaseCommit> {
 /// Shanghai lifecycle. This applies the [EIP-4895] pre-block system action.
 ///
 /// [EIP-4895]: https://eips.ethereum.org/EIPS/eip-4895
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ShanghaiLifecycle<'a> {
     /// The withdrawals to be processed.
     pub withdrawls: &'a [Withdrawal],
@@ -73,6 +74,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for Shanghai
 /// Cancun lifecycle. This applies the [EIP-4788] pre-block system action.
 ///
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CancunLifecycle<'a> {
     /// The parent beacon root, for the [EIP-4788] pre-block system action.
     ///
@@ -105,6 +107,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for CancunLi
 /// actions.
 ///
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct PragueLifecycle<'a> {
     /// The Prague lifecycle is a superset of the Cancun lifecycle.
     pub cancun: CancunLifecycle<'a>,

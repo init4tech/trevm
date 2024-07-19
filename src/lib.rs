@@ -165,7 +165,7 @@ mod fill;
 pub use fill::{Block, Cfg, Tx};
 
 mod lifecycle;
-pub use lifecycle::Lifecycle;
+pub use lifecycle::{CancunLifecycle, Lifecycle, PragueLifecycle, ShanghaiLifecycle};
 
 mod output;
 pub use output::BlockOutput;
@@ -179,6 +179,7 @@ pub use states::{EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
 
 pub mod syscall;
 
+/// Utilities for testing Trevm or testing with Trevm.
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
 
