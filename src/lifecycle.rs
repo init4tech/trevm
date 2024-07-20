@@ -11,18 +11,22 @@ use revm::{
 /// A trait for defining EVM actions that take place before or after execution
 /// of a block.
 pub trait Lifecycle<'a, Ext, Db: Database + DatabaseCommit> {
+    /// The error type for the lifecycle. This captures logic errors that occur
+    /// during the lifecycle.
+    type Error: From<EVMError<Db::Error>>;
+
     /// Apply pre-block logic, and prep the EVM for the first user transaction.
     fn open_block<EvmState: NeedsBlock, B: Block>(
         &mut self,
         trevm: Trevm<'a, Ext, Db, EvmState>,
         b: &B,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>>;
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>>;
 
     /// Apply post-block logic and close the block.
     fn close_block(
         &mut self,
         trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>>;
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>>;
 }
 
 /// Shanghai lifecycle. This applies the [EIP-4895] post-block system action.
@@ -47,18 +51,20 @@ impl<'a> From<&'a [Withdrawal]> for ShanghaiLifecycle<'a> {
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for ShanghaiLifecycle<'_> {
+    type Error = EVMError<Db::Error>;
+
     fn open_block<EvmState: NeedsBlock, B: Block>(
         &mut self,
         trevm: Trevm<'a, Ext, Db, EvmState>,
         b: &B,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
         Ok(trevm.fill_block(b))
     }
 
     fn close_block(
         &mut self,
         mut trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
         // We need to apply the withdrawals by incrementing the balances of the
         // respective accounts, then committing the changes to the database.
         let mut changes = HashMap::new();
@@ -98,18 +104,20 @@ pub struct CancunLifecycle<'a> {
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for CancunLifecycle<'_> {
+    type Error = EVMError<Db::Error>;
+
     fn open_block<EvmState: NeedsBlock, B: Block>(
         &mut self,
         trevm: Trevm<'a, Ext, Db, EvmState>,
         b: &B,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
         trevm.fill_block(b).apply_eip4788(self.parent_beacon_root)
     }
 
     fn close_block(
         &mut self,
         trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
         self.shanghai.close_block(trevm)
     }
 }
@@ -126,18 +134,20 @@ pub struct PragueLifecycle<'a> {
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for PragueLifecycle<'_> {
+    type Error = EVMError<Db::Error>;
+
     fn open_block<EvmState: NeedsBlock, B: Block>(
         &mut self,
         trevm: Trevm<'a, Ext, Db, EvmState>,
         b: &B,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
         self.cancun.open_block(trevm, b)?.apply_eip2935()
     }
 
     fn close_block(
         &mut self,
         trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
         let trevm = trevm.apply_eip7002()?.apply_eip7251()?;
         self.cancun.close_block(trevm)
     }

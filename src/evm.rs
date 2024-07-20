@@ -28,19 +28,19 @@ use std::{
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
 /// See the [crate-level documentation](crate) for more information.
-pub struct Trevm<'a, Ext, Db: Database, State> {
+pub struct Trevm<'a, Ext, Db: Database, TrevmState> {
     inner: Box<Evm<'a, Ext, Db>>,
     outputs: Vec<BlockOutput>,
-    _state: PhantomData<fn() -> State>,
+    _state: PhantomData<fn() -> TrevmState>,
 }
 
-impl<Ext, Db: Database, State> Debug for Trevm<'_, Ext, Db, State> {
+impl<Ext, Db: Database, TrevmState> Debug for Trevm<'_, Ext, Db, TrevmState> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trevm").finish_non_exhaustive()
     }
 }
 
-impl<'a, Ext, Db: Database, State> AsRef<Evm<'a, Ext, Db>> for Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database, TrevmState> AsRef<Evm<'a, Ext, Db>> for Trevm<'a, Ext, Db, TrevmState> {
     fn as_ref(&self) -> &Evm<'a, Ext, Db> {
         &self.inner
     }
@@ -52,14 +52,14 @@ impl<'a, Ext, Db: Database> From<Evm<'a, Ext, Db>> for EvmNeedsCfg<'a, Ext, Db> 
     }
 }
 
-impl<'a, Ext, Db: Database, State> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Get a reference to the current [`Evm`].
     pub fn inner(&self) -> &Evm<'a, Ext, Db> {
         self.as_ref()
     }
 
     /// Get a mutable reference to the current [`Evm`]. This should be used with
-    /// caution, as modifying the EVM may lead to inconsistent state or invalid
+    /// caution, as modifying the EVM may lead to inconsistent Trevmstate or invalid
     /// execution.
     pub fn inner_mut_unchecked(&mut self) -> &mut Evm<'a, Ext, Db> {
         &mut self.inner
@@ -129,7 +129,7 @@ impl<'a, Ext, Db: Database, State> Trevm<'a, Ext, Db, State> {
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseRef, State> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database + DatabaseRef, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Get the current account info for a specific address.
     pub fn try_read_account_ref(
         &self,
@@ -177,7 +177,7 @@ impl<'a, Ext, Db: Database + DatabaseRef, State> Trevm<'a, Ext, Db, State> {
     }
 }
 
-impl<'a, Ext, Db: Database<Error = Infallible>, State> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database<Error = Infallible>, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Get the current account info for a specific address.
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
@@ -215,8 +215,8 @@ impl<'a, Ext, Db: Database<Error = Infallible>, State> Trevm<'a, Ext, Db, State>
     }
 }
 
-impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>, State>
-    Trevm<'a, Ext, Db, State>
+impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>, TrevmState>
+    Trevm<'a, Ext, Db, TrevmState>
 {
     /// Get the current account info for a specific address.
     ///
@@ -251,7 +251,7 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, State> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Commit a set of state changes to the database. This is a low-level API,
     /// and is not intended for general use. Prefer executing a transaction
     /// and using the [`Transacted::apply`]  method instead.
@@ -409,7 +409,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit, State> Trevm<'a, Ext, Db, State> {
     }
 }
 
-impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, State> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
+    Trevm<'a, Ext, Db, TrevmState>
+{
     /// Modify an account with a closure and commit the modified account. This
     /// is a low-level API, and is not intended for general use.
     pub fn modify_account_unchecked(
@@ -500,7 +502,7 @@ impl<'a, Ext, Db: Database> EvmNeedsCfg<'a, Ext, Db> {
 
 // --- HAS CFG
 
-impl<'a, Ext, Db: Database, State: HasCfg> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database, TrevmState: HasCfg> Trevm<'a, Ext, Db, TrevmState> {
     /// Set the [EIP-170] contract code size limit. By default this is set to
     /// 0x6000 bytes (~25KiB). Contracts whose bytecode is larger than this
     /// limit cannot be deployed and will produce a [`CreateInitCodeSizeLimit`]
@@ -767,7 +769,7 @@ impl<'a, Ext, Db: Database, State: HasCfg> Trevm<'a, Ext, Db, State> {
 
 // --- NEEDS BLOCK
 
-impl<'a, Ext, Db: Database, State: NeedsBlock> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database, TrevmState: NeedsBlock> Trevm<'a, Ext, Db, TrevmState> {
     /// Create new block outputs, to be filled by executing transactions.
     fn new_block_outputs(&mut self, tx_hint: usize) {
         self.outputs.push(BlockOutput::with_capacity(tx_hint));
@@ -800,7 +802,7 @@ impl<'a, Ext, Db: Database, State: NeedsBlock> Trevm<'a, Ext, Db, State> {
         self,
         filler: &B,
         lifecycle: &mut L,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>>
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, L::Error>>
     where
         B: Block,
         L: Lifecycle<'a, Ext, Db>,
@@ -812,7 +814,7 @@ impl<'a, Ext, Db: Database, State: NeedsBlock> Trevm<'a, Ext, Db, State> {
 
 // --- HAS OUTPUTS
 
-impl<'a, Ext, Db: Database, State: HasOutputs> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database, TrevmState: HasOutputs> Trevm<'a, Ext, Db, TrevmState> {
     /// Get the current block's outputs.
     pub fn current_output(&self) -> &BlockOutput {
         self.outputs.last().expect("never empty")
@@ -849,13 +851,6 @@ impl<'a, Ext, Db: Database, Missing: HasOutputs> Trevm<'a, Ext, State<Db>, Missi
 // --- NEEDS FIRST TX
 
 impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
-    fn commit_state(&mut self, state: EvmState)
-    where
-        Db: DatabaseCommit,
-    {
-        self.inner.db_mut().commit(state);
-    }
-
     /// Accumulate the result of a transaction.
     fn push_to_outputs(&mut self, result: ExecutionResult) {
         let sender = self.inner.tx().caller;
@@ -900,7 +895,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
     pub fn close_block<L>(
         self,
         lifecycle: &mut L,
-    ) -> Result<EvmNeedsNextBlock<'a, Ext, Db>, TransactedError<'a, Ext, Db>>
+    ) -> Result<EvmNeedsNextBlock<'a, Ext, Db>, TransactedError<'a, Ext, Db, L::Error>>
     where
         L: Lifecycle<'a, Ext, Db>,
         Db: DatabaseCommit,
@@ -1475,7 +1470,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> Transacted<'a, Ext, Db> {
     pub fn apply(self) -> EvmNeedsTx<'a, Ext, Db> {
         let (mut evm, result) = self.into_parts();
 
-        evm.commit_state(result.state);
+        evm.commit_unchecked(result.state);
         evm.push_to_outputs(result.result);
 
         evm
@@ -1492,7 +1487,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> Transacted<'a, Ext, Db> {
     pub fn apply_sys(self) -> EvmNeedsTx<'a, Ext, Db> {
         let (mut evm, result) = self.into_parts();
 
-        evm.commit_state(result.state);
+        evm.commit_unchecked(result.state);
 
         evm
     }

@@ -170,6 +170,50 @@
 //! # }
 //! ```
 //!
+//! ### Handling execution errors
+//!
+//! Trevm uses the [`TransactedError`] type to handle errors during transaction
+//! execution. This type is a wrapper around the error that occurred, and
+//! provides a method to discard the error and continue execution. This is
+//! useful when you want to continue executing transactions even if one fails.
+//!
+//! Usually, errors will be [`EVMError<Db>`], but [`Lifecycle`] implementations
+//! may return other errors. The [`TransactedError`] type is generic over the
+//! error type, so you can use it with any error type.
+//!
+//! ```
+//! # use revm::{EvmBuilder, db::InMemoryDB};
+//! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx,
+//! # ShanghaiLifecycle, CancunLifecycle};
+//! # use alloy_primitives::B256;
+//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
+//! # -> Result<(), Box<dyn std::error::Error>> {
+//! // Lifecycles are mutable and can be reused across multiple blocks.
+//! let mut lifecycle = CancunLifecycle::<'static> {
+//!    parent_beacon_root: B256::repeat_byte(0x42),
+//!    shanghai: ShanghaiLifecycle::default(),
+//! };
+//!
+//! match EvmBuilder::default()
+//!     .with_db(InMemoryDB::default())
+//!     .build_trevm()
+//!     .fill_cfg(cfg)
+//!     // The pre-block logic is applied here
+//!     .open_block(block, &mut lifecycle) {
+//!     Ok(trevm) => {
+//!         trevm
+//!     }
+//!     Err(transacted_error) => {
+//!         let (trevm, error) = transacted_error.into_parts();
+//!         // Handle the error here, and return the EVM if you want
+//!         // to keep going
+//!         trevm
+//!     }
+//! };
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! ### Extending Trevm
 //!
 //! Trevm has a few extension points:
@@ -285,6 +329,7 @@
 //! let (bundle, outputs) = evm.close_block(block, post_block_logic).finish();
 //! ```
 //!
+//! [`EVMError<Db>`]: revm::primitives::EVMError<Db>
 //! [typestate pattern]: https://cliffle.com/blog/rust-typestate/
 //! [crate readme]: https://github.com/init4tt/trevm
 //! [EIP-2537]: https://eips.ethereum.org/EIPS/eip-2537
