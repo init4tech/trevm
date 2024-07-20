@@ -629,10 +629,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
     }
 
     /// Accumulate the result of a transaction.
-    fn push_to_outputs(&mut self, result: ExecutionResult)
-    where
-        Db: DatabaseCommit,
-    {
+    fn push_to_outputs(&mut self, result: ExecutionResult) {
         let sender = self.inner.tx().caller;
         let cumulative_gas_used =
             self.current_output().cumulative_gas_used().saturating_add(result.gas_used() as u128);
@@ -767,10 +764,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
     pub fn execute_system_tx(
         mut self,
         syscall: &SystemCall,
-    ) -> Result<Transacted<'a, Ext, Db>, TransactedError<'a, Ext, Db>>
-    where
-        Db: DatabaseCommit,
-    {
+    ) -> Result<Transacted<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
         let limit = U256::from(self.inner.tx().gas_limit);
         let old_gas_limit = std::mem::replace(&mut self.inner.block_mut().gas_limit, limit);
         let old_base_fee = std::mem::replace(&mut self.inner.block_mut().basefee, U256::ZERO);
