@@ -5,11 +5,12 @@ use. ⚠️
 
 Trevm is a [typestate] API wrapper for [revm]. It provides an ergonomic way to
 interact with the revm API, shortcuts for common tasks, and straightforward API
-extensibility.
+extensibility. Trevm does NOT try to provide low-level EVM management, but
+rather to shortcut and simplify common tasks like simulating transactions.
 
 Trevm is NOT a replacement for revm. It is a wrapper around the revm API. It is
-NOT a drop-in upgrade, integrating trevm into your project will require some
-changes to your code.
+NOT a drop-in upgrade, integrating trevm into your project will require changes
+to your code.
 
 See the [documentation on docs.rs] for information on usage.
 
