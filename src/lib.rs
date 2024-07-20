@@ -60,10 +60,12 @@
 //! - Implement the [`PostTx`] trait to apply post-transaction logic/changes.
 //! - Implement your own [`Cfg`], [`Block`], and
 //!   [`Tx`] to fill the EVM from your own data structures.
+//! - Implement your own [`Lifecycle`] to apply pre- and post-block logic.
 //!
 //! ### Trevm feature flags
 //!
-//! Trevm passes through most feature flags from revm:
+//! Trevm passes through most feature flags from revm, the following are on by
+//! default:
 //!
 //! - `c-kzg` - Enable KZG precompiles as specced for [EIP-4844].
 //! - `blst` - Enable BLST precompiles as speced for [EIP-2537].

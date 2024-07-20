@@ -3,7 +3,7 @@ use crate::{
     Block, BlockOutput, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
     EvmReady, HasCfg, HasOutputs, Lifecycle, NeedsBlock, PostTx, PostflightResult, Tx,
 };
-use alloy_consensus::{Receipt, Request};
+use alloy_consensus::{constants::KECCAK_EMPTY, Receipt, Request};
 use alloy_eips::{
     eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE},
     eip7002::WithdrawalRequest,
@@ -248,6 +248,234 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>
     pub fn read_code_ref(&self, address: Address) -> Option<Bytecode> {
         let acct_info = self.read_account_ref(address)?;
         Some(self.inner.db().code_by_hash_ref(acct_info.code_hash).expect("infallible"))
+    }
+}
+
+impl<'a, Ext, Db: Database + DatabaseCommit, State> Trevm<'a, Ext, Db, State> {
+    /// Commit a set of state changes to the database. This is a low-level API,
+    /// and is not intended for general use. Prefer executing a transaction
+    /// and using the [`Transacted::apply`]  method instead.
+    pub fn commit_unchecked(&mut self, state: EvmState) {
+        self.inner.db_mut().commit(state);
+    }
+
+    /// Modify an account with a closure and commit the modified account. This
+    /// is a low-level API, and is not intended for general use.
+    pub fn try_modify_account_unchecked<F: FnOnce(&mut AccountInfo)>(
+        &mut self,
+        address: Address,
+        f: F,
+    ) -> Result<AccountInfo, Db::Error> {
+        let db = self.inner_mut_unchecked().db_mut();
+
+        let mut info = db.basic(address)?.unwrap_or_default();
+        let old = info.clone();
+        f(&mut info);
+
+        // Make a new account with the modified info
+        let mut acct = Account { info, ..Default::default() };
+        acct.mark_touch();
+
+        // Create a state object with the modified account.
+        let state = [(address, acct)].iter().cloned().collect();
+        self.commit_unchecked(state);
+
+        Ok(old)
+    }
+
+    /// Set the nonce of an account, returning the previous nonce. This is a
+    /// low-level API, and is not intended for general use.
+    pub fn try_set_nonce_unchecked(
+        &mut self,
+        address: Address,
+        nonce: u64,
+    ) -> Result<u64, Db::Error> {
+        self.try_modify_account_unchecked(address, |info| info.nonce = nonce).map(|info| info.nonce)
+    }
+
+    /// Increment the nonce of an account, returning the previous nonce. This is
+    /// a low-level API, and is not intended for general use.
+    ///
+    /// If the nonce is already at the maximum value, it will not be
+    /// incremented.
+    pub fn try_increment_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error> {
+        self.try_modify_account_unchecked(address, |info| info.nonce = info.nonce.saturating_add(1))
+            .map(|info| info.nonce)
+    }
+
+    /// Decrement the nonce of an account, returning the previous nonce. This is
+    /// a low-level API, and is not intended for general use.
+    ///
+    /// If the nonce is already 0, it will not be decremented.
+    pub fn try_decrement_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error> {
+        self.try_modify_account_unchecked(address, |info| info.nonce = info.nonce.saturating_sub(1))
+            .map(|info| info.nonce)
+    }
+
+    /// Set the EVM storage at a slot. This is a low-level API, and is not
+    /// intended for general use.
+    pub fn try_set_storage_unchecked(
+        &mut self,
+        address: Address,
+        slot: U256,
+        value: U256,
+    ) -> Result<U256, Db::Error> {
+        let db = self.inner_mut_unchecked().db_mut();
+        let info = db.basic(address)?.unwrap_or_default();
+        let old = db.storage(address, slot)?;
+
+        let change = EvmStorageSlot::new_changed(old, value);
+
+        // Make a new account with the modified storage
+        let storage = [(slot, change)].iter().cloned().collect();
+        let mut acct = Account { storage, info, ..Default::default() };
+        acct.mark_touch();
+
+        // Create a state object with the modified account.
+        let state = [(address, acct)].iter().cloned().collect();
+        self.commit_unchecked(state);
+
+        Ok(old)
+    }
+
+    /// Set the bytecode at a specific address, returning the previous bytecode
+    /// at that address. This is a low-level API, and is not intended for
+    /// general use.
+    pub fn try_set_bytecode_unchecked(
+        &mut self,
+        address: Address,
+        bytecode: Bytecode,
+    ) -> Result<Option<Bytecode>, Db::Error> {
+        let db = self.inner_mut_unchecked().db_mut();
+        let mut info = db.basic(address)?.unwrap_or_default();
+
+        let old = if info.code_hash != KECCAK_EMPTY {
+            Some(db.code_by_hash(info.code_hash)?)
+        } else {
+            None
+        };
+
+        info.code_hash = if bytecode.is_empty() { KECCAK_EMPTY } else { bytecode.hash_slow() };
+        info.code = Some(bytecode);
+
+        let mut acct = Account { info, ..Default::default() };
+        acct.mark_touch();
+        let state = [(address, acct)].iter().cloned().collect();
+        self.commit_unchecked(state);
+
+        Ok(old)
+    }
+
+    /// Increase the balance of an account. Returns the previous balance. This
+    /// is a low-level API, and is not intended for general use.
+    ///
+    /// If this would cause an overflow, the balance will be increased to the
+    /// maximum value.
+    pub fn try_increase_balance_unchecked(
+        &mut self,
+        address: Address,
+        amount: U256,
+    ) -> Result<U256, Db::Error> {
+        self.try_modify_account_unchecked(address, |info| {
+            info.balance = info.balance.saturating_add(amount)
+        })
+        .map(|info| info.balance)
+    }
+
+    /// Decrease the balance of an account. Returns the previous balance. This
+    /// is a low-level API, and is not intended for general use.
+    ///
+    /// If this would cause an underflow, the balance will be decreased to 0.
+    pub fn try_decrease_balance_unchecked(
+        &mut self,
+        address: Address,
+        amount: U256,
+    ) -> Result<U256, Db::Error> {
+        self.try_modify_account_unchecked(address, |info| {
+            info.balance = info.balance.saturating_sub(amount)
+        })
+        .map(|info| info.balance)
+    }
+
+    /// Set the balance of an account. Returns the previous balance. This is a
+    /// low-level API, and is not intended for general use.
+    pub fn try_set_balance_unchecked(
+        &mut self,
+        address: Address,
+        amount: U256,
+    ) -> Result<U256, Db::Error> {
+        self.try_modify_account_unchecked(address, |info| info.balance = amount)
+            .map(|info| info.balance)
+    }
+}
+
+impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, State> Trevm<'a, Ext, Db, State> {
+    /// Modify an account with a closure and commit the modified account. This
+    /// is a low-level API, and is not intended for general use.
+    pub fn modify_account_unchecked(
+        &mut self,
+        address: Address,
+        f: impl FnOnce(&mut AccountInfo),
+    ) -> AccountInfo {
+        self.try_modify_account_unchecked(address, f).expect("infallible")
+    }
+
+    /// Set the nonce of an account, returning the previous nonce. This is a
+    /// low-level API, and is not intended for general use.
+    pub fn set_nonce_unchecked(&mut self, address: Address, nonce: u64) -> u64 {
+        self.try_set_nonce_unchecked(address, nonce).expect("infallible")
+    }
+
+    /// Increment the nonce of an account, returning the previous nonce. This is
+    /// a low-level API, and is not intended for general use.
+    ///
+    /// If this would cause the nonce to overflow, the nonce will be set to the
+    /// maximum value.
+    pub fn increment_nonce_unchecked(&mut self, address: Address) -> u64 {
+        self.try_increment_nonce_unchecked(address).expect("infallible")
+    }
+
+    /// Decrement the nonce of an account, returning the previous nonce. This is
+    /// a low-level API, and is not intended for general use.
+    ///
+    /// If this would cause the nonce to underflow, the nonce will be set to 0.
+    pub fn decrement_nonce_unchecked(&mut self, address: Address) -> u64 {
+        self.try_decrement_nonce_unchecked(address).expect("infallible")
+    }
+
+    /// Set the EVM storage at a slot. This is a low-level API, and is not
+    /// intended for general use.
+    pub fn set_storage_unchecked(&mut self, address: Address, slot: U256, value: U256) -> U256 {
+        self.try_set_storage_unchecked(address, slot, value).expect("infallible")
+    }
+
+    /// Set the bytecode at a specific address, returning the previous bytecode
+    /// at that address. This is a low-level API, and is not intended for
+    /// general use.
+    pub fn set_bytecode_unchecked(
+        &mut self,
+        address: Address,
+        bytecode: Bytecode,
+    ) -> Option<Bytecode> {
+        self.try_set_bytecode_unchecked(address, bytecode).expect("infallible")
+    }
+
+    /// Increase the balance of an account. Returns the previous balance. This
+    /// is a low-level API, and is not intended for general use.
+    pub fn increase_balance_unchecked(&mut self, address: Address, amount: U256) -> U256 {
+        self.try_increase_balance_unchecked(address, amount).expect("infallible")
+    }
+
+    /// Decrease the balance of an account. Returns the previous balance. This
+    /// is a low-level API, and is not intended for general use.
+    pub fn decrease_balance_unchecked(&mut self, address: Address, amount: U256) -> U256 {
+        self.try_decrease_balance_unchecked(address, amount).expect("infallible")
+    }
+
+    /// Set the balance of an account. Returns the previous balance. This is a
+    /// low-level API, and is not intended for general use.
+    pub fn set_balance_unchecked(&mut self, address: Address, amount: U256) -> U256 {
+        self.try_set_balance_unchecked(address, amount).expect("infallible")
     }
 }
 
