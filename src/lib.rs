@@ -141,15 +141,12 @@
 //! Here's the above example using a lifecycle. Note that
 //!
 //! ```
-//!
 //! # use revm::{EvmBuilder, db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx,
 //! # ShanghaiLifecycle, CancunLifecycle};
 //! # use alloy_primitives::B256;
-//!
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//!
 //! // Lifecycles are mutable and can be reused across multiple blocks.
 //! let mut lifecycle = CancunLifecycle::<'static> {
 //!    parent_beacon_root: B256::repeat_byte(0x42),
