@@ -25,13 +25,25 @@ pub trait Lifecycle<'a, Ext, Db: Database + DatabaseCommit> {
     ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db>>;
 }
 
-/// Shanghai lifecycle. This applies the [EIP-4895] pre-block system action.
+/// Shanghai lifecycle. This applies the [EIP-4895] post-block system action.
 ///
 /// [EIP-4895]: https://eips.ethereum.org/EIPS/eip-4895
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ShanghaiLifecycle<'a> {
     /// The withdrawals to be processed.
     pub withdrawls: &'a [Withdrawal],
+}
+
+impl Default for ShanghaiLifecycle<'_> {
+    fn default() -> Self {
+        Self { withdrawls: &[] }
+    }
+}
+
+impl<'a> From<&'a [Withdrawal]> for ShanghaiLifecycle<'a> {
+    fn from(withdrawls: &'a [Withdrawal]) -> Self {
+        Self { withdrawls }
+    }
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit> Lifecycle<'a, Ext, Db> for ShanghaiLifecycle<'_> {
