@@ -47,7 +47,7 @@ fn main() {
     let mut db = CacheDB::new(EmptyDB::new());
 
     let bytecode = Bytecode::new_raw(hex::decode(CONTRACT_BYTECODE).unwrap().into());
-    let acc_info = AccountInfo::new(U256::ZERO, 1, bytecode.hash_slow(), bytecode.clone());
+    let acc_info = AccountInfo::new(U256::ZERO, 1, bytecode.hash_slow(), bytecode);
 
     // insert both the contract code to the contract cache, and the account info to the account cache
     db.insert_contract(&mut acc_info.clone());

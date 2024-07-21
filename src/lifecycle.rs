@@ -32,16 +32,10 @@ pub trait Lifecycle<'a, Ext, Db: Database + DatabaseCommit> {
 /// Shanghai lifecycle. This applies the [EIP-4895] post-block system action.
 ///
 /// [EIP-4895]: https://eips.ethereum.org/EIPS/eip-4895
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct ShanghaiLifecycle<'a> {
     /// The withdrawals to be processed.
     pub withdrawls: &'a [Withdrawal],
-}
-
-impl Default for ShanghaiLifecycle<'_> {
-    fn default() -> Self {
-        Self { withdrawls: &[] }
-    }
 }
 
 impl<'a> From<&'a [Withdrawal]> for ShanghaiLifecycle<'a> {
