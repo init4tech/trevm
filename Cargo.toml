@@ -31,10 +31,10 @@ alloy-consensus = { version = "0.1", features = ["k256"] }
 alloy-eips = "0.1.0"
 alloy-primitives = "0.7.6"
 alloy-sol-types = "0.7.7"
-revm = { version = "11.0.0", default-features = false, features = ["std"] }
+revm = { version = "12.1.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-revm = { version = "11.0.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
+revm = { version = "12.1.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
 tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
 
 # alloydb
