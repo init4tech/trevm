@@ -38,7 +38,7 @@ revm = { version = "11.0.0", features = ["test-utils", "serde-json", "std", "all
 tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
 
 # alloydb
-alloy-provider = "0.1"
+alloy-provider = "0.2"
 alloy-transport = "0.1"
 
 # misc
