@@ -6,6 +6,9 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   rust-base:
     uses: init4tech/actions/.github/workflows/rust-base.yml@main
