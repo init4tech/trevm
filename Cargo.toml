@@ -39,7 +39,7 @@ tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
 
 # alloydb
 alloy-provider = "0.1"
-alloy-transport = "0.1"
+alloy-transport = "0.2"
 
 # misc
 eyre = "0.6"
