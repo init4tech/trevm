@@ -27,7 +27,7 @@ option-if-let-else = "warn"
 redundant-clone = "warn"
 
 [dependencies]
-alloy-consensus = { version = "0.1", features = ["k256"] }
+alloy-consensus = { version = "0.2", features = ["k256"] }
 alloy-eips = "0.1.0"
 alloy-primitives = "0.7.6"
 alloy-sol-types = "0.7.7"
