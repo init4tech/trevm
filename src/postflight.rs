@@ -3,7 +3,9 @@ use revm::primitives::ResultAndState;
 /// Control flow for transaction execution.
 #[derive(Debug, Clone, Copy)]
 pub enum PostflightResult {
+    /// Discard the state changes
     Discard(&'static str),
+    /// Apply the state changes
     Apply,
 }
 

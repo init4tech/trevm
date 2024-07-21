@@ -209,10 +209,10 @@ impl Tx for Signed<alloy_consensus::TxEip4844Variant> {
 impl Tx for alloy_consensus::TxEnvelope {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         match self {
-            alloy_consensus::TxEnvelope::Legacy(t) => t.fill_tx_env(tx_env),
-            alloy_consensus::TxEnvelope::Eip2930(t) => t.fill_tx_env(tx_env),
-            alloy_consensus::TxEnvelope::Eip1559(t) => t.fill_tx_env(tx_env),
-            alloy_consensus::TxEnvelope::Eip4844(t) => t.fill_tx_env(tx_env),
+            Self::Legacy(t) => t.fill_tx_env(tx_env),
+            Self::Eip2930(t) => t.fill_tx_env(tx_env),
+            Self::Eip1559(t) => t.fill_tx_env(tx_env),
+            Self::Eip4844(t) => t.fill_tx_env(tx_env),
             _ => panic!("Unsupported transaction type"),
         }
     }

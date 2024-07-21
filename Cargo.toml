@@ -1,29 +1,45 @@
 [package]
 name = "trevm"
 version = "0.1.0"
+rust-version = "1.79.0"
 edition = "2021"
 authors = ["Init4 LLC"]
-homepage = "https://github.com/init4tt/trevm"
-repository = "https://github.com/init4tt/trevm"
+homepage = "https://github.com/init4tech/trevm"
+repository = "https://github.com/init4tech/trevm"
 license = "MIT OR APACHE-2.0"
 description = "A typestate API wrapper for the revm EVM implementation"
 
+[lints.rust]
+missing-debug-implementations = "warn"
+missing-docs = "warn"
+unreachable-pub = "warn"
+unused-must-use = "deny"
+rust-2018-idioms = "deny"
+unnameable-types = "warn"
+
+[lints.rustdoc]
+all = "warn"
+
+[lints.clippy]
+missing-const-for-fn = "warn"
+use-self = "warn"
+option-if-let-else = "warn"
+redundant-clone = "warn"
+
 [dependencies]
 alloy-consensus = { version = "0.1", features = ["k256"] }
+alloy-eips = "0.1.0"
 alloy-primitives = "0.7.6"
+alloy-sol-types = "0.7.7"
 revm = { version = "11.0.0", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-revm = { version = "11.0.0", features = ["test-utils", "serde-json", "alloydb", "std"] }
+revm = { version = "11.0.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
 tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
-alloy-sol-types = { version = "0.7.7", default-features = false, features = [
-    "std",
-] }
 
 # alloydb
-alloy-provider = { version = "0.1" }
-alloy-eips = { version = "0.1" }
-alloy-transport = { version = "0.1" }
+alloy-provider = "0.1"
+alloy-transport = "0.1"
 
 # misc
 eyre = "0.6"
