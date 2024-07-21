@@ -555,7 +555,7 @@ impl<'a, Ext, Db: Database, TrevmState: HasCfg> Trevm<'a, Ext, Db, TrevmState> {
     /// this is set to the settings used in the Ethereum mainnet.
     ///
     /// This is a low-level API, and is not intended for general use.
-    #[cfg(feature = "kzg")]
+    #[cfg(feature = "c-kzg")]
     pub fn set_kzg_settings(
         &mut self,
         settings: revm::primitives::EnvKzgSettings,

@@ -110,7 +110,7 @@ async fn main() -> eyre::Result<()> {
     };
 
     // decode bytes to reserves + ts via alloy's abi decode
-    let return_vals = getReservesCall::abi_decode_returns(&value.data(), true)?;
+    let return_vals = getReservesCall::abi_decode_returns(value.data(), true)?;
 
     // Print emulated getReserves() call output
     println!("Reserve0: {:#?}", return_vals.reserve0);
