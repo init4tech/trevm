@@ -1,3 +1,5 @@
+//! This example demonstrates how to query storage slots of a contract, using AlloyDB.
+
 use alloy_eips::BlockId;
 use alloy_primitives::Address;
 use alloy_provider::ProviderBuilder;
@@ -14,6 +16,7 @@ use trevm::TrevmBuilder;
 use trevm::Tx;
 
 sol! {
+    #[allow(missing_docs)]
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
 }
 

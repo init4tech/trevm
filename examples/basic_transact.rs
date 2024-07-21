@@ -1,3 +1,6 @@
+//! Simple TREVM example that demonstrates how to execute a transaction on a contract.
+//! It simply loads the contract bytecode and executes a transaction.
+
 use revm::{
     db::{CacheDB, EmptyDB},
     inspector_handle_register,
