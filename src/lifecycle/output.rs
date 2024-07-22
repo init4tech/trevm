@@ -59,16 +59,6 @@ impl<T: TxReceipt> BlockOutput<T> {
         self.push_sender(sender);
     }
 
-    // /// Push a request onto the list of requests.
-    // pub fn push_request(&mut self, request: Request) {
-    //     self.requests.push(request);
-    // }
-
-    // /// Extend the list of requests with a vector of requests.
-    // pub fn extend_requests(&mut self, requests: Vec<Request>) {
-    //     self.requests.extend(requests);
-    // }
-
     /// Push a receipt onto the list of receipts.
     fn push_receipt(&mut self, receipt: T) {
         self.receipts.push(receipt);

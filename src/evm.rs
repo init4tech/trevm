@@ -1,7 +1,7 @@
 use crate::{
-    Block, BlockContext, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
-    EvmReady, HasCfg, HasOutputs, NeedsBlock, NeedsCfg, NeedsNextBlock, NeedsTx, PostTx,
-    PostflightResult, Ready, Tx,
+    states::EvmBlockComplete, Block, BlockComplete, BlockContext, Cfg, EvmNeedsCfg,
+    EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady, HasCfg, HasOutputs, NeedsBlock,
+    NeedsCfg, NeedsNextBlock, NeedsTx, PostTx, PostflightResult, Ready, Tx,
 };
 use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_primitives::{Address, Bytes, U256};
@@ -809,6 +809,19 @@ impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
     }
 }
 
+impl<'a, Ext, Db: Database + DatabaseCommit, C> EvmBlockComplete<'a, Ext, Db, C> {
+    /// Destructure the EVM and return the block context and the EVM ready for
+    /// the next block.
+    pub fn into_parts(self) -> (C, EvmNeedsNextBlock<'a, Ext, Db>) {
+        (self.state.0, EvmNeedsNextBlock { inner: self.inner, state: NeedsNextBlock::new() })
+    }
+
+    /// Discard the block context and return the EVM ready for the next block.
+    pub fn discard_context(self) -> EvmNeedsNextBlock<'a, Ext, Db> {
+        self.into_parts().1
+    }
+}
+
 // --- NEEDS FIRST TX
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsTx<'a, Ext, Db, C> {
@@ -822,7 +835,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
     pub fn close_block(
         self,
-    ) -> Result<(C, EvmNeedsNextBlock<'a, Ext, Db>), TransactedError<'a, Ext, Db, C>> {
+    ) -> Result<EvmBlockComplete<'a, Ext, Db, C>, TransactedError<'a, Ext, Db, C>> {
         let Trevm { mut inner, mut state } = self;
 
         let res = state.0.close_block(&mut inner);
@@ -830,7 +843,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
         inner.block_mut().clear();
 
         match res {
-            Ok(_) => Ok((state.0, Trevm { inner, state: NeedsNextBlock::new() })),
+            Ok(_) => Ok(Trevm { inner, state: BlockComplete(state.0) }),
             Err(error) => Err(TransactedError::new(Trevm { inner, state }, error)),
         }
     }

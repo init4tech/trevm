@@ -355,12 +355,14 @@ pub use fill::{Block, Cfg, Tx};
 
 mod lifecycle;
 pub use lifecycle::{
-    BlockContext, BlockOutput, Cancun, BasicContext, PostTx, PostflightResult, Prague, Shanghai,
+    BasicContext, BlockContext, BlockOutput, Cancun, PostTx, PostflightResult, Prague, Shanghai,
 };
 
 mod states;
 pub(crate) use states::sealed::*;
-pub use states::{EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady};
+pub use states::{
+    EvmBlockComplete, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady,
+};
 
 pub mod syscall;
 

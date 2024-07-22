@@ -13,16 +13,22 @@ pub type EvmNeedsCfg<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsCfg>;
 /// outputs. This EVM has not yet executed any transactions or state changes.
 ///
 /// Expected continuations include:
-/// - [`EvmNeedsFirstBlock::fill_block`]
 /// - [`EvmNeedsFirstBlock::open_block`]
 ///
 /// [`Block`]: crate::Block
 pub type EvmNeedsFirstBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsFirstBlock>;
 
+/// A [`Trevm`] that has completed a block and contains the block's populated
+/// lifecycle object.
+///
+/// Expected continuations include:
+/// - [`EvmBlockComplete::into_parts`]
+/// - [`EvmBlockComplete::discard_context`]
+pub type EvmBlockComplete<'a, Ext, Db, T> = Trevm<'a, Ext, Db, BlockComplete<T>>;
+
 /// A [`Trevm`] that requires a [`Block`].
 ///
 /// Expected continuations include:
-/// - [`EvmNeedsNextBlock::fill_block`]
 /// - [`EvmNeedsFirstBlock::open_block`]
 ///
 /// [`Block`]: crate::Block
@@ -32,7 +38,6 @@ pub type EvmNeedsNextBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsNextBlock>;
 ///
 /// Expected continuations include:
 /// - [`EvmNeedsTx::fill_tx`]
-/// - [`EvmNeedsTx::clear_block`]
 /// - [`EvmNeedsTx::execute_tx`]
 /// - [`EvmNeedsTx::apply_tx`]
 /// - [`EvmNeedsTx::finish`]
@@ -83,6 +88,12 @@ pub(crate) mod sealed {
     /// [`Trevm`]: crate::Trevm
     #[derive(Debug)]
     pub struct Ready<T>(pub T);
+
+    /// A state for the [`Trevm`].
+    ///
+    /// [`Trevm`]: crate::Trevm
+    #[derive(Debug)]
+    pub struct BlockComplete<T>(pub T);
 
     /// Trait for states where block execution can be started.
     #[allow(unnameable_types)]
