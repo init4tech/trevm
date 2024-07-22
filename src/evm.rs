@@ -1,8 +1,9 @@
 use crate::{
-    syscall::SystemTx, Block, BlockOutput, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock,
-    EvmNeedsTx, EvmReady, HasCfg, HasOutputs, Lifecycle, NeedsBlock, PostTx, PostflightResult, Tx,
+    syscall::SystemTx, Block, BlockContext, Cfg, ContextResult, EvmNeedsCfg, EvmNeedsFirstBlock,
+    EvmNeedsNextBlock, EvmNeedsTx, EvmReady, HasCfg, HasOutputs, NeedsBlock, PostTx,
+    PostflightResult, Tx,
 };
-use alloy_consensus::{constants::KECCAK_EMPTY, Receipt};
+use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_primitives::{Address, Bytes, U256};
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState},
@@ -19,7 +20,6 @@ use std::{convert::Infallible, fmt, marker::PhantomData};
 /// See the [crate-level documentation](crate) for more information.
 pub struct Trevm<'a, Ext, Db: Database, TrevmState> {
     inner: Box<Evm<'a, Ext, Db>>,
-    outputs: Vec<BlockOutput>,
     _state: PhantomData<fn() -> TrevmState>,
 }
 
@@ -37,7 +37,7 @@ impl<'a, Ext, Db: Database, TrevmState> AsRef<Evm<'a, Ext, Db>> for Trevm<'a, Ex
 
 impl<'a, Ext, Db: Database> From<Evm<'a, Ext, Db>> for EvmNeedsCfg<'a, Ext, Db> {
     fn from(inner: Evm<'a, Ext, Db>) -> Self {
-        Self { inner: Box::new(inner), outputs: Default::default(), _state: PhantomData }
+        Self { inner: Box::new(inner), _state: PhantomData }
     }
 }
 
@@ -55,21 +55,8 @@ impl<'a, Ext, Db: Database, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     }
 
     /// Destructure the [`Trevm`] into its parts.
-    pub fn into_parts(self) -> (Box<Evm<'a, Ext, Db>>, Vec<BlockOutput>) {
-        (self.inner, self.outputs)
-    }
-
-    /// Get a reference to the outputs produced by block proessing so far.
-    ///
-    ///
-    /// ## Note
-    /// The outputs will:
-    /// - be empty if the EVM has not received any block environment yet
-    ///   (i.e. has never reached the [`EvmNeedsTx`] state).
-    /// - contain a partially filled block output if the EVM is in the
-    ///   [`EvmNeedsTx`] state.
-    pub fn outputs(&self) -> &[BlockOutput] {
-        &self.outputs
+    pub fn into_inner(self) -> Box<Evm<'a, Ext, Db>> {
+        self.inner
     }
 
     /// Get the id of the currently running hardfork spec. Convenience function
@@ -759,11 +746,6 @@ impl<'a, Ext, Db: Database, TrevmState: HasCfg> Trevm<'a, Ext, Db, TrevmState> {
 // --- NEEDS BLOCK
 
 impl<'a, Ext, Db: Database, TrevmState: NeedsBlock> Trevm<'a, Ext, Db, TrevmState> {
-    /// Create new block outputs, to be filled by executing transactions.
-    fn new_block_outputs(&mut self, tx_hint: usize) {
-        self.outputs.push(BlockOutput::with_capacity(tx_hint));
-    }
-
     /// Fill the block environment. This is a low-level API, and is not intended
     /// for general use, as it will not perform pre-block logic such as applying
     /// pre-block hooks introduced in [EIP-4788] or [EIP-2935].
@@ -774,7 +756,6 @@ impl<'a, Ext, Db: Database, TrevmState: NeedsBlock> Trevm<'a, Ext, Db, TrevmStat
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
     pub fn fill_block<B: Block>(mut self, filler: &B) -> EvmNeedsTx<'a, Ext, Db> {
         filler.fill_block(&mut self.inner);
-        self.new_block_outputs(filler.tx_count_hint().unwrap_or(10));
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
     }
@@ -787,32 +768,17 @@ impl<'a, Ext, Db: Database, TrevmState: NeedsBlock> Trevm<'a, Ext, Db, TrevmStat
     ///
     /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
-    pub fn open_block<B, L>(
+    pub fn open_block<B, C>(
         self,
         filler: &B,
-        lifecycle: &mut L,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, L::Error>>
+        context: &mut C,
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, C::Error>>
     where
         B: Block,
-        L: Lifecycle<'a, Ext, Db>,
+        C: BlockContext<Ext, Db>,
         Db: DatabaseCommit,
     {
-        lifecycle.open_block(self, filler)
-    }
-}
-
-// --- HAS OUTPUTS
-
-impl<'a, Ext, Db: Database, TrevmState: HasOutputs> Trevm<'a, Ext, Db, TrevmState> {
-    /// Get the current block's outputs.
-    pub fn current_output(&self) -> &BlockOutput {
-        self.outputs.last().expect("never empty")
-    }
-
-    /// Get the current block's outputs. Modification is discouraged as it may
-    /// lead to inconsistent state or invalid execution.
-    pub fn current_output_mut_unchecked(&mut self) -> &mut BlockOutput {
-        self.outputs.last_mut().expect("never empty")
+        context.open_block(self, filler)
     }
 }
 
@@ -824,39 +790,22 @@ impl<'a, Ext, Db: Database, Missing: HasOutputs> Trevm<'a, Ext, State<Db>, Missi
     /// If the State has not been built with StateBuilder::with_bundle_update.
     ///
     /// See [`State::merge_transitions`] and `State::take_bundle`.
-    pub fn finish(self) -> (BundleState, Vec<BlockOutput>)
+    pub fn finish(self) -> BundleState
     where
         Db: DatabaseCommit,
     {
-        let Self { outputs, inner: mut evm, .. } = self;
+        let Self { inner: mut evm, .. } = self;
 
         evm.db_mut().merge_transitions(BundleRetention::Reverts);
         let bundle = evm.db_mut().take_bundle();
 
-        (bundle, outputs)
+        bundle
     }
 }
 
 // --- NEEDS FIRST TX
 
 impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
-    /// Accumulate the result of a transaction.
-    fn push_to_outputs(&mut self, result: ExecutionResult) {
-        let sender = self.inner.tx().caller;
-        let cumulative_gas_used =
-            self.current_output().cumulative_gas_used().saturating_add(result.gas_used() as u128);
-
-        // Must be created after use_block_gas
-        let receipt = Receipt {
-            status: result.is_success().into(),
-            cumulative_gas_used,
-            logs: result.into_logs(),
-        };
-
-        let parse_deposits = self.spec_id() >= SpecId::PRAGUE;
-        self.current_output_mut_unchecked().push_result(receipt, sender, parse_deposits);
-    }
-
     /// Clear the current block environment.
     ///
     /// This is a low-level API, and is not intended for general use, as it
@@ -881,15 +830,15 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
     ///
     /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    pub fn close_block<L>(
+    pub fn close_block<C>(
         self,
-        lifecycle: &mut L,
-    ) -> Result<EvmNeedsNextBlock<'a, Ext, Db>, TransactedError<'a, Ext, Db, L::Error>>
+        context: &mut C,
+    ) -> Result<EvmNeedsNextBlock<'a, Ext, Db>, TransactedError<'a, Ext, Db, C::Error>>
     where
-        L: Lifecycle<'a, Ext, Db>,
+        C: BlockContext<Ext, Db>,
         Db: DatabaseCommit,
     {
-        lifecycle.close_block(self).map(EvmNeedsTx::clear_block)
+        context.close_block(self).map(EvmNeedsTx::clear_block)
     }
 
     /// Fill the transaction environment.
@@ -1318,13 +1267,11 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
 
 impl<'a, Ext, Db: Database + DatabaseCommit> Transacted<'a, Ext, Db> {
     /// Apply the state changes, update the [`BlockOutput`], and return the EVM.
-    pub fn apply(self) -> EvmNeedsTx<'a, Ext, Db> {
-        let (mut evm, result) = self.into_parts();
-
-        evm.commit_unchecked(result.state);
-        evm.push_to_outputs(result.result);
-
-        evm
+    pub fn apply<C>(self, context: &mut C) -> ContextResult<'a, Ext, Db, C>
+    where
+        C: BlockContext<Ext, Db>,
+    {
+        context.apply_tx(self)
     }
 
     /// Apply the state changes, do not update the [`BlockOutput`], and return
@@ -1345,29 +1292,36 @@ impl<'a, Ext, Db: Database + DatabaseCommit> Transacted<'a, Ext, Db> {
 
     /// Apply a predicate to the result and accept or reject based on the
     /// result. Returns a tuple of the choice and the EVM.
-    pub fn apply_if<F, T>(self, f: F) -> (PostflightResult, EvmNeedsTx<'a, Ext, Db>)
+    pub fn apply_if<C, F, T>(
+        self,
+        context: &mut C,
+        f: F,
+    ) -> (PostflightResult, ContextResult<'a, Ext, Db, C>)
     where
+        C: BlockContext<Ext, Db>,
         F: FnOnce(&ResultAndState) -> T,
         T: Into<PostflightResult>,
     {
         let choice = f(&self.result).into();
 
-        let evm = if choice.is_apply() { self.apply() } else { self.discard() };
+        let evm = if choice.is_apply() { self.apply(context) } else { Ok(self.discard()) };
         (choice, evm)
     }
 
     /// Apply a [`PostTx`] to the result and accept or reject based on
     /// the result. Returns a tuple of the choice and the EVM.
-    pub fn apply_with_postcondition<F>(
+    pub fn apply_with_postcondition<C, F>(
         self,
+        context: &mut C,
         f: &mut F,
-    ) -> (PostflightResult, EvmNeedsTx<'a, Ext, Db>)
+    ) -> (PostflightResult, ContextResult<'a, Ext, Db, C>)
     where
         F: PostTx,
+        C: BlockContext<Ext, Db>,
     {
         let choice = f.run_post_tx(&self.result);
 
-        let evm = if choice.is_apply() { self.apply() } else { self.discard() };
+        let evm = if choice.is_apply() { self.apply(context) } else { Ok(self.discard()) };
         (choice, evm)
     }
 }

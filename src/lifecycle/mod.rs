@@ -1,7 +1,7 @@
-mod cycles;
-pub use cycles::{
-    CancunLifecycle, CancunLifecycleResult, LifecycleResult, PragueLifecycle,
-    PragueLifecycleResult, ShanghaiLifecycle, ShanghaiLifecycleResult,
+mod contexts;
+pub use contexts::{
+    Cancun, CancunContextResult, ContextResult, NoopContext, Prague, PragueContextResult, Shanghai,
+    ShanghaiContextResult,
 };
 
 mod output;
@@ -11,4 +11,4 @@ mod postflight;
 pub use postflight::{PostTx, PostflightResult};
 
 mod r#trait;
-pub use r#trait::Lifecycle;
+pub use r#trait::BlockContext;

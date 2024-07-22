@@ -57,6 +57,14 @@ pub(crate) mod sealed {
                 #[allow(unnameable_types)]
                 #[derive(Debug)]
                 pub struct $name { _private: () }
+
+                impl $name {
+                    /// Create a new state.
+                    pub(crate) fn new() -> Self {
+                        Self { _private: () }
+                    }
+                }
+
             )*
         };
     }
