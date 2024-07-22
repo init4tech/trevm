@@ -65,7 +65,7 @@ fn main() {
 
     let evm = evm.fill_cfg(&NoopCfg);
 
-    let evm = evm.open_block(&NoopBlock, &mut Shanghai::default()).unwrap();
+    let evm = evm.open_block(&NoopBlock, Shanghai::default()).unwrap();
 
     let evm = evm.fill_tx(&SampleTx).execute_tx();
 

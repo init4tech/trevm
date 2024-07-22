@@ -1,5 +1,8 @@
-use crate::{Block, ContextResult, EvmNeedsTx, NeedsBlock, Transacted, Trevm};
-use revm::{primitives::EVMError, Database, DatabaseCommit};
+use crate::Block;
+use revm::{
+    primitives::{EVMError, ResultAndState},
+    Database, DatabaseCommit, Evm,
+};
 
 /// Block contexts apply pre-block and post-block logic to the EVM, as well as
 /// post-tx logic like receipt generation.
@@ -23,18 +26,15 @@ pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
     type Error: From<EVMError<Db::Error>>;
 
     /// Apply pre-block logic, and prep the EVM for the first user transaction.
-    fn open_block<'a, TrevmState: NeedsBlock, B: Block>(
+    fn open_block<B: Block>(
         &mut self,
-        trevm: Trevm<'a, Ext, Db, TrevmState>,
+        evm: &mut Evm<'_, Ext, Db>,
         b: &B,
-    ) -> ContextResult<'a, Ext, Db, Self>;
+    ) -> Result<(), Self::Error>;
 
     /// Apply the transaction to the evm state
-    fn apply_tx<'a>(&mut self, trevm: Transacted<'a, Ext, Db>) -> ContextResult<'a, Ext, Db, Self>;
+    fn apply_tx(&mut self, trevm: &mut Evm<'_, Ext, Db>, result: ResultAndState);
 
     /// Apply post-block logic and close the block.
-    fn close_block<'a>(
-        &mut self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> ContextResult<'a, Ext, Db, Self>;
+    fn close_block(&mut self, trevm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error>;
 }

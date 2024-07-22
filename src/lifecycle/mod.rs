@@ -1,8 +1,5 @@
 mod contexts;
-pub use contexts::{
-    Cancun, CancunContextResult, ContextResult, NoopContext, Prague, PragueContextResult, Shanghai,
-    ShanghaiContextResult,
-};
+pub use contexts::{BasicContext, Cancun, Prague, Shanghai};
 
 mod output;
 pub use output::BlockOutput;

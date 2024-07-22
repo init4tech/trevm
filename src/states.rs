@@ -38,14 +38,16 @@ pub type EvmNeedsNextBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsNextBlock>;
 /// - [`EvmNeedsTx::finish`]
 ///
 /// [`Tx`]: crate::Tx
-pub type EvmNeedsTx<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsTx>;
+pub type EvmNeedsTx<'a, Ext, Db, C> = Trevm<'a, Ext, Db, NeedsTx<C>>;
 
 /// A [`Trevm`] that is ready to execute a transaction.
 ///
 /// The transaction may be executed with [`Trevm::execute_tx`] or cleared
 /// with [`Trevm::clear_tx`]
-pub type EvmReady<'a, Ext, Db> = Trevm<'a, Ext, Db, Ready>;
+pub type EvmReady<'a, Ext, Db, C> = Trevm<'a, Ext, Db, Ready<C>>;
 
+#[allow(dead_code)]
+#[allow(unnameable_types)]
 pub(crate) mod sealed {
     macro_rules! states {
         ($($name:ident),+) => {
@@ -54,13 +56,12 @@ pub(crate) mod sealed {
                 /// A state for the [`Trevm`].
                 ///
                 /// [`Trevm`]: crate::Trevm
-                #[allow(unnameable_types)]
                 #[derive(Debug)]
                 pub struct $name { _private: () }
 
                 impl $name {
                     /// Create a new state.
-                    pub(crate) fn new() -> Self {
+                    pub(crate) const fn new() -> Self {
                         Self { _private: () }
                     }
                 }
@@ -69,7 +70,19 @@ pub(crate) mod sealed {
         };
     }
 
-    states!(NeedsCfg, NeedsFirstBlock, NeedsNextBlock, NeedsTx, Ready);
+    states!(NeedsCfg, NeedsFirstBlock, NeedsNextBlock);
+
+    /// A state for the [`Trevm`].
+    ///
+    /// [`Trevm`]: crate::Trevm
+    #[derive(Debug)]
+    pub struct NeedsTx<T>(pub T);
+
+    /// A state for the [`Trevm`].
+    ///
+    /// [`Trevm`]: crate::Trevm
+    #[derive(Debug)]
+    pub struct Ready<T>(pub T);
 
     /// Trait for states where block execution can be started.
     #[allow(unnameable_types)]
@@ -81,14 +94,14 @@ pub(crate) mod sealed {
     #[allow(unnameable_types)]
     pub trait HasOutputs {}
     impl HasOutputs for NeedsNextBlock {}
-    impl HasOutputs for NeedsTx {}
-    impl HasOutputs for Ready {}
+    impl<T> HasOutputs for NeedsTx<T> {}
+    impl<T> HasOutputs for Ready<T> {}
 
     #[allow(unnameable_types)]
     pub trait HasCfg {}
     #[allow(unnameable_types)]
     impl HasCfg for NeedsFirstBlock {}
     impl HasCfg for NeedsNextBlock {}
-    impl HasCfg for NeedsTx {}
-    impl HasCfg for Ready {}
+    impl<T> HasCfg for NeedsTx<T> {}
+    impl<T> HasCfg for Ready<T> {}
 }

@@ -1,8 +1,9 @@
 use crate::{
     syscall::{
-        eip6110, eip7002::WITHDRAWAL_REQUEST_BYTES, eip7251::CONSOLIDATION_REQUEST_BYTES, SystemTx,
+        eip6110, eip7002::WITHDRAWAL_REQUEST_BYTES, eip7251::CONSOLIDATION_REQUEST_BYTES,
+        execute_system_tx, SystemTx,
     },
-    Block, BlockContext, BlockOutput, EvmNeedsTx, NeedsBlock, Transacted, TransactedError, Trevm,
+    Block, BlockContext, BlockOutput,
 };
 use alloy_consensus::{Receipt, ReceiptEnvelope, Request};
 use alloy_eips::{
@@ -15,53 +16,36 @@ use alloy_primitives::{B256, U256};
 use alloy_sol_types::SolEvent;
 use revm::{
     primitives::{
-        Account, AccountInfo, Bytecode, EVMError, EvmStorageSlot, ExecutionResult, SpecId,
-        BLOCKHASH_SERVE_WINDOW,
+        Account, AccountInfo, Bytecode, EVMError, EvmStorageSlot, ExecutionResult, ResultAndState,
+        SpecId, BLOCKHASH_SERVE_WINDOW,
     },
-    Database, DatabaseCommit,
+    Database, DatabaseCommit, Evm,
 };
 use std::collections::HashMap;
 
-/// Lifecycle result type alias.
-pub type ContextResult<'a, Ext, Db, T> = Result<
-    EvmNeedsTx<'a, Ext, Db>,
-    TransactedError<'a, Ext, Db, <T as BlockContext<Ext, Db>>::Error>,
->;
+/// A context that performs the fewest meaingful actions. Specifically, it
+/// fills the block, and applies transactions to the EVM db.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub struct BasicContext;
 
-/// Lifecycle result for [`PragueLifecycle`].
-pub type PragueContextResult<'a, Ext, Db> = ContextResult<'a, Ext, Db, Prague<'a>>;
-
-/// Lifecycle result for [`CancunLifecycle`].
-pub type CancunContextResult<'a, Ext, Db> = ContextResult<'a, Ext, Db, Cancun<'a>>;
-
-/// Lifecycle result for [`ShanghaiLifecycle`].
-pub type ShanghaiContextResult<'a, Ext, Db> = ContextResult<'a, Ext, Db, Shanghai<'a>>;
-
-pub struct NoopContext;
-
-impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for NoopContext {
+impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for BasicContext {
     type Error = EVMError<Db::Error>;
 
-    fn open_block<'a, TrevmState: NeedsBlock, B: Block>(
+    fn open_block<B: Block>(
         &mut self,
-        trevm: Trevm<'a, Ext, Db, TrevmState>,
+        evm: &mut Evm<'_, Ext, Db>,
         b: &B,
-    ) -> ContextResult<'a, Ext, Db, Self> {
-        Ok(trevm.fill_block(b))
+    ) -> Result<(), Self::Error> {
+        b.fill_block(evm);
+        Ok(())
     }
 
-    fn apply_tx<'a>(&mut self, trevm: Transacted<'a, Ext, Db>) -> ContextResult<'a, Ext, Db, Self> {
-        let (mut trevm, result) = trevm.into_parts();
-
-        trevm.commit_unchecked(result.state);
-        Ok(trevm)
+    fn apply_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: revm::primitives::ResultAndState) {
+        evm.db_mut().commit(result.state);
     }
 
-    fn close_block<'a>(
-        &mut self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> ContextResult<'a, Ext, Db, Self> {
-        Ok(trevm)
+    fn close_block(&mut self, _evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
@@ -86,24 +70,21 @@ impl<'a> From<&'a [Withdrawal]> for Shanghai<'a> {
 impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Shanghai<'_> {
     type Error = EVMError<Db::Error>;
 
-    fn open_block<'a, TrevmState: NeedsBlock, B: Block>(
+    fn open_block<B: Block>(
         &mut self,
-        trevm: Trevm<'a, Ext, Db, TrevmState>,
+        evm: &mut Evm<'_, Ext, Db>,
         b: &B,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
-        Ok(trevm.fill_block(b))
+    ) -> Result<(), Self::Error> {
+        b.fill_block(evm);
+        Ok(())
     }
 
-    fn apply_tx<'a>(
-        &mut self,
-        trevm: Transacted<'a, Ext, Db>,
-    ) -> ShanghaiContextResult<'a, Ext, Db> {
-        let sender = trevm.evm().inner().tx().caller;
+    fn apply_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
+        let sender = evm.tx().caller;
 
-        let (mut trevm, result) = trevm.into_parts();
         let receipt = self.make_receipt(result.result).into();
 
-        let tx_env = trevm.inner().tx();
+        let tx_env = evm.tx();
 
         // Determine the receipt envelope type based on the transaction type.
         let receipt = if !tx_env.blob_hashes.is_empty() {
@@ -116,17 +97,13 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Shanghai<'_> 
             ReceiptEnvelope::Legacy(receipt)
         };
 
-        trevm.commit_unchecked(result.state);
+        evm.db_mut().commit(result.state);
         self.outputs.push_result(receipt, sender);
-
-        Ok(trevm)
     }
 
-    fn close_block<'a>(
-        &mut self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db>, TransactedError<'a, Ext, Db, Self::Error>> {
-        self.apply_withdrawals(trevm)
+    fn close_block(&mut self, evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error> {
+        self.apply_withdrawals(evm)?;
+        Ok(())
     }
 }
 
@@ -148,10 +125,10 @@ impl Shanghai<'_> {
     }
 
     /// Apply the withdrawals to the EVM state.
-    pub fn apply_withdrawals<'a, Ext, Db>(
+    pub fn apply_withdrawals<Ext, Db>(
         &mut self,
-        mut trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> ShanghaiContextResult<'a, Ext, Db>
+        evm: &mut Evm<'_, Ext, Db>,
+    ) -> Result<(), <Self as BlockContext<Ext, Db>>::Error>
     where
         Db: Database + DatabaseCommit,
     {
@@ -166,16 +143,16 @@ impl Shanghai<'_> {
             .filter(|(_, amount)| *amount != 0);
 
         for (address, amount) in increments {
-            let mut info = match trevm.inner_mut_unchecked().db_mut().basic(address) {
+            let mut info = match evm.db_mut().basic(address) {
                 Ok(account) => account.unwrap_or_default(),
-                Err(error) => return Err(TransactedError::new(trevm, EVMError::Database(error))),
+                Err(error) => return Err(EVMError::Database(error)),
             };
             info.balance = info.balance.saturating_add(U256::from(amount));
             changes.insert(address, Account { info, ..Default::default() });
         }
-        trevm.inner_mut_unchecked().db_mut().commit(changes);
+        evm.db_mut().commit(changes);
 
-        Ok(trevm)
+        Ok(())
     }
 }
 
@@ -197,23 +174,21 @@ pub struct Cancun<'a> {
 impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Cancun<'_> {
     type Error = EVMError<Db::Error>;
 
-    fn open_block<'a, TrevmState: NeedsBlock, B: Block>(
+    fn open_block<B: Block>(
         &mut self,
-        trevm: Trevm<'a, Ext, Db, TrevmState>,
+        evm: &mut Evm<'_, Ext, Db>,
         b: &B,
-    ) -> CancunContextResult<'a, Ext, Db> {
-        self.apply_eip4788(trevm.fill_block(b))
+    ) -> Result<(), Self::Error> {
+        self.shanghai.open_block(evm, b)?;
+        self.apply_eip4788(evm)
     }
 
-    fn apply_tx<'a>(&mut self, trevm: Transacted<'a, Ext, Db>) -> CancunContextResult<'a, Ext, Db> {
-        self.shanghai.apply_tx(trevm)
+    fn apply_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
+        self.shanghai.apply_tx(evm, result)
     }
 
-    fn close_block<'a>(
-        &mut self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> CancunContextResult<'a, Ext, Db> {
-        self.shanghai.close_block(trevm)
+    fn close_block(&mut self, evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error> {
+        self.shanghai.close_block(evm)
     }
 }
 
@@ -223,19 +198,18 @@ impl Cancun<'_> {
     /// contract to update the historical beacon root.
     ///
     /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
-    pub fn apply_eip4788<'a, Ext, Db>(
-        &self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> CancunContextResult<'a, Ext, Db>
+    pub fn apply_eip4788<Ext, Db>(
+        &mut self,
+        evm: &mut Evm<'_, Ext, Db>,
+    ) -> Result<(), <Self as BlockContext<Ext, Db>>::Error>
     where
         Db: Database + DatabaseCommit,
     {
-        if trevm.spec_id() < SpecId::CANCUN {
-            return Ok(trevm);
+        if evm.spec_id() < SpecId::CANCUN {
+            return Ok(());
         }
-        trevm
-            .execute_system_tx(&SystemTx::eip4788(self.parent_beacon_root))
-            .map(Transacted::apply_sys)
+        execute_system_tx(evm, &SystemTx::eip4788(self.parent_beacon_root))?;
+        Ok(())
     }
 }
 
@@ -261,27 +235,24 @@ where
 {
     type Error = EVMError<Db::Error>;
 
-    fn open_block<'a, TrevmState: NeedsBlock, B: Block>(
+    fn open_block<'a, B: Block>(
         &mut self,
-        trevm: Trevm<'a, Ext, Db, TrevmState>,
+        evm: &mut Evm<'_, Ext, Db>,
         b: &B,
-    ) -> PragueContextResult<'a, Ext, Db> {
-        Self::apply_eip2935(self.cancun.open_block(trevm, b)?)
+    ) -> Result<(), Self::Error> {
+        self.cancun.open_block(evm, b)?;
+        Self::apply_eip2935(evm)
     }
 
-    fn apply_tx<'a>(&mut self, trevm: Transacted<'a, Ext, Db>) -> PragueContextResult<'a, Ext, Db> {
-        let trevm = self.cancun.shanghai.apply_tx(trevm)?;
+    fn apply_tx<'a>(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
+        self.cancun.apply_tx(evm, result);
         self.find_deposit_logs();
-        Ok(trevm)
     }
 
-    fn close_block<'a>(
-        &mut self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> PragueContextResult<'a, Ext, Db> {
-        let trevm = self.apply_eip7002(trevm)?;
-        let trevm = self.apply_eip7251(trevm)?;
-        self.cancun.close_block(trevm)
+    fn close_block<'a>(&mut self, evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error> {
+        self.apply_eip7002(evm)?;
+        self.apply_eip7251(evm)?;
+        self.cancun.close_block(evm)
     }
 }
 
@@ -291,7 +262,7 @@ impl Prague<'_> {
             self.cancun.shanghai.outputs.receipts().last().expect("produced in shanghai lifecycle");
 
         for log in
-            receipt.logs().into_iter().filter(|log| log.address == eip6110::MAINNET_DEPOSIT_ADDRESS)
+            receipt.logs().iter().filter(|log| log.address == eip6110::MAINNET_DEPOSIT_ADDRESS)
         {
             // We assume that the log is valid because it was emitted by the
             // deposit contract.
@@ -307,47 +278,40 @@ impl Prague<'_> {
     ///
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
     pub fn apply_eip2935<Ext, Db>(
-        mut trevm: EvmNeedsTx<'_, Ext, Db>,
-    ) -> PragueContextResult<'_, Ext, Db>
+        evm: &mut Evm<'_, Ext, Db>,
+    ) -> Result<(), <Self as BlockContext<Ext, Db>>::Error>
     where
         Db: Database + DatabaseCommit,
     {
-        if trevm.spec_id() < SpecId::PRAGUE || trevm.inner().block().number.is_zero() {
-            return Ok(trevm);
+        if evm.spec_id() < SpecId::PRAGUE || evm.block().number.is_zero() {
+            return Ok(());
         }
 
-        let mut account: Account =
-            match trevm.inner_mut_unchecked().db_mut().basic(HISTORY_STORAGE_ADDRESS) {
-                Ok(Some(account)) => account,
-                Ok(None) => AccountInfo {
-                    nonce: 1,
-                    code: Some(Bytecode::new_raw(HISTORY_STORAGE_CODE.clone())),
-                    ..Default::default()
-                },
-                Err(error) => return Err(TransactedError::new(trevm, EVMError::Database(error))),
-            }
-            .into();
+        let mut account: Account = match evm.db_mut().basic(HISTORY_STORAGE_ADDRESS) {
+            Ok(Some(account)) => account,
+            Ok(None) => AccountInfo {
+                nonce: 1,
+                code: Some(Bytecode::new_raw(HISTORY_STORAGE_CODE.clone())),
+                ..Default::default()
+            },
+            Err(error) => return Err(EVMError::Database(error)),
+        }
+        .into();
 
-        let block_num = trevm.inner().block().number.as_limbs()[0];
+        let block_num = evm.block().number.as_limbs()[0];
         let prev_block = block_num.saturating_sub(1);
 
         // Update the EVM state with the new value.
         {
             let slot = U256::from(block_num % BLOCKHASH_SERVE_WINDOW as u64);
-            let current_hash =
-                match trevm.inner_mut_unchecked().db_mut().storage(HISTORY_STORAGE_ADDRESS, slot) {
-                    Ok(current_hash) => current_hash,
-                    Err(error) => {
-                        return Err(TransactedError::new(trevm, EVMError::Database(error)))
-                    }
-                };
-            let parent_block_hash =
-                match trevm.inner_mut_unchecked().db_mut().block_hash(prev_block) {
-                    Ok(parent_block_hash) => parent_block_hash,
-                    Err(error) => {
-                        return Err(TransactedError::new(trevm, EVMError::Database(error)))
-                    }
-                };
+            let current_hash = match evm.db_mut().storage(HISTORY_STORAGE_ADDRESS, slot) {
+                Ok(current_hash) => current_hash,
+                Err(error) => return Err(EVMError::Database(error)),
+            };
+            let parent_block_hash = match evm.db_mut().block_hash(prev_block) {
+                Ok(parent_block_hash) => parent_block_hash,
+                Err(error) => return Err(EVMError::Database(error)),
+            };
 
             // Insert the state change for the slot
             let value = EvmStorageSlot::new_changed(current_hash, parent_block_hash.into());
@@ -357,12 +321,9 @@ impl Prague<'_> {
 
         // Mark the account as touched and commit the state change
         account.mark_touch();
-        trevm
-            .inner_mut_unchecked()
-            .db_mut()
-            .commit(HashMap::from([(HISTORY_STORAGE_ADDRESS, account)]));
+        evm.db_mut().commit(HashMap::from([(HISTORY_STORAGE_ADDRESS, account)]));
 
-        Ok(trevm)
+        Ok(())
     }
 
     /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
@@ -370,18 +331,18 @@ impl Prague<'_> {
     /// request contract to process withdrawal requests.
     ///
     /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    pub fn apply_eip7002<'a, Ext, Db>(
+    pub fn apply_eip7002<Ext, Db>(
         &mut self,
 
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> PragueContextResult<'a, Ext, Db>
+        evm: &mut Evm<'_, Ext, Db>,
+    ) -> Result<(), <Self as BlockContext<Ext, Db>>::Error>
     where
         Db: Database + DatabaseCommit,
     {
-        if trevm.spec_id() < SpecId::PRAGUE {
-            return Ok(trevm);
+        if evm.spec_id() < SpecId::PRAGUE {
+            return Ok(());
         }
-        let res = trevm.execute_system_tx(&SystemTx::eip7002())?;
+        let res = execute_system_tx(evm, &SystemTx::eip7002())?;
 
         // We make assumptions here:
         // - The system transaction never reverts.
@@ -401,24 +362,24 @@ impl Prague<'_> {
             Request::WithdrawalRequest(req)
         }));
 
-        Ok(res.apply_sys())
+        Ok(())
     }
 
     /// Apply a system transaction as specified in [EIP-7251]. The EIP-7251
     /// post-block action calls the consolidation request contract to process
     /// consolidation requests.
-    pub fn apply_eip7251<'a, Ext, Db>(
+    pub fn apply_eip7251<Ext, Db>(
         &mut self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> PragueContextResult<'a, Ext, Db>
+        evm: &mut Evm<'_, Ext, Db>,
+    ) -> Result<(), <Self as BlockContext<Ext, Db>>::Error>
     where
         Db: Database + DatabaseCommit,
     {
-        if trevm.spec_id() < SpecId::PRAGUE {
-            return Ok(trevm);
+        if evm.spec_id() < SpecId::PRAGUE {
+            return Ok(());
         }
 
-        let res = trevm.execute_system_tx(&SystemTx::eip7251())?;
+        let res = execute_system_tx(evm, &SystemTx::eip7251())?;
 
         // We make assumptions here:
         // - The system transaction never reverts.
@@ -438,6 +399,6 @@ impl Prague<'_> {
             Request::ConsolidationRequest(req)
         }));
 
-        Ok(res.apply_sys())
+        Ok(())
     }
 }

@@ -355,8 +355,7 @@ pub use fill::{Block, Cfg, Tx};
 
 mod lifecycle;
 pub use lifecycle::{
-    BlockContext, BlockOutput, Cancun, CancunContextResult, ContextResult, NoopContext, PostTx,
-    PostflightResult, Prague, PragueContextResult, Shanghai, ShanghaiContextResult,
+    BlockContext, BlockOutput, Cancun, BasicContext, PostTx, PostflightResult, Prague, Shanghai,
 };
 
 mod states;
@@ -369,15 +368,17 @@ pub mod syscall;
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
 
-use revm::{Database, EvmBuilder};
+use revm::{Database, DatabaseCommit, EvmBuilder};
 
 /// Ext trait for [`EvmBuilder`] that builds a [`Trevm`].
-pub trait TrevmBuilder<'a, Ext, Db: Database> {
+pub trait TrevmBuilder<'a, Ext, Db: Database + DatabaseCommit> {
     /// Builds the [`Trevm`].
     fn build_trevm(self) -> EvmNeedsCfg<'a, Ext, Db>;
 }
 
-impl<'a, Stage, Ext, Db: Database> TrevmBuilder<'a, Ext, Db> for EvmBuilder<'a, Stage, Ext, Db> {
+impl<'a, Stage, Ext, Db: Database + DatabaseCommit> TrevmBuilder<'a, Ext, Db>
+    for EvmBuilder<'a, Stage, Ext, Db>
+{
     /// Builds the [`Trevm`].
     fn build_trevm(self) -> EvmNeedsCfg<'a, Ext, Db> {
         Trevm::from(self.build())

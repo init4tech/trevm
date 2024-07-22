@@ -4,12 +4,12 @@ use revm::{
     db::{CacheDB, EmptyDB, InMemoryDB},
     inspector_handle_register,
     primitives::{AccountInfo, Bytecode},
-    Database, EvmBuilder, GetInspector,
+    Database, DatabaseCommit, EvmBuilder, GetInspector,
 };
 
 pub use revm::test_utils as revm_test_utils;
 
-impl<'a, Ext, Db: Database, State> Trevm<'a, Ext, Db, State> {
+impl<'a, Ext, Db: Database + DatabaseCommit, State> Trevm<'a, Ext, Db, State> {
     /// Make a new [`Trevm`] with a [`InMemoryDB`].
     pub fn test_trevm() -> EvmNeedsCfg<'static, (), InMemoryDB> {
         test_trevm()

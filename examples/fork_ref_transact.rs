@@ -91,7 +91,7 @@ async fn main() -> eyre::Result<()> {
     let evm = Evm::builder().with_db(cache_db).build_trevm();
 
     let evm = evm.fill_cfg(&NoopCfg);
-    let evm = evm.open_block(&NoopBlock, &mut Shanghai::default()).unwrap();
+    let evm = evm.open_block(&NoopBlock, Shanghai::default()).unwrap();
 
     let evm = evm.fill_tx(&GetReservesFiller).execute_tx();
 
