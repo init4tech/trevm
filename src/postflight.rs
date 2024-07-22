@@ -1,6 +1,9 @@
 use revm::primitives::ResultAndState;
 
 /// Control flow for transaction execution.
+///
+/// This enum is used to determine whether to apply or discard the state
+/// changes after a transaction is executed.
 #[derive(Debug, Clone, Copy)]
 pub enum PostflightResult {
     /// Discard the state changes
@@ -63,7 +66,8 @@ macro_rules! discard_if {
     };
 }
 
-/// Trait for types which inspect the outcome of EVM execution after each Tx.
+/// Inspect the outcome of a transaction execution, and determine whether to
+/// apply or discard the state changes.
 pub trait PostTx {
     /// Check the result of the EVM execution, potentially mutating self.
     fn run_post_tx(&mut self, result: &ResultAndState) -> PostflightResult;

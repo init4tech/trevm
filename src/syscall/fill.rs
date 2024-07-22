@@ -5,19 +5,22 @@ use revm::primitives::TxEnv;
 /// System smart contract calls as specified in [EIP-4788], [EIP-7002],
 /// and [EIP-7251].
 ///
-/// These calls are sent from a special system caller address.
+/// By default, these calls are sent from a special system caller address
+/// specified in the EIPs, but this can be overridden using the
+/// [`SystemTx::new_with_caller`] method.
+///
 ///
 /// [`EIP-4788`]: https://eips.ethereum.org/EIPS/eip-4788
 /// [`EIP-7002`]: https://eips.ethereum.org/EIPS/eip-7002
 /// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SystemCall {
-    /// The caller address of the system call.
-    pub caller: Address,
+pub struct SystemTx {
     /// The target address of the system call.
     pub target: Address,
     /// The input data of the system call.
     pub input: Bytes,
+    /// The caller address of the system call.
+    pub caller: Address,
 }
 
 /// The system caller as specified in [EIP-4788], [EIP-7002], and [EIP-7251].
@@ -27,19 +30,19 @@ pub struct SystemCall {
 /// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
 pub const DEFAULT_SYSTEM_CALLER: Address = address!("fffffffffffffffffffffffffffffffffffffffe");
 
-impl SystemCall {
-    /// Instantiate a new [`SystemCall`].
+impl SystemTx {
+    /// Instantiate a new [`SystemTx`].
     pub const fn new(target: Address, input: Bytes) -> Self {
         Self { caller: DEFAULT_SYSTEM_CALLER, target, input }
     }
 
-    /// Instantiate a new [`SystemCall`] with a custom caller address.
-    pub const fn new_with_caller(caller: Address, target: Address, input: Bytes) -> Self {
+    /// Instantiate a new [`SystemTx`] with a custom caller address.
+    pub const fn new_with_caller(target: Address, input: Bytes, caller: Address) -> Self {
         Self { caller, target, input }
     }
 }
 
-impl Tx for SystemCall {
+impl Tx for SystemTx {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         let TxEnv {
             caller,
@@ -58,16 +61,23 @@ impl Tx for SystemCall {
         } = tx_env;
         *caller = self.caller;
         *gas_limit = 30_000_000;
+        // 0 gas price
         *gas_price = U256::ZERO;
         *transact_to = self.target.into();
         *value = U256::ZERO;
         *data = self.input.clone();
+        // disable revm nonce checks
         nonce.take();
+        // disable chain id checks
         chain_id.take();
+        // set priority fee to 0
         gas_priority_fee.take();
+        // disable eip-2930
         access_list.clear();
+        // disable eip-4844
         blob_hashes.clear();
         max_fee_per_blob_gas.take();
+        // disable eip-7702
         authorization_list.take();
     }
 }

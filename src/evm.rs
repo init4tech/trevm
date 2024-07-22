@@ -1,5 +1,5 @@
 use crate::{
-    syscall::{SystemCall, CONSOLIDATION_REQUEST_BYTES, WITHDRAWAL_REQUEST_BYTES},
+    syscall::{eip7002::WITHDRAWAL_REQUEST_BYTES, eip7251::CONSOLIDATION_REQUEST_BYTES, SystemTx},
     Block, BlockOutput, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
     EvmReady, HasCfg, HasOutputs, Lifecycle, NeedsBlock, PostTx, PostflightResult, Tx,
 };
@@ -986,7 +986,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
     pub fn execute_system_tx(
         mut self,
-        syscall: &SystemCall,
+        syscall: &SystemTx,
     ) -> Result<Transacted<'a, Ext, Db>, TransactedError<'a, Ext, Db>> {
         let limit = U256::from(self.inner.tx().gas_limit);
         let old_gas_limit = std::mem::replace(&mut self.inner.block_mut().gas_limit, limit);
@@ -1021,7 +1021,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         if self.spec_id() < SpecId::CANCUN {
             return Ok(self);
         }
-        self.execute_system_tx(&SystemCall::eip4788(parent_beacon_root)).map(Transacted::apply_sys)
+        self.execute_system_tx(&SystemTx::eip4788(parent_beacon_root)).map(Transacted::apply_sys)
     }
 
     /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
@@ -1036,7 +1036,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         if self.spec_id() < SpecId::PRAGUE {
             return Ok(self);
         }
-        let mut res = self.execute_system_tx(&SystemCall::eip7002())?;
+        let mut res = self.execute_system_tx(&SystemTx::eip7002())?;
 
         // We make assumptions here:
         // - The system transaction never reverts.
@@ -1073,7 +1073,7 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
             return Ok(self);
         }
 
-        let mut res = self.execute_system_tx(&SystemCall::eip7251())?;
+        let mut res = self.execute_system_tx(&SystemTx::eip7251())?;
 
         // We make assumptions here:
         // - The system transaction never reverts.
@@ -1365,7 +1365,7 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
     /// restoring the block environment.
     fn cleanup_syscall(
         mut self,
-        syscall: &SystemCall,
+        syscall: &SystemTx,
         old_gas_limit: U256,
         old_base_fee: U256,
     ) -> Self {
@@ -1390,9 +1390,9 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
     /// Get a mutable reference to the result. Modification of the result is
     /// discouraged, as it may lead to inconsistent state.
     ///
-    /// This is primarily intended for use in [`SystemCall`] execution.
+    /// This is primarily intended for use in [`SystemTx`] execution.
     ///
-    /// [`SystemCall`]: crate::syscall::SystemCall
+    /// [`SystemTx`]: crate::syscall::SystemTx
     pub fn result_mut_unchecked(&mut self) -> &mut ExecutionResult {
         &mut self.result.result
     }
@@ -1416,9 +1416,9 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
     /// Get a mutable reference to the result and state. Modification of the
     /// result and state is discouraged, as it may lead to inconsistent state.
     ///
-    /// This is primarily intended for use in [`SystemCall`] execution.
+    /// This is primarily intended for use in [`SystemTx`] execution.
     ///
-    /// [`SystemCall`]: crate::syscall::SystemCall
+    /// [`SystemTx`]: crate::syscall::SystemTx
     pub fn result_and_state_mut_unchecked(&mut self) -> &mut ResultAndState {
         &mut self.result
     }

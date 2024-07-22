@@ -17,6 +17,11 @@ sol! {
 }
 
 /// Parse deposit requests from logs.
+///
+/// When parsing logs, the following assumptions are made
+///
+/// - The `DepositEvent` is the only event in the deposit contract.
+/// - The deposit contract enforces the length of the fields.
 pub fn parse_deposit_from_log(log: &Log<DepositEvent>) -> DepositRequest {
     // SAFETY: These `expect` https://github.com/ethereum/consensus-specs/blob/5f48840f4d768bf0e0a8156a3ed06ec333589007/solidity_deposit_contract/deposit_contract.sol#L107-L110
     // are safe because the `DepositEvent` is the only event in the deposit contract and the length

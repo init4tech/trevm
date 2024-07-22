@@ -1,44 +1,5 @@
-pub(crate) mod sealed {
-    macro_rules! states {
-        ($($name:ident),+) => {
-            $(
-
-                /// A state for the [`Trevm`].
-                ///
-                /// [`Trevm`]: crate::Trevm
-                #[allow(unnameable_types)]
-                #[derive(Debug)]
-                pub struct $name { _private: () }
-            )*
-        };
-    }
-
-    states!(NeedsCfg, NeedsFirstBlock, NeedsNextBlock, NeedsTx, Ready);
-
-    /// Trait for states where block execution can be started.
-    #[allow(unnameable_types)]
-    pub trait NeedsBlock {}
-    impl NeedsBlock for NeedsFirstBlock {}
-    impl NeedsBlock for NeedsNextBlock {}
-
-    /// Trait for states where thcare outputs vec is non-empty.
-    #[allow(unnameable_types)]
-    pub trait HasOutputs {}
-    impl HasOutputs for NeedsNextBlock {}
-    impl HasOutputs for NeedsTx {}
-    impl HasOutputs for Ready {}
-
-    #[allow(unnameable_types)]
-    pub trait HasCfg {}
-    #[allow(unnameable_types)]
-    impl HasCfg for NeedsFirstBlock {}
-    impl HasCfg for NeedsNextBlock {}
-    impl HasCfg for NeedsTx {}
-    impl HasCfg for Ready {}
-}
-use sealed::*;
-
 use crate::Trevm;
+use sealed::*;
 
 /// A [`Trevm`] that requires a [`Cfg`].
 ///
@@ -84,3 +45,42 @@ pub type EvmNeedsTx<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsTx>;
 /// The transaction may be executed with [`Trevm::execute_tx`] or cleared
 /// with [`Trevm::clear_tx`]
 pub type EvmReady<'a, Ext, Db> = Trevm<'a, Ext, Db, Ready>;
+
+pub(crate) mod sealed {
+    macro_rules! states {
+        ($($name:ident),+) => {
+            $(
+
+                /// A state for the [`Trevm`].
+                ///
+                /// [`Trevm`]: crate::Trevm
+                #[allow(unnameable_types)]
+                #[derive(Debug)]
+                pub struct $name { _private: () }
+            )*
+        };
+    }
+
+    states!(NeedsCfg, NeedsFirstBlock, NeedsNextBlock, NeedsTx, Ready);
+
+    /// Trait for states where block execution can be started.
+    #[allow(unnameable_types)]
+    pub trait NeedsBlock {}
+    impl NeedsBlock for NeedsFirstBlock {}
+    impl NeedsBlock for NeedsNextBlock {}
+
+    /// Trait for states where thcare outputs vec is non-empty.
+    #[allow(unnameable_types)]
+    pub trait HasOutputs {}
+    impl HasOutputs for NeedsNextBlock {}
+    impl HasOutputs for NeedsTx {}
+    impl HasOutputs for Ready {}
+
+    #[allow(unnameable_types)]
+    pub trait HasCfg {}
+    #[allow(unnameable_types)]
+    impl HasCfg for NeedsFirstBlock {}
+    impl HasCfg for NeedsNextBlock {}
+    impl HasCfg for NeedsTx {}
+    impl HasCfg for Ready {}
+}

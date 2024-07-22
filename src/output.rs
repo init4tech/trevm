@@ -2,12 +2,14 @@ use alloy_consensus::{Receipt, Request, TxReceipt};
 use alloy_primitives::{Address, Log};
 use alloy_sol_types::SolEvent;
 
-use crate::syscall::{DepositEvent, MAINNET_DEPOSIT_ADDRESS};
+use crate::syscall::eip6110;
 
 /// Information externalized during block execution.
 ///
-/// Requests are not handled here, as they require outside configuration in the
-/// form of the deposit address.
+/// This struct is used to collect the results of executing a block of
+/// transactions. It contains the receipts and senders of the transactions, as
+/// well as any [`Request`] objects that were generated during the block.
+
 #[derive(Debug, Clone, Default)]
 pub struct BlockOutput<T: TxReceipt = Receipt> {
     /// The receipts of the transactions in the block, in order.
@@ -57,16 +59,20 @@ impl<T: TxReceipt> BlockOutput<T> {
     }
 
     fn find_deposit_logs(&mut self, log: &Log) {
-        if log.address == MAINNET_DEPOSIT_ADDRESS {
+        if log.address == eip6110::MAINNET_DEPOSIT_ADDRESS {
             // We assume that the log is valid because it was emitted by the
             // deposit contract.
-            let decoded_log = DepositEvent::decode_log(log, false).expect("invalid log");
-            let deposit = crate::syscall::parse_deposit_from_log(&decoded_log);
+            let decoded_log = eip6110::DepositEvent::decode_log(log, false).expect("invalid log");
+            let deposit = eip6110::parse_deposit_from_log(&decoded_log);
             self.push_request(Request::DepositRequest(deposit));
         }
     }
 
-    /// Accumulate the result of a transaction execution.
+    /// Accumulate the result of a transaction execution. If `parse_deposits` is
+    /// true, the logs of the transaction will be scanned for deposit events
+    /// according to the [EIP-6110] specification.
+    ///
+    /// [EIP-6110]: https://eips.ethereum.org/EIPS/eip-6110
     pub fn push_result(&mut self, receipt: T, sender: Address, parse_deposits: bool) {
         if parse_deposits {
             for log in receipt.logs() {

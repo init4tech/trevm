@@ -1,4 +1,4 @@
-use crate::syscall::SystemCall;
+use crate::syscall::SystemTx;
 use alloy_primitives::{address, Address, Bytes};
 
 /// The address for the [EIP-7251] consolidation requests contract
@@ -10,11 +10,11 @@ pub const CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS: Address =
 /// The size of a consolidation request in bytes.
 pub const CONSOLIDATION_REQUEST_BYTES: usize = 20 + 48 + 48;
 
-impl SystemCall {
+impl SystemTx {
     /// Instantiate a system call for the post-block consolidation requests as
     /// specified in [EIP-7251].
     ///
-    /// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
     pub const fn eip7251() -> Self {
         Self::eip7251_with_target(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS)
     }
@@ -22,8 +22,17 @@ impl SystemCall {
     /// Instantiate a system call for the post-block consolidation requests as
     /// specified in [EIP-7251], with a custom target address.
     ///
-    /// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
     pub const fn eip7251_with_target(target: Address) -> Self {
         Self::new(target, Bytes::new())
+    }
+
+    /// Instantiate a system call for the post-block consolidation requests as
+    /// specified in [EIP-7251], with a custom target address and caller
+    /// address.
+    ///
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+    pub const fn eip7251_with_target_and_caller(target: Address, caller: Address) -> Self {
+        Self::new_with_caller(target, Bytes::new(), caller)
     }
 }
