@@ -10,7 +10,7 @@ use crate::syscall::eip6110;
 /// transactions. It contains the receipts and senders of the transactions, as
 /// well as any [`Request`] objects that were generated during the block.
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockOutput<T: TxReceipt = Receipt> {
     /// The receipts of the transactions in the block, in order.
     receipts: Vec<T>,
@@ -20,6 +20,12 @@ pub struct BlockOutput<T: TxReceipt = Receipt> {
 
     /// Requests made during post-block hooks.
     requests: Vec<Request>,
+}
+
+impl<T: TxReceipt> Default for BlockOutput<T> {
+    fn default() -> Self {
+        Self::with_capacity(10)
+    }
 }
 
 impl<T: TxReceipt> BlockOutput<T> {
@@ -101,16 +107,5 @@ impl<T: TxReceipt> BlockOutput<T> {
     /// Push a sender onto the list of senders.
     fn push_sender(&mut self, sender: Address) {
         self.senders.push(sender);
-    }
-
-    /// Pop a receipt from the list of receipts. This is discouraged as it
-    /// may lead to [`BlockOutput`] being out of sync with the block.
-    ///
-    /// It is primarily used for post-execution cleanup of [`SystemCall`] runs.
-    ///
-    /// [`SystemCall`]: crate::syscall::SystemCall
-    pub fn pop_tx_unchecked(&mut self) -> Option<T> {
-        let _ = self.senders.pop();
-        self.receipts.pop()
     }
 }
