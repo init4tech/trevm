@@ -1,29 +1,18 @@
 use crate::{
-    syscall::{eip7002::WITHDRAWAL_REQUEST_BYTES, eip7251::CONSOLIDATION_REQUEST_BYTES, SystemTx},
-    Block, BlockOutput, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
-    EvmReady, HasCfg, HasOutputs, Lifecycle, NeedsBlock, PostTx, PostflightResult, Tx,
+    syscall::SystemTx, Block, BlockOutput, Cfg, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock,
+    EvmNeedsTx, EvmReady, HasCfg, HasOutputs, Lifecycle, NeedsBlock, PostTx, PostflightResult, Tx,
 };
-use alloy_consensus::{constants::KECCAK_EMPTY, Receipt, Request};
-use alloy_eips::{
-    eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE},
-    eip7002::WithdrawalRequest,
-    eip7251::ConsolidationRequest,
-};
-use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy_consensus::{constants::KECCAK_EMPTY, Receipt};
+use alloy_primitives::{Address, Bytes, U256};
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState},
     primitives::{
         Account, AccountInfo, Bytecode, EVMError, EvmState, EvmStorageSlot, ExecutionResult,
-        InvalidTransaction, ResultAndState, SpecId, BLOCKHASH_SERVE_WINDOW,
+        InvalidTransaction, ResultAndState, SpecId,
     },
     Database, DatabaseCommit, DatabaseRef, Evm, State,
 };
-use std::{
-    collections::HashMap,
-    convert::Infallible,
-    fmt::{self, Debug},
-    marker::PhantomData,
-};
+use std::{convert::Infallible, fmt, marker::PhantomData};
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
@@ -34,7 +23,7 @@ pub struct Trevm<'a, Ext, Db: Database, TrevmState> {
     _state: PhantomData<fn() -> TrevmState>,
 }
 
-impl<Ext, Db: Database, TrevmState> Debug for Trevm<'_, Ext, Db, TrevmState> {
+impl<Ext, Db: Database, TrevmState> fmt::Debug for Trevm<'_, Ext, Db, TrevmState> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trevm").finish_non_exhaustive()
     }
@@ -918,64 +907,6 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
         self.fill_tx(filler).execute_tx()
     }
 
-    /// Apply the pre-block logic for [EIP-2935]. This logic was introduced in
-    /// Prague and updates historical block hashes in a special system
-    /// contract. Unlike other system transactions, this is NOT modeled as a transaction.
-    ///
-    /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
-    pub fn apply_eip2935(mut self) -> Result<Self, TransactedError<'a, Ext, Db>>
-    where
-        Db: DatabaseCommit,
-    {
-        if self.spec_id() < SpecId::PRAGUE || self.inner.block().number.is_zero() {
-            return Ok(self);
-        }
-
-        let mut account: Account = match self.inner.db_mut().basic(HISTORY_STORAGE_ADDRESS) {
-            Ok(Some(account)) => account,
-            Ok(None) => AccountInfo {
-                nonce: 1,
-                code: Some(Bytecode::new_raw(HISTORY_STORAGE_CODE.clone())),
-                ..Default::default()
-            },
-            Err(error) => {
-                return Err(TransactedError { evm: self, error: EVMError::Database(error) })
-            }
-        }
-        .into();
-
-        let block_num = self.inner.block().number.as_limbs()[0];
-        let prev_block = block_num.saturating_sub(1);
-
-        // Update the EVM state with the new value.
-        {
-            let slot = U256::from(block_num % BLOCKHASH_SERVE_WINDOW as u64);
-            let current_hash = match self.inner.db_mut().storage(HISTORY_STORAGE_ADDRESS, slot) {
-                Ok(current_hash) => current_hash,
-                Err(error) => {
-                    return Err(TransactedError { evm: self, error: EVMError::Database(error) })
-                }
-            };
-            let parent_block_hash = match self.inner.db_mut().block_hash(prev_block) {
-                Ok(parent_block_hash) => parent_block_hash,
-                Err(error) => {
-                    return Err(TransactedError { evm: self, error: EVMError::Database(error) })
-                }
-            };
-
-            // Insert the state change for the slot
-            let value = EvmStorageSlot::new_changed(current_hash, parent_block_hash.into());
-
-            account.storage.insert(slot, value);
-        }
-
-        // Mark the account as touched and commit the state change
-        account.mark_touch();
-        self.inner.db_mut().commit(HashMap::from([(HISTORY_STORAGE_ADDRESS, account)]));
-
-        Ok(self)
-    }
-
     /// Apply a system transaction as specified in [EIP-4788], [EIP-7002], or
     /// [EIP-7251]. This function will execute the system transaction and apply
     /// the result if non-error, cleaning up any extraneous state changes, and
@@ -1004,100 +935,6 @@ impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
 
         // apply result, remove receipt from block outputs.
         Ok(trevm)
-    }
-
-    /// Apply a system transaction as specified in [EIP-4788]. The EIP-4788
-    /// pre-block action was introduced in Cancun, and calls the beacon root
-    /// contract to update the historical beacon root.
-    ///
-    /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
-    pub fn apply_eip4788(
-        self,
-        parent_beacon_root: B256,
-    ) -> Result<Self, TransactedError<'a, Ext, Db>>
-    where
-        Db: DatabaseCommit,
-    {
-        if self.spec_id() < SpecId::CANCUN {
-            return Ok(self);
-        }
-        self.execute_system_tx(&SystemTx::eip4788(parent_beacon_root)).map(Transacted::apply_sys)
-    }
-
-    /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
-    /// post-block action was introduced in Prague, and calls the withdrawal
-    /// request contract to process withdrawal requests.
-    ///
-    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    pub fn apply_eip7002(self) -> Result<Self, TransactedError<'a, Ext, Db>>
-    where
-        Db: DatabaseCommit,
-    {
-        if self.spec_id() < SpecId::PRAGUE {
-            return Ok(self);
-        }
-        let mut res = self.execute_system_tx(&SystemTx::eip7002())?;
-
-        // We make assumptions here:
-        // - The system transaction never reverts.
-        // - The system transaction always has an output.
-        // - The system contract produces correct output.
-        // - The output is a list of withdrawal requests.
-        // - The output does not contain incomplete requests.
-
-        let Some(output) = res.output() else { panic!("no output") };
-        let reqs = output
-            .chunks_exact(WITHDRAWAL_REQUEST_BYTES)
-            .map(|chunk| {
-                let mut req: WithdrawalRequest = Default::default();
-
-                req.source_address.copy_from_slice(&chunk[0..20]);
-                req.validator_pubkey.copy_from_slice(&chunk[20..68]);
-                req.amount = u64::from_be_bytes(chunk[68..76].try_into().unwrap());
-
-                Request::WithdrawalRequest(req)
-            })
-            .collect();
-        res.evm.current_output_mut_unchecked().extend_requests(reqs);
-
-        Ok(res.apply_sys())
-    }
-
-    /// Apply a system transaction as specified in [EIP-7251]. The EIP-7251
-    /// post-block action calls the consolidation request contract to process
-    pub fn apply_eip7251(self) -> Result<Self, TransactedError<'a, Ext, Db>>
-    where
-        Db: DatabaseCommit,
-    {
-        if self.spec_id() < SpecId::PRAGUE {
-            return Ok(self);
-        }
-
-        let mut res = self.execute_system_tx(&SystemTx::eip7251())?;
-
-        // We make assumptions here:
-        // - The system transaction never reverts.
-        // - The system transaction always has an output.
-        // - The system contract produces correct output.
-        // - The output is a list of consolidation requests.
-        // - The output does not contain incomplete requests.
-
-        let Some(output) = res.output() else { panic!("no output") };
-        let reqs = output
-            .chunks_exact(CONSOLIDATION_REQUEST_BYTES)
-            .map(|chunk| {
-                let mut req: ConsolidationRequest = Default::default();
-
-                req.source_address.copy_from_slice(&chunk[0..20]);
-                req.source_pubkey.copy_from_slice(&chunk[20..68]);
-                req.target_pubkey.copy_from_slice(&chunk[68..116]);
-
-                Request::ConsolidationRequest(req)
-            })
-            .collect();
-        res.evm.current_output_mut_unchecked().extend_requests(reqs);
-
-        Ok(res.apply_sys())
     }
 
     /// Run a transaction and apply the result if non-error. Shortcut for
@@ -1263,6 +1100,13 @@ impl<'a, Ext, Db: Database, E> TransactedError<'a, Ext, Db, E> {
     /// Get a reference to the EVM.
     pub fn evm(&self) -> &EvmNeedsTx<'a, Ext, Db> {
         self.as_ref()
+    }
+
+    /// Get a mutable reference to the EVM. This is a low-level API, and is not
+    /// intended for general use. Improper modification of the EVM may lead to
+    /// inconsistent state or invalid execution.
+    pub fn evm_mut_unchecked(&mut self) -> &mut EvmNeedsTx<'a, Ext, Db> {
+        &mut self.evm
     }
 
     /// Destructure the `TransactedError` into its parts.
@@ -1452,6 +1296,13 @@ impl<'a, Ext, Db: Database> Transacted<'a, Ext, Db> {
     /// Get a reference to the EVM.
     pub fn evm(&self) -> &EvmNeedsTx<'a, Ext, Db> {
         self.as_ref()
+    }
+
+    /// Get a mutable reference to the EVM. This is a low-level API, and is not
+    /// intended for general use. Improper modification of the EVM may lead to
+    /// inconsistent state or invalid execution.
+    pub fn evm_mut_unchecked(&mut self) -> &mut EvmNeedsTx<'a, Ext, Db> {
+        &mut self.evm
     }
 
     /// Destructure the `Transacted` into its parts.

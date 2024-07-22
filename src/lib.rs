@@ -355,8 +355,9 @@ pub use fill::{Block, Cfg, Tx};
 
 mod lifecycle;
 pub use lifecycle::{
-    BlockOutput, CancunLifecycle, Lifecycle, PostTx, PostflightResult, PragueLifecycle,
-    ShanghaiLifecycle,
+    BlockOutput, CancunLifecycle, CancunLifecycleResult, Lifecycle, LifecycleResult, PostTx,
+    PostflightResult, PragueLifecycle, PragueLifecycleResult, ShanghaiLifecycle,
+    ShanghaiLifecycleResult,
 };
 
 mod states;

@@ -1,5 +1,8 @@
 mod cycles;
-pub use cycles::{CancunLifecycle, PragueLifecycle, ShanghaiLifecycle};
+pub use cycles::{
+    CancunLifecycle, CancunLifecycleResult, LifecycleResult, PragueLifecycle,
+    PragueLifecycleResult, ShanghaiLifecycle, ShanghaiLifecycleResult,
+};
 
 mod output;
 pub use output::BlockOutput;
