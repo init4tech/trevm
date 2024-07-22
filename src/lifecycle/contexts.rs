@@ -157,7 +157,7 @@ impl Shanghai<'_> {
 }
 
 /// Cancun lifecycle. This applies the [EIP-4788] pre-block beacon root update
-/// system transact action, as well withdrawals via the [ShanghaiLifecycle].
+/// system transact action, as well withdrawals via the [`Shanghai`] context.
 ///
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,15 +213,15 @@ impl Cancun<'_> {
     }
 }
 
-/// Prague lifecycle. This applies withdrawals via the [ShanghaiLifecycle],
-/// beacon root updates via the [CancunLifecycle], the [EIP-7002] post-block
+/// Prague block context. This applies withdrawals via the [Shanghai],
+/// beacon root updates via the [`Cancun`] context, the [EIP-7002] post-block
 /// withdrawal requests, and the [EIP-7251] post-block consolidation requests.
 ///
 /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
 /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prague<'a> {
-    /// The Prague lifecycle is a superset of the Cancun lifecycle.
+    /// The Prague context is a superset of the [`Cancun`] context.
     pub cancun: Cancun<'a>,
 
     /// Requests produced in the block. These include Deposit, Withdrawal, and

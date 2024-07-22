@@ -11,17 +11,18 @@ use revm::{
 /// be applied to the EVM. This is useful for implementing EIPs that require
 /// special system actions to be taken before and after the block is processed.
 ///
-/// Lifecycles are provided for [Shanghai], [Cancun], and [Prague]. While most
-/// lifecycles modify previous behavior, the [Prague] lifecycle is a superset of
-/// the [Cancun] lifecycle, and the [Cancun] lifecycle is a superset of the
+/// Contexts are provided for [Shanghai], [Cancun], and [Prague]. While most
+/// Contexts do not modify previous behavior, older context modify things like
+/// the block reward in place. The [Prague] lifecycle is a superset of the
+/// [Cancun] lifecycle, and the [Cancun] lifecycle is a superset of the
 /// [Shanghai] lifecycle. This means that the [Prague] lifecycle includes all
-/// the logic of the [Cancun] and [Shanghai] lifecycles.
+/// the logic of the [Cancun] and [Shanghai] Contexts.
 ///
-/// [Shanghai]: crate::ShanghaiLifecycle
-/// [Cancun]: crate::CancunLifecycle
-/// [Prague]: crate::PragueLifecycle
+/// [Shanghai]: crate::Shanghai
+/// [Cancun]: crate::Cancun
+/// [Prague]: crate::Prague
 pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
-    /// The error type for the lifecycle. This captures logic errors that occur
+    /// The error type for the context. This captures logic errors that occur
     /// during the lifecycle.
     type Error: From<EVMError<Db::Error>>;
 

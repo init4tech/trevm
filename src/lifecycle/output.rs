@@ -4,9 +4,7 @@ use alloy_primitives::{Address, Log};
 /// Information externalized during block execution.
 ///
 /// This struct is used to collect the results of executing a block of
-/// transactions. It contains the receipts and senders of the transactions, as
-/// well as any [`Request`] objects that were generated during the block.
-
+/// transactions. It accumulates the receipts and senders of the transactions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockOutput<T: TxReceipt = Receipt> {
     /// The receipts of the transactions in the block, in order.

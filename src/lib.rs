@@ -114,29 +114,32 @@
 //! # }
 //! ```
 //!
-//! ### Lifecycles
+//! ### [`BlockContext`]
 //!
-//! Trevm handles pre- and post-block logic through the [`Lifecycle`] trait.
-//! The lifecycle trait can be invoked by [`Trevm::open_block`] and
-//! [`Trevm::close_block`]. Trevm provides a few lifecycle implementations:
+//! Trevm handles pre- and post-block logic through the [`BlockContext`] trait.
+//! The block context trait can be invoked by [`Trevm::open_block`] and
+//! [`Trevm::close_block`]. Trevm provides a few block context implementations:
 //!
-//! - [`ShanghaiLifecycle`]: Shanghai lifecycle applies the post-block system
+//! - [`Shanghai`]: Shanghai context applies the post-block system
 //!   action (withdrawals) introduced by [EIP-4895].
-//! - [`CancunLifecycle`]: Cancun lifecycle applies the [`ShanghaiLifecycle`]
+//! - [`Cancun`]: Cancun context applies the [`Shanghai`]
 //!   as well as the post-block logic introduced by [EIP-4788].
-//! - [`PragueLifecycle`]: Prague lifecycle applies [`ShanghaiLifecycle`] and
-//!   [`CancunLifecycle`] as well as the pre-block logic of [EIP-2935] and the
-//!   post-block logic introduced by [EIP-7002] and [EIP-7251].
+//! - [`Prague`]: Prague context applies [`Shanghai`] and
+//!   [`Cancun`] as well as the pre-block logic of [EIP-2935], the
+//!   post-block logic introduced by [EIP-7002] and [EIP-7251], and the
+//!   withdrawal request accumulation logic introduced in [EIP-6110].
 //!
-//! Lifecycles before Shanghai are not currently implemented. In particular,
+//! s before Shanghai are not currently implemented. In particular,
 //! block and ommer rewards for pre-merge blocks are not implemented.
 //!
-//! The [`Lifecycle`] trait methods take a mutable reference to allow the
-//! lifecycle to accumulate information about the execution. This is useful for
-//! pre-block logic, where the lifecycle may need to accumulate information
-//! about the block before the first transaction is executed, and re-use that
-//! information to close the block. It may also be used to compute statistics
-//! or indices that are only available after the block is closed.
+//! The [`BlockContext`] trait methods take a mutable reference to allow the
+//! context to accumulate information about the execution. This is useful for
+//! accumulating receipts, senders, or other information that is more readily
+//! available during execution. It is also useful for pre-block logic, where
+//! the lifecycle may need to accumulate information about the block before the
+//! first transaction is executed, and re-use that information to close the
+//! block. It may also be used to compute statistics or indices that are only
+//! available after the block is closed.
 //!
 //! Here's the above example using a lifecycle. Note that
 //!
@@ -177,7 +180,7 @@
 //! provides a method to discard the error and continue execution. This is
 //! useful when you want to continue executing transactions even if one fails.
 //!
-//! Usually, errors will be [`EVMError<Db>`], but [`Lifecycle`] implementations
+//! Usually, errors will be [`EVMError<Db>`], but [`BlockContext`] implementations
 //! may return other errors. The [`TransactedError`] type is generic over the
 //! error type, so you can use it with any error type.
 //!
@@ -222,7 +225,7 @@
 //! - Implement the [`PostTx`] trait to apply post-transaction logic/changes.
 //! - Implement your own [`Cfg`], [`Block`], and
 //!   [`Tx`] to fill the EVM from your own data structures.
-//! - Implement your own [`Lifecycle`] to apply pre- and post-block logic.
+//! - Implement your own [`BlockContext`] to apply pre- and post-block logic.
 //!
 //! ```
 //! # use trevm::Tx;
@@ -289,18 +292,20 @@
 //! +-----+      +-----------+
 //! |Start| ---> |EvmNeedsCfg|
 //! +-----+      +-----------+
-//!                   |                  +--------------------+
-//!                   +-- fill_cfg() --> | EvmNeedsFirstBlock |
-//!                                      +--------------------+
-//!              +-----------------+                |
-//!     +------- |EvmNeedsNextBlock|----------------+
-//!     |        +-----------------+                |
-//!     |            ^                              |
-//!   finish()       |                              |
-//!     |       close_block()                       |
-//!     V            |                              |
-//!  +------+   +----------+                        |
-//!  |Finish}   |EvmNeedsTx| <------ open_block() --+
+//!                   |                       +--------------------+
+//!                   +-- fill_cfg() -------> | EvmNeedsFirstBlock |
+//!                                           +--------------------+
+//!                                                          |
+//!         +----------------+                               |
+//!     +-- |EvmBlockComplete|--take_context()-+             |
+//!     |   +----------------+  or discard     |             |
+//!     |            ^                         V             |
+//!     |            |              +-----------------+      |
+//!   finish()       |              |EvmNeedsNextBlock|------+
+//!     |       close_block()       +-----------------+      |
+//!     V            |                                       |
+//!  +------+   +----------+                                 |
+//!  |Finish}   |EvmNeedsTx| <------ open_block() -----------+
 //!  +------+   +----------+
 //!              ^       |                                +--------+
 //!              |       +------- fill_tx() ------------> |EvmReady|

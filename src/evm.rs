@@ -1,7 +1,7 @@
 use crate::{
     states::EvmBlockComplete, Block, BlockComplete, BlockContext, Cfg, EvmNeedsCfg,
     EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady, HasCfg, HasOutputs, NeedsBlock,
-    NeedsCfg, NeedsNextBlock, NeedsTx, PostTx, PostflightResult, Ready, Tx,
+    NeedsCfg, NeedsNextBlock, NeedsTx, Ready, Tx,
 };
 use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_primitives::{Address, Bytes, U256};
@@ -871,21 +871,6 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
         self.execute_tx(filler).map(Transacted::apply)
     }
 
-    /// Run a transaction, apply the result if non-error and the predicate
-    /// passes. Shortcut for `execute_tx(tx).map(|t| t.apply_if(f))`.
-    pub fn apply_with_postcondition<T, F>(
-        self,
-        filler: &T,
-        f: &mut F,
-    ) -> Result<(PostflightResult, Self), TransactedError<'a, Ext, Db, C>>
-    where
-        Db: Database + DatabaseCommit,
-        T: Tx,
-        F: PostTx,
-    {
-        self.execute_tx(filler).map(|t| t.apply_with_postcondition(f))
-    }
-
     /// Execute the transactions from a block, without system actions.
     ///
     /// # Notes
@@ -910,49 +895,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
         I: IntoIterator<Item = &'b T>,
         T: Tx + 'b,
     {
-        let f = |_: &ResultAndState| true;
-        self.execute_block_txns_apply_with_postconditions(txns, f)
-    }
-
-    /// Execute the transactions from a block, applying a check to each
-    /// transaction output.
-    ///
-    /// This function is used for rollups and other cases where the block may
-    /// contain invalid transactions. The check is applied to each transaction
-    /// and if it returns true, the transaction is applied. If it returns
-    /// false, the transaction is discarded.
-    ///
-    /// # Notes
-    ///
-    /// This function is intended to be used when validating a block that is
-    /// expected to be good. It will execute all transactions in the block, and
-    /// apply the results. This operation is not currently recoverable. If it
-    /// fails, the EVM will be left in an inconsistent state.
-    ///
-    /// This function will NOT apply any system actions such as pre/post block
-    /// hooks introduced in EIPs like [EIP-2935], [EIP-4788], [EIP-7002],
-    /// [EIP-7251].
-    ///
-    /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
-    /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
-    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    //
-    // TODO: make it recoverable
-    pub fn execute_block_txns_apply_with_postconditions<'b, I, T, F>(
-        self,
-        txns: I,
-        mut f: F,
-    ) -> Result<Self, C::Error>
-    where
-        I: IntoIterator<Item = &'b T>,
-        T: Tx + 'b,
-        Db: Database + DatabaseCommit,
-        F: PostTx,
-    {
         let mut evm = self;
         for tx in txns {
-            evm = evm.apply_with_postcondition(tx, &mut f).map_err(TransactedError::into_error)?.1;
+            evm = evm.execute_tx(tx).map(Transacted::apply).map_err(TransactedError::into_error)?;
         }
 
         Ok(evm)
@@ -1096,14 +1041,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
 /// either [`apply`] the result or [`discard`] it. You can inspect the
 /// [`ResultAndState`] using the [`result_and_state`] method.
 ///
-/// The [`apply_if`] and [`apply_with_postcondition`] methods allow you to
-/// apply the result conditionally, by making checks on the outcome.
-///
 /// [`apply`]: Self::apply
 /// [`discard`]: Self::discard
 /// [`result_and_state`]: Self::result
-/// [`apply_if`]: Self::apply_if
-/// [`apply_with_postcondition`]: Self::apply_with_postcondition
 pub struct Transacted<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> {
     /// The evm, with the transaction cleared.
     evm: EvmNeedsTx<'a, Ext, Db, C>,
@@ -1234,7 +1174,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacte
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacted<'a, Ext, Db, C> {
-    /// Apply the state changes, update the [`BlockOutput`], and return the EVM.
+    /// Apply the state changes, invoke the [`BlockContext::apply_tx`] method,
+    /// and return the EVM ready for the next transaction.
     pub fn apply(self) -> EvmNeedsTx<'a, Ext, Db, C> {
         let (trevm, result) = self.into_parts();
 
@@ -1243,34 +1184,6 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacte
         state.0.apply_tx(&mut inner, result);
 
         Trevm { inner, state }
-    }
-
-    /// Apply a predicate to the result and accept or reject based on the
-    /// result. Returns a tuple of the choice and the EVM.
-    pub fn apply_if<F, T>(self, f: F) -> (PostflightResult, EvmNeedsTx<'a, Ext, Db, C>)
-    where
-        F: FnOnce(&ResultAndState) -> T,
-        T: Into<PostflightResult>,
-    {
-        let choice = f(&self.result).into();
-
-        let evm = if choice.is_apply() { self.apply() } else { self.discard() };
-        (choice, evm)
-    }
-
-    /// Apply a [`PostTx`] to the result and accept or reject based on
-    /// the result. Returns a tuple of the choice and the EVM.
-    pub fn apply_with_postcondition<F>(
-        self,
-        f: &mut F,
-    ) -> (PostflightResult, EvmNeedsTx<'a, Ext, Db, C>)
-    where
-        F: PostTx,
-    {
-        let choice = f.run_post_tx(&self.result);
-
-        let evm = if choice.is_apply() { self.apply() } else { self.discard() };
-        (choice, evm)
     }
 }
 
