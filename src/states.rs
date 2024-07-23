@@ -186,13 +186,15 @@ pub(crate) mod sealed {
 /// Invoking with an ext and DB type will use the provided ext type and the
 /// static lifetime:
 ///
-/// ```no_compile
+/// ```
+/// # mod t {
 /// # use trevm::trevm_aliases;
 /// # use revm::db::InMemoryDB;
-///
+/// # pub struct SomeExtType;
 /// // produces types that look like this:
 /// // type EvmNeedsCfg = trevm::EvmNeedsCfg<'static, SomeExtType, InMemoryDB>;
 /// trevm_aliases!(SomeExtType, InMemoryDB);
+/// # }
 /// ```
 ///
 /// To add a lifetime to the ext type, add the word lifetime:
