@@ -69,7 +69,7 @@ fn main() {
 
     let evm = evm.open_block(&NoopBlock, Shanghai::default()).unwrap();
 
-    let evm = evm.fill_tx(&SampleTx).execute();
+    let evm = evm.fill_tx(&SampleTx).run();
 
     match evm {
         Ok(res) => {

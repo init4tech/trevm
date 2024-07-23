@@ -33,7 +33,7 @@
 //! - Fill a Cfg by calling [`Trevm::fill_cfg`] with a [`Cfg`].
 //! - Open a block by calling [`Trevm::open_block`] with a [`Block`].
 //! - Fill a Tx by calling [`Trevm::fill_tx`] with a [`Tx`].
-//! - Run the transaction by calling [`Trevm::execute_tx`].
+//! - Run the transaction by calling [`Trevm::run_tx`].
 //! - Handle the result by calling [`EvmTransacted::accept`] or
 //!   [`EvmTransacted::reject`].
 //! - Call [`Trevm::close_block`] to close the block.
@@ -57,7 +57,7 @@
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
-//!     .execute_tx(tx);
+//!     .run_tx(tx);
 //! # Ok(())
 //! # }
 //!
@@ -135,7 +135,7 @@
 //! let res: Result<
 //!     EvmTransacted<'_, _, _, _>,
 //!     EvmErrored<'_, _, _, _>,
-//! > = trevm.execute();
+//! > = trevm.run();
 //!
 //!
 //! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx`.
@@ -221,7 +221,7 @@
 //!     .open_block(block, context)
 //!     // Note that the logic is fallible, so we have to handle errors
 //!     .map_err(EvmErrored::into_error)?
-//!     .execute_tx(tx)
+//!     .run_tx(tx)
 //!     .map_err(EvmErrored::into_error)?
 //!     .accept()
 //!     // Closing the block applies the post-block logic, and is also fallible
@@ -369,11 +369,11 @@
 //!  |Finish|   |EvmNeedsTx| <------ open_block() -----------+
 //!  +------+   +----------+
 //!              ^       |                           +--------+
-//!              |       +------- fill_tx() -------> |EvmReady|---+
-//!              |                                   +--------+   |
-//!              |             +-------------+                    |
-//!              +- apply() ---|EvmTransacted| <-- execute_tx() --+
-//!              or discard()  +-------------+
+//!              |       +------- fill_tx() -------> |EvmReady|--+
+//!              |                                   +--------+  |
+//!              |             +-------------+                   |
+//!              +- accept() --|EvmTransacted| <-- run_tx() -----+
+//!              or reject()   +-------------+
 //! ```
 //!
 //! A basic block loop should look like this:
