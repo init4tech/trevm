@@ -873,6 +873,14 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
     ) -> Result<EvmTransacted<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
         self.fill_tx(filler).execute_tx()
     }
+
+    /// Execute a transaction, accept the output, and ignore errors.
+    pub fn run_tx<T: Tx>(self, filler: &T) -> Self {
+        match self.execute_tx(filler) {
+            Ok(evm) => evm.accept(),
+            Err(evm) => evm.discard_error(),
+        }
+    }
 }
 
 // --- READY
@@ -880,7 +888,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<'a, Ext, Db, C> {
     /// Clear the current transaction environment.
     pub fn clear_tx(self) -> EvmNeedsTx<'a, Ext, Db, C> {
-        // NB: we do not clear the tx env here, as we read it during `BlockContext::apply_tx`
+        // NB: we do not clear the tx env here, as we may read it during `BlockContext::post_tx`
         EvmNeedsTx { inner: self.inner, state: NeedsTx(self.state.0) }
     }
 
@@ -897,6 +905,14 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
             Err(error) => {
                 Err(EvmErrored { inner, state: ErroredState { context, error: error.into() } })
             }
+        }
+    }
+
+    /// Execute the loaded transaction, accept the output, and ignore errors.
+    pub fn run(self) -> EvmNeedsTx<'a, Ext, Db, C> {
+        match self.execute_tx() {
+            Ok(evm) => evm.accept(),
+            Err(evm) => evm.discard_error(),
         }
     }
 }
@@ -927,6 +943,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
     /// Convert the error into an [`EVMError`].
     pub fn into_error(self) -> E {
         self.state.error
+    }
+
+    /// Reset the EVM, returning the error and the EVM ready for the next
+    /// transaction.
+    pub fn take_error(self) -> (EvmNeedsTx<'a, Ext, Db, C>, E) {
+        let Trevm { inner, state: ErroredState { context, error } } = self;
+        (Trevm { inner, state: NeedsTx(context) }, error)
     }
 }
 
@@ -1063,7 +1086,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
     }
 
     /// Accept the state changes, skipping the [`BlockContext::after_tx`]
-    /// method, and applying them directly to the database.
+    /// method, and committing them directly to the database.
     ///
     /// This is a low-level API, and is not intended for general use. It is
     /// almost always better to use [`Self::accept`] instead.

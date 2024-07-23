@@ -56,7 +56,8 @@ pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
     /// state. This will be called by [`Trevm`] for each transaction in a block.
     ///
     /// This is the hook to produce receipts, update cumulative gas used,
-    /// inspect logs, etc etc.
+    /// inspect logs, etc etc. You can read transaction details from `evm.tx()`
+    /// and the result of the transaction from `result`.
     ///
     /// Generally this should end by calling `evm.db_mut().commit(result.state)`
     /// however, it is allowed to discard the transaction instead of committing

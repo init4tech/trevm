@@ -48,7 +48,7 @@
 //!
 //! ```
 //! use revm::{EvmBuilder, db::InMemoryDB};
-//! use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx, };
+//! use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, };
 //!
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +57,7 @@
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
-//!     .apply_tx(tx);
+//!     .execute_tx(tx);
 //! # Ok(())
 //! # }
 //!
@@ -107,9 +107,9 @@
 //! ```
 //! # use revm::{EvmBuilder, db::{InMemoryDB, BundleState}, State,
 //! # StateBuilder};
-//! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx, BlockOutput,
+//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, BlockOutput,
 //! # EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsTx, EvmReady, EvmNeedsNextBlock,
-//! # EvmBlockComplete, Shanghai};
+//! # EvmBlockComplete, Shanghai, EvmTransacted};
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! let state = StateBuilder::new_with_database(InMemoryDB::default()).build();
@@ -128,21 +128,18 @@
 //! let trevm: EvmNeedsTx<'_, _, _, _> = trevm.open_block(
 //!     block,
 //!     Shanghai::default()
-//! ).map_err(TransactedError::into_error)?;
+//! ).map_err(EvmErrored::into_error)?;
 //! // Filling the tx gets us to `EvmReady`.
 //! let trevm: EvmReady<'_, _, _, _> = trevm.fill_tx(tx);
 //!
 //! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx``.
-//! let trevm: EvmNeedsTx<'_, _, _, _> = match trevm.execute_tx() {
-//!     Ok(transacted) => transacted.apply(),
-//!     Err(e) => e.discard_error(),
-//! };
+//! let trevm: EvmNeedsTx<'_, _, _, _> = trevm.run();
 //!
 //! // Clearing or closing a block gets us to `EvmNeedsNextBlock`, ready for the
 //! // next block.
 //! let trevm: EvmBlockComplete<'_, _, _, _> = trevm
 //!     .close_block()
-//!     .map_err(TransactedError::into_error)?;;
+//!     .map_err(EvmErrored::into_error)?;;
 //!
 //! // During block execution, a context object
 //! let (context, trevm): (Shanghai<'_>, EvmNeedsNextBlock<'_, _, _>) = trevm
@@ -195,7 +192,7 @@
 //!
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
-//! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx,
+//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx,
 //! # Shanghai, Cancun};
 //! # use alloy_primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
@@ -213,12 +210,13 @@
 //!     // The pre-block logic is applied here
 //!     .open_block(block, context)
 //!     // Note that the logic is fallible, so we have to handle errors
-//!     .map_err(TransactedError::into_error)?
-//!     .apply_tx(tx)
-//!     .map_err(TransactedError::into_error)?
+//!     .map_err(EvmErrored::into_error)?
+//!     .execute_tx(tx)
+//!     .map_err(EvmErrored::into_error)?
+//!     .accept()
 //!     // Closing the block applies the post-block logic, and is also fallible
 //!     .close_block()
-//!     .map_err(TransactedError::into_error)?
+//!     .map_err(EvmErrored::into_error)?
 //!     // This splits the context, and puts trevm into `EvmNeedsNextBlock`
 //!     .take_context();
 //! # Ok(())
@@ -238,7 +236,7 @@
 //!
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
-//! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx,
+//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx,
 //! # Shanghai, Cancun};
 //! # use alloy_primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
@@ -259,7 +257,7 @@
 //!         trevm
 //!     }
 //!     Err(transacted_error) => {
-//!         let (trevm, error) = transacted_error.into_parts();
+//!         let (trevm, error) = transacted_error.take_error();
 //!         // Handle the error here, and return the EVM if you want
 //!         // to keep going
 //!         trevm
@@ -360,12 +358,12 @@
 //!  +------+   +----------+                                 |
 //!  |Finish}   |EvmNeedsTx| <------ open_block() -----------+
 //!  +------+   +----------+
-//!              ^       |                                +--------+
-//!              |       +------- fill_tx() ------------> |EvmReady|
-//!              |                                        +--------+
-//!              |             +----------+                   |
-//!              +- apply() ---|Transacted| <-- execute_tx() -+
-//!              or discard()  +----------+
+//!              ^       |                                   +--------+
+//!              |       +------- fill_tx() ---------------> |EvmReady|
+//!              |                                           +--------+
+//!              |             +-------------+                    |
+//!              +- apply() ---|EvmTransacted| <-- execute_tx() --+
+//!              or discard()  +-------------+
 //! ```
 //!
 //! A basic block loop should look like this:
@@ -377,10 +375,7 @@
 //!
 //! for tx in txs {
 //!     // apply the transaction, discard the error if any
-//!     evm = match evm.apply_tx(tx) {
-//!         Ok(evm) => evm,
-//!         Err(e) => { e.discard_error() }
-//!     }
+//!     evm = match evm.run_tx(tx);
 //! }
 //!
 //! // close out the EVM, getting the final state
