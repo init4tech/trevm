@@ -41,7 +41,7 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for BasicContext 
         Ok(())
     }
 
-    fn apply_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: revm::primitives::ResultAndState) {
+    fn after_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: revm::primitives::ResultAndState) {
         evm.db_mut().commit(result.state);
     }
 
@@ -80,7 +80,7 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Shanghai<'_> 
         Ok(())
     }
 
-    fn apply_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
+    fn after_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
         let sender = evm.tx().caller;
 
         let receipt = self.make_receipt(result.result).into();
@@ -224,8 +224,8 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Cancun<'_> {
         self.apply_eip4788(evm)
     }
 
-    fn apply_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
-        self.shanghai.apply_tx(evm, result)
+    fn after_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
+        self.shanghai.after_tx(evm, result)
     }
 
     fn close_block(&mut self, evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error> {
@@ -299,8 +299,8 @@ where
         Self::apply_eip2935(evm)
     }
 
-    fn apply_tx<'a>(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
-        self.cancun.apply_tx(evm, result);
+    fn after_tx<'a>(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
+        self.cancun.after_tx(evm, result);
         self.find_deposit_logs();
     }
 

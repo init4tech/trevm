@@ -1,7 +1,8 @@
 use crate::{
-    states::EvmBlockComplete, BasicContext, Block, BlockComplete, BlockContext, Cfg, EvmNeedsCfg,
-    EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady, HasCfg, HasOutputs, NeedsBlock,
-    NeedsCfg, NeedsNextBlock, NeedsTx, Ready, Tx,
+    states::EvmBlockComplete, BasicContext, Block, BlockComplete, BlockContext, Cfg, ErroredState,
+    EvmErrored, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady,
+    EvmTransacted, HasCfg, HasOutputs, NeedsBlock, NeedsCfg, NeedsNextBlock, NeedsTx, Ready,
+    TransactedState, Tx,
 };
 use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_primitives::{Address, Bytes, U256};
@@ -239,8 +240,7 @@ impl<
 
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Commit a set of state changes to the database. This is a low-level API,
-    /// and is not intended for general use. Prefer executing a transaction
-    /// and using the [`Transacted::apply`]  method instead.
+    /// and is not intended for general use. Prefer executing a transaction.
     pub fn commit_unchecked(&mut self, state: EvmState) {
         self.inner.db_mut().commit(state);
     }
@@ -770,18 +770,17 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
         mut self,
         filler: &B,
         mut context: C,
-    ) -> Result<EvmNeedsTx<'a, Ext, Db, C>, TransactedError<'a, Ext, Db, C>>
+    ) -> Result<EvmNeedsTx<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>>
     where
         B: Block,
         C: BlockContext<Ext, Db>,
         Db: Database + DatabaseCommit,
     {
         let res = context.open_block(self.inner_mut_unchecked(), filler);
-        let evm = Trevm { inner: self.inner, state: NeedsTx(context) };
 
         match res {
-            Ok(_) => Ok(evm),
-            Err(error) => Err(TransactedError { evm, error }),
+            Ok(_) => Ok(Trevm { inner: self.inner, state: NeedsTx(context) }),
+            Err(error) => Err(Trevm { inner: self.inner, state: ErroredState { context, error } }),
         }
     }
 
@@ -848,16 +847,16 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
     pub fn close_block(
         self,
-    ) -> Result<EvmBlockComplete<'a, Ext, Db, C>, TransactedError<'a, Ext, Db, C>> {
-        let Trevm { mut inner, mut state } = self;
+    ) -> Result<EvmBlockComplete<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
+        let Trevm { mut inner, state: NeedsTx(mut context) } = self;
 
-        let res = state.0.close_block(&mut inner);
+        let res = context.close_block(&mut inner);
 
         inner.block_mut().clear();
 
         match res {
-            Ok(_) => Ok(Trevm { inner, state: BlockComplete(state.0) }),
-            Err(error) => Err(TransactedError::new(Trevm { inner, state }, error)),
+            Ok(_) => Ok(Trevm { inner, state: BlockComplete(context) }),
+            Err(error) => Err(Trevm { inner, state: ErroredState { context, error } }),
         }
     }
 
@@ -871,49 +870,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
     pub fn execute_tx<T: Tx>(
         self,
         filler: &T,
-    ) -> Result<Transacted<'a, Ext, Db, C>, TransactedError<'a, Ext, Db, C>> {
+    ) -> Result<EvmTransacted<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
         self.fill_tx(filler).execute_tx()
-    }
-
-    /// Run a transaction and apply the result if non-error. Shortcut for
-    /// `execute_tx(tx).map(Transacted::apply)`.
-    pub fn apply_tx<T: Tx>(self, filler: &T) -> Result<Self, TransactedError<'a, Ext, Db, C>>
-    where
-        Db: Database + DatabaseCommit,
-    {
-        self.execute_tx(filler).map(Transacted::apply)
-    }
-
-    /// Execute the transactions from a block, without system actions.
-    ///
-    /// # Notes
-    ///
-    /// This function is intended to be used when validating a block that is
-    /// expected to be good. It will execute all transactions in the block, and
-    /// apply the results. This operation is not currently recoverable. If it
-    /// fails, the EVM will be left in an inconsistent state.
-    ///
-    /// This function will NOT apply any system actions such as pre/post block
-    /// hooks introduced in EIPs like [EIP-2935], [EIP-4788], [EIP-7002],
-    /// [EIP-7251].
-    ///
-    /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
-    /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
-    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    //
-    // TODO: make it recoverable
-    pub fn apply_txns<'b, I, T>(self, txns: I) -> Result<Self, C::Error>
-    where
-        I: IntoIterator<Item = &'b T>,
-        T: Tx + 'b,
-    {
-        let mut evm = self;
-        for tx in txns {
-            evm = evm.execute_tx(tx).map(Transacted::apply).map_err(TransactedError::into_error)?;
-        }
-
-        Ok(evm)
     }
 }
 
@@ -929,75 +887,28 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
     /// Execute the loaded transaction.
     pub fn execute_tx(
         mut self,
-    ) -> Result<Transacted<'a, Ext, Db, C>, TransactedError<'a, Ext, Db, C>> {
+    ) -> Result<EvmTransacted<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
         let result = self.inner.transact();
-        let evm = self.clear_tx();
+
+        let Trevm { inner, state: Ready(context) } = self;
 
         match result {
-            Ok(result) => Ok(Transacted { evm, result }),
-            Err(error) => Err(TransactedError::new(evm, error.into())),
+            Ok(result) => Ok(Trevm { inner, state: TransactedState { context, result } }),
+            Err(error) => {
+                Err(EvmErrored { inner, state: ErroredState { context, error: error.into() } })
+            }
         }
     }
 }
 
-/// The error outcome of [`EvmReady::execute_tx`].
-pub struct TransactedError<
-    'a,
-    Ext,
-    Db: Database + DatabaseCommit,
-    C: BlockContext<Ext, Db>,
-    E = <C as BlockContext<Ext, Db>>::Error,
-> {
-    evm: EvmNeedsTx<'a, Ext, Db, C>,
-    error: E,
-}
-
-impl<Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E> fmt::Debug
-    for TransactedError<'_, Ext, Db, C, E>
-where
-    E: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TransactedError").field("error", &self.error).finish_non_exhaustive()
-    }
-}
+// --- ERRORED
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
-    AsRef<EvmNeedsTx<'a, Ext, Db, C>> for TransactedError<'a, Ext, Db, C, E>
+    EvmErrored<'a, Ext, Db, C, E>
 {
-    fn as_ref(&self) -> &EvmNeedsTx<'a, Ext, Db, C> {
-        &self.evm
-    }
-}
-
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
-    TransactedError<'a, Ext, Db, C, E>
-{
-    /// Create a new `TransactedError`.
-    pub const fn new(evm: EvmNeedsTx<'a, Ext, Db, C>, error: E) -> Self {
-        Self { evm, error }
-    }
-
     /// Get a reference to the error.
     pub const fn error(&self) -> &E {
-        &self.error
-    }
-
-    /// Get a reference to the EVM.
-    pub fn evm(&self) -> &EvmNeedsTx<'a, Ext, Db, C> {
-        self.as_ref()
-    }
-
-    /// Get a mutable reference to the EVM. This is a low-level API, and is not
-    /// intended for general use. Improper modification of the EVM may lead to
-    /// inconsistent state or invalid execution.
-    pub fn evm_mut_unchecked(&mut self) -> &mut EvmNeedsTx<'a, Ext, Db, C> {
-        &mut self.evm
-    }
-
-    /// Destructure the `TransactedError` into its parts.
-    pub fn into_parts(self) -> (EvmNeedsTx<'a, Ext, Db, C>, E) {
-        (self.evm, self.error)
+        &self.state.error
     }
 
     /// Inspect the error with a closure.
@@ -1005,33 +916,33 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
     where
         F: FnOnce(&E) -> T,
     {
-        f(&self.error)
+        f(self.error())
     }
 
     /// Discard the error and return the EVM.
     pub fn discard_error(self) -> EvmNeedsTx<'a, Ext, Db, C> {
-        self.evm
+        Trevm { inner: self.inner, state: NeedsTx(self.state.context) }
     }
 
     /// Convert the error into an [`EVMError`].
     pub fn into_error(self) -> E {
-        self.error
+        self.state.error
     }
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
-    TransactedError<'a, Ext, Db, C, EVMError<Db::Error>>
+    EvmErrored<'a, Ext, Db, C, EVMError<Db::Error>>
 {
     /// Check if the error is a transaction error. This is provided as a
     /// convenience function for common cases, as Transaction errors should
     /// usually be discarded.
     pub const fn is_transaction_error(&self) -> bool {
-        matches!(self.error, EVMError::Transaction(_))
+        matches!(self.state.error, EVMError::Transaction(_))
     }
 
     /// Fallible cast to a [`InvalidTransaction`].
     pub const fn as_transaction_err(&self) -> Option<&InvalidTransaction> {
-        match &self.error {
+        match &self.state.error {
             EVMError::Transaction(err) => Some(err),
             _ => None,
         }
@@ -1048,54 +959,27 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
     }
 }
 
-/// The success outcome of a [`EvmReady::execute_tx`] call.
-///
-/// This struct contains the EVM and the result of the transaction. You should
-/// either [`apply`] the result or [`discard`] it. You can inspect the
-/// [`ResultAndState`] using the [`result_and_state`] method.
-///
-/// [`apply`]: Self::apply
-/// [`discard`]: Self::discard
-/// [`result_and_state`]: Self::result
-pub struct Transacted<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> {
-    /// The evm, with the transaction cleared.
-    evm: EvmNeedsTx<'a, Ext, Db, C>,
-    result: ResultAndState,
-}
-
-impl<Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> fmt::Debug
-    for Transacted<'_, Ext, Db, C>
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Transacted").finish_non_exhaustive()
-    }
-}
-
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
-    AsRef<EvmNeedsTx<'a, Ext, Db, C>> for Transacted<'a, Ext, Db, C>
-{
-    fn as_ref(&self) -> &EvmNeedsTx<'a, Ext, Db, C> {
-        &self.evm
-    }
-}
+// --- TRANSACTED
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<ResultAndState>
-    for Transacted<'a, Ext, Db, C>
+    for EvmTransacted<'a, Ext, Db, C>
 {
     fn as_ref(&self) -> &ResultAndState {
-        &self.result
+        &self.state.result
     }
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<ExecutionResult>
-    for Transacted<'a, Ext, Db, C>
+    for EvmTransacted<'a, Ext, Db, C>
 {
     fn as_ref(&self) -> &ExecutionResult {
-        &self.result.result
+        &self.state.result.result
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacted<'a, Ext, Db, C> {
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
+    EvmTransacted<'a, Ext, Db, C>
+{
     /// Get a reference to the result.
     pub fn result(&self) -> &ExecutionResult {
         self.as_ref()
@@ -1108,18 +992,18 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacte
     ///
     /// [`SystemTx`]: crate::syscall::SystemTx
     pub fn result_mut_unchecked(&mut self) -> &mut ExecutionResult {
-        &mut self.result.result
+        &mut self.state.result.result
     }
 
     /// Get a reference to the state.
     pub const fn state(&self) -> &EvmState {
-        &self.result.state
+        &self.state.result.state
     }
 
     /// Get a mutable reference to the state. Modification of the state is
     /// discouraged, as it may lead to inconsistent state.
     pub fn state_mut_unchecked(&mut self) -> &mut EvmState {
-        &mut self.result.state
+        &mut self.state.result.state
     }
 
     /// Get a reference to the result and state.
@@ -1134,7 +1018,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacte
     ///
     /// [`SystemTx`]: crate::syscall::SystemTx
     pub fn result_and_state_mut_unchecked(&mut self) -> &mut ResultAndState {
-        &mut self.result
+        &mut self.state.result
     }
 
     /// Get the output of the transaction. This is the return value of the
@@ -1160,43 +1044,35 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacte
 
     /// Get the gas used by the transaction.
     pub fn gas_used(&self) -> u64 {
-        self.result.result.gas_used()
-    }
-
-    /// Get a reference to the EVM.
-    pub fn evm(&self) -> &EvmNeedsTx<'a, Ext, Db, C> {
-        self.as_ref()
-    }
-
-    /// Get a mutable reference to the EVM. This is a low-level API, and is not
-    /// intended for general use. Improper modification of the EVM may lead to
-    /// inconsistent state or invalid execution.
-    pub fn evm_mut_unchecked(&mut self) -> &mut EvmNeedsTx<'a, Ext, Db, C> {
-        &mut self.evm
-    }
-
-    /// Destructure the `Transacted` into its parts.
-    pub fn into_parts(self) -> (EvmNeedsTx<'a, Ext, Db, C>, ResultAndState) {
-        (self.evm, self.result)
+        self.state.result.result.gas_used()
     }
 
     /// Discard the state changes and return the EVM.
-    pub fn discard(self) -> EvmNeedsTx<'a, Ext, Db, C> {
-        self.evm
+    pub fn reject(self) -> EvmNeedsTx<'a, Ext, Db, C> {
+        Trevm { inner: self.inner, state: NeedsTx(self.state.context) }
     }
-}
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> Transacted<'a, Ext, Db, C> {
-    /// Apply the state changes, invoke the [`BlockContext::apply_tx`] method,
-    /// and return the EVM ready for the next transaction.
-    pub fn apply(self) -> EvmNeedsTx<'a, Ext, Db, C> {
-        let (trevm, result) = self.into_parts();
+    /// Accept the state changes, invoking the [`BlockContext::after_tx`]
+    /// method, and return the EVM ready for the next transaction.
+    pub fn accept(self) -> EvmNeedsTx<'a, Ext, Db, C> {
+        let Trevm { mut inner, state: TransactedState { mut context, result } } = self;
 
-        let Trevm { mut inner, mut state } = trevm;
+        context.after_tx(&mut inner, result);
 
-        state.0.apply_tx(&mut inner, result);
+        Trevm { inner, state: NeedsTx(context) }
+    }
 
-        Trevm { inner, state }
+    /// Accept the state changes, skipping the [`BlockContext::after_tx`]
+    /// method, and applying them directly to the database.
+    ///
+    /// This is a low-level API, and is not intended for general use. It is
+    /// almost always better to use [`Self::accept`] instead.
+    pub fn accept_skip_context_unchecked(self) -> EvmNeedsTx<'a, Ext, Db, C> {
+        let Trevm { mut inner, state: TransactedState { context, result } } = self;
+
+        inner.db_mut().commit(result.state);
+
+        Trevm { inner, state: NeedsTx(context) }
     }
 }
 

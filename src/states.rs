@@ -1,4 +1,4 @@
-use crate::Trevm;
+use crate::{BlockContext, Trevm};
 use sealed::*;
 
 /// A [`Trevm`] that requires a [`Cfg`].
@@ -39,11 +39,21 @@ pub type EvmNeedsNextBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsNextBlock>;
 /// Expected continuations include:
 /// - [`EvmNeedsTx::fill_tx`]
 /// - [`EvmNeedsTx::execute_tx`]
-/// - [`EvmNeedsTx::apply_tx`]
 /// - [`EvmNeedsTx::finish`]
 ///
 /// [`Tx`]: crate::Tx
 pub type EvmNeedsTx<'a, Ext, Db, C> = Trevm<'a, Ext, Db, NeedsTx<C>>;
+
+/// A [`Trevm`] that encountered an error during transaction execution.
+pub type EvmTransacted<'a, Ext, Db, C> = Trevm<'a, Ext, Db, TransactedState<C>>;
+
+/// A [`Trevm`] that encountered an error during transaction execution.
+///
+/// Expected continuations include:
+/// - [`EvmErrored::discard_error`]
+/// - [`EvmErrored::into_error`]
+pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext<Ext, Db>>::Error> =
+    Trevm<'a, Ext, Db, ErroredState<C, E>>;
 
 /// A [`Trevm`] that is ready to execute a transaction.
 ///
@@ -54,6 +64,8 @@ pub type EvmReady<'a, Ext, Db, C> = Trevm<'a, Ext, Db, Ready<C>>;
 #[allow(dead_code)]
 #[allow(unnameable_types)]
 pub(crate) mod sealed {
+    use revm::primitives::ResultAndState;
+
     macro_rules! states {
         ($($name:ident),+) => {
             $(
@@ -95,6 +107,28 @@ pub(crate) mod sealed {
     #[derive(Debug)]
     pub struct BlockComplete<T>(pub T);
 
+    /// A state for the [`Trevm`].
+    ///
+    /// [`Trevm`]: crate::Trevm
+    #[derive(Debug)]
+    pub struct TransactedState<T> {
+        /// The context for the block.
+        pub context: T,
+        /// The transaction result.
+        pub result: ResultAndState,
+    }
+
+    /// A state for the [`Trevm`].
+    ///
+    /// [`Trevm`]: crate::Trevm
+    #[derive(Debug)]
+    pub struct ErroredState<T, E> {
+        /// The context for the block.
+        pub context: T,
+        /// The transaction error.
+        pub error: E,
+    }
+
     /// Trait for states where block execution can be started.
     #[allow(unnameable_types)]
     pub trait NeedsBlock {}
@@ -106,6 +140,8 @@ pub(crate) mod sealed {
     pub trait HasOutputs {}
     impl HasOutputs for NeedsNextBlock {}
     impl<T> HasOutputs for NeedsTx<T> {}
+    impl<T> HasOutputs for TransactedState<T> {}
+    impl<T, E> HasOutputs for ErroredState<T, E> {}
     impl<T> HasOutputs for Ready<T> {}
 
     #[allow(unnameable_types)]
@@ -114,6 +150,8 @@ pub(crate) mod sealed {
     impl HasCfg for NeedsFirstBlock {}
     impl HasCfg for NeedsNextBlock {}
     impl<T> HasCfg for NeedsTx<T> {}
+    impl<T> HasCfg for TransactedState<T> {}
+    impl<T, E> HasCfg for ErroredState<T, E> {}
     impl<T> HasCfg for Ready<T> {}
 }
 

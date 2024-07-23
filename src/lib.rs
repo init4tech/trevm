@@ -15,9 +15,9 @@
 //! - [`EvmNeedsTx`]: The EVM is configured and has a block environment, and
 //!   now needs a transaction to execute.
 //! - [`EvmReady`]: The EVM has a transaction loaded and is ready to execute it.
-//! - [`TransactedError`]: The EVM has executed a transaction and encountered an
+//! - [`EvmErrored`]: The EVM has executed a transaction and encountered an
 //!   error.
-//! - [`Transacted`]: The EVM has executed a transaction successfully.
+//! - [`EvmTransacted`]: The EVM has executed a transaction successfully.
 //! - [`EvmBlockComplete`]: The EVM has executed and closed a block and contains
 //!   some a populated [`BlockContext`] object
 //! - [`EvmNeedsNextBlock`]: The EVM has executed a transaction (or several
@@ -34,8 +34,8 @@
 //! - Open a block by calling [`Trevm::open_block`] with a [`Block`].
 //! - Fill a Tx by calling [`Trevm::fill_tx`] with a [`Tx`].
 //! - Run the transaction by calling [`Trevm::execute_tx`].
-//! - Handle the result by calling [`Transacted::apply`] or
-//!   [`Transacted::discard`].
+//! - Handle the result by calling [`EvmTransacted::accept`] or
+//!   [`EvmTransacted::reject`].
 //! - Call [`Trevm::close_block`] to close the block.
 //! - Call[ [`Trevm::take_context`] to get the context object or
 //!   [`Trevm::discard_context`] to drop it.
@@ -72,7 +72,8 @@
 //! - [`EvmNeedsFirstBlock`] for the state after configuring the EVM.
 //! - [`EvmNeedsTx`] for the state after opening a block.
 //! - [`EvmReady`] for the state after filling a transaction.
-//! - [`Transacted`] for the state after executing a transaction.
+//! - [`EvmTransacted`] for the state after executing a transaction.
+//! - [`EvmErrored`] for the state after encountering an error.
 //! - [`EvmBlockComplete`] for the state after closing a block.
 //! - [`EvmNeedsNextBlock`] for the state after taking or discarding block
 //!   context.
@@ -162,7 +163,7 @@
 //! of a block, the context is opened with [`BlockContext::open_block`], and at
 //! the end of the block, the context is closed with
 //! [`BlockContext::close_block`]. After each transaction, the context's
-//! [`BlockContext::apply_tx`] logic controls how and whether the execution
+//! [`BlockContext::after_tx`] logic controls how and whether the execution
 //! result is applied to the EVM state, and handles per-transaction logic like
 //! generating receipts and tracking senders.
 //!
@@ -226,13 +227,13 @@
 //!
 //! ### Handling execution errors
 //!
-//! Trevm uses the [`TransactedError`] type to handle errors during transaction
+//! Trevm uses the [`EvmErrored`] state to handle errors during transaction
 //! execution. This type is a wrapper around the error that occurred, and
 //! provides a method to discard the error and continue execution. This is
 //! useful when you want to continue executing transactions even if one fails.
 //!
 //! Usually, errors will be [`EVMError<Db>`], but [`BlockContext`]
-//! implementations may return other errors. The [`TransactedError`] type is
+//! implementations may return other errors. The [`EvmErrored`] type is
 //! generic over the error type, so you can use it with any error type.
 //!
 //! ```
@@ -405,7 +406,7 @@
 mod alloy;
 
 mod evm;
-pub use evm::{Transacted, TransactedError, Trevm};
+pub use evm::Trevm;
 
 mod fill;
 pub use fill::{Block, Cfg, Tx};
@@ -418,7 +419,8 @@ pub use lifecycle::{
 mod states;
 pub(crate) use states::sealed::*;
 pub use states::{
-    EvmBlockComplete, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady,
+    EvmBlockComplete, EvmErrored, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
+    EvmReady, EvmTransacted,
 };
 
 pub mod syscall;
