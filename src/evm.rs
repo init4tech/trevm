@@ -1,5 +1,5 @@
 use crate::{
-    states::EvmBlockComplete, Block, BlockComplete, BlockContext, Cfg, EvmNeedsCfg,
+    states::EvmBlockComplete, BasicContext, Block, BlockComplete, BlockContext, Cfg, EvmNeedsCfg,
     EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady, HasCfg, HasOutputs, NeedsBlock,
     NeedsCfg, NeedsNextBlock, NeedsTx, Ready, Tx,
 };
@@ -784,6 +784,22 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
             Err(error) => Err(TransactedError { evm, error }),
         }
     }
+
+    /// Open a block and return the EVM ready for the next transaction. This is
+    /// a convenience API, and is equivalent to `open_block(filler,
+    /// BasicContext::default())`.
+    ///
+    /// This is a shortcut for `open_block(filler, BasicContext::default())`.
+    /// It will not perform any pre-block or post-block logic, and will not
+    /// produce transaction receipts. As such, this cannot be used to produce
+    /// real blocks on any network, and may produce inconsistent results when
+    /// applied on networks that require pre-block or post-block logic.
+    pub fn fill_block<B: Block>(self, filler: &B) -> EvmNeedsTx<'a, Ext, Db, BasicContext> {
+        match self.open_block(filler, BasicContext::default()) {
+            Ok(evm) => evm,
+            _ => unreachable!("basic filler is infallible"),
+        }
+    }
 }
 
 impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
@@ -795,7 +811,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
     ///
     /// If the State has not been built with StateBuilder::with_bundle_update.
     ///
-    /// See [`State::merge_transitions`] and `State::take_bundle`.
+    /// See [`State::merge_transitions`] and [`State::take_bundle`].
     pub fn finish(self) -> BundleState
     where
         Db: Database + DatabaseCommit,
@@ -812,13 +828,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
 impl<'a, Ext, Db: Database + DatabaseCommit, C> EvmBlockComplete<'a, Ext, Db, C> {
     /// Destructure the EVM and return the block context and the EVM ready for
     /// the next block.
-    pub fn into_parts(self) -> (C, EvmNeedsNextBlock<'a, Ext, Db>) {
+    pub fn take_context(self) -> (C, EvmNeedsNextBlock<'a, Ext, Db>) {
         (self.state.0, EvmNeedsNextBlock { inner: self.inner, state: NeedsNextBlock::new() })
     }
 
     /// Discard the block context and return the EVM ready for the next block.
     pub fn discard_context(self) -> EvmNeedsNextBlock<'a, Ext, Db> {
-        self.into_parts().1
+        self.take_context().1
     }
 }
 

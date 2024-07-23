@@ -53,7 +53,7 @@
 //!     .fill_block(block)
 //!     .apply_tx(tx)
 //!     .map_err(TransactedError::into_error)?
-//!     .clear_block();
+//!     .close_block();
 //! # Ok(())
 //! # }
 //!
@@ -79,7 +79,8 @@
 //! # use revm::{EvmBuilder, db::{InMemoryDB, BundleState}, State,
 //! # StateBuilder};
 //! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx, BlockOutput,
-//! # EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsTx, EvmReady, EvmNeedsNextBlock};
+//! # EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsTx, EvmReady, EvmNeedsNextBlock,
+//! # EvmBlockComplete, Shanghai};
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! let state = StateBuilder::new_with_database(InMemoryDB::default()).build();
@@ -92,24 +93,35 @@
 //! // Once the cfg is filled, we move to `EvmNeedsFirstBlock`.
 //! let trevm: EvmNeedsFirstBlock<'_, _, _> = trevm.fill_cfg(cfg);
 //!
-//! // Filling the block gets us to `EvmNeedsTx`.
-//! let trevm: EvmNeedsTx<'_, _, _> = trevm.fill_block(block);
+//! // Filling the block gets us to `EvmNeedsTx`. `open_block` takes a
+//! // context object that will apply pre- and post-block logic, accumulate
+//! // receipts, and perform other lifecycle tasks.
+//! let trevm: EvmNeedsTx<'_, _, _, _> = trevm.open_block(
+//!     block,
+//!     Shanghai::default()
+//! ).map_err(TransactedError::into_error)?;
 //! // Filling the tx gets us to `EvmReady`.
-//! let trevm: EvmReady<'_, _, _> = trevm.fill_tx(tx);
+//! let trevm: EvmReady<'_, _, _, _> = trevm.fill_tx(tx);
 //!
 //! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx``.
-//! let trevm: EvmNeedsTx<'_, _, _> = match trevm.execute_tx() {
+//! let trevm: EvmNeedsTx<'_, _, _, _> = match trevm.execute_tx() {
 //!     Ok(transacted) => transacted.apply(),
 //!     Err(e) => e.discard_error(),
 //! };
 //!
 //! // Clearing or closing a block gets us to `EvmNeedsNextBlock`, ready for the
 //! // next block.
-//! let trevm: EvmNeedsNextBlock<'_, _, _> = trevm.clear_block();
+//! let trevm: EvmBlockComplete<'_, _, _, _> = trevm
+//!     .close_block()
+//!     .map_err(TransactedError::into_error)?;;
+//!
+//! // During block execution, a context object
+//! let (context, trevm): (Shanghai<'_>, EvmNeedsNextBlock<'_, _, _>) = trevm
+//!     .take_context();
 //!
 //! // Finishing the EVM gets us the final changes and a list of block outputs
 //! // that includes the transaction receipts.
-//! let (bundle, outputs): (BundleState, Vec<BlockOutput>) = trevm.finish();
+//! let bundle: BundleState = trevm.finish();
 //! # Ok(())
 //! # }
 //! ```
@@ -146,14 +158,14 @@
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx,
-//! # ShanghaiLifecycle, CancunLifecycle};
+//! # Shanghai, Cancun};
 //! # use alloy_primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! // Lifecycles are mutable and can be reused across multiple blocks.
-//! let mut lifecycle = CancunLifecycle::<'static> {
+//! let mut lifecycle = Cancun::<'static> {
 //!    parent_beacon_root: B256::repeat_byte(0x42),
-//!    shanghai: ShanghaiLifecycle::default(),
+//!    shanghai: Shanghai::default(),
 //! };
 //!
 //! EvmBuilder::default()
@@ -161,13 +173,13 @@
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     // The pre-block logic is applied here
-//!     .open_block(block, &mut lifecycle)
+//!     .open_block(block, lifecycle)
 //!     // Note that the logic is fallible, so we have to handle errors
 //!     .map_err(TransactedError::into_error)?
 //!     .apply_tx(tx)
 //!     .map_err(TransactedError::into_error)?
 //!     // Closing the block applies the post-block logic, and is also fallible
-//!     .close_block(&mut lifecycle)
+//!     .close_block()
 //!     .map_err(TransactedError::into_error)?;
 //! # Ok(())
 //! # }
@@ -187,14 +199,14 @@
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx,
-//! # ShanghaiLifecycle, CancunLifecycle};
+//! # Shanghai, Cancun};
 //! # use alloy_primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! // Lifecycles are mutable and can be reused across multiple blocks.
-//! let mut lifecycle = CancunLifecycle::<'static> {
+//! let mut lifecycle = Cancun::<'static> {
 //!    parent_beacon_root: B256::repeat_byte(0x42),
-//!    shanghai: ShanghaiLifecycle::default(),
+//!    shanghai: Shanghai::default(),
 //! };
 //!
 //! match EvmBuilder::default()
@@ -202,7 +214,7 @@
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     // The pre-block logic is applied here
-//!     .open_block(block, &mut lifecycle) {
+//!     .open_block(block, lifecycle) {
 //!     Ok(trevm) => {
 //!         trevm
 //!     }
