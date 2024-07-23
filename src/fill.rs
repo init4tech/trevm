@@ -3,14 +3,6 @@ use revm::{
     Database, Evm,
 };
 
-/// A no-op transaction filler.
-#[derive(Debug)]
-pub struct NoopTx;
-
-impl Tx for NoopTx {
-    fn fill_tx_env(&self, _: &mut TxEnv) {}
-}
-
 /// A no-op block filler.
 #[derive(Debug)]
 pub struct NoopBlock;
