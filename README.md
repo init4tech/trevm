@@ -46,7 +46,7 @@ as the block is already open. You can't call `close_block()` on a `EvmReady`
 state, without explicitly clearing or running the transaction that has been
 ready.
 
-![typestates are cool](./assets/Screenshot%202024-07-17%20at%2015.19.27.png)
+![typestates are cool](./assets/states.png)
 
 [typestate]: https://cliffle.com/blog/rust-typestate/
 [revm]: https://github.com/bluealloy/revm
