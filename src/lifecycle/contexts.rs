@@ -24,7 +24,8 @@ use revm::{
 use std::{collections::HashMap, sync::OnceLock};
 
 /// A context that performs the fewest meaingful actions. Specifically, it
-/// fills the block, and applies transactions to the EVM db.
+/// fills the block, and applies transactions to the EVM db. It does not apply
+/// any pre- or post-block actions.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct BasicContext;
 
@@ -156,7 +157,7 @@ impl Shanghai<'_> {
     }
 
     /// Get the block outputs. This contains receipts and senders.
-    pub fn outputs(&self) -> &BlockOutput {
+    pub const fn outputs(&self) -> &BlockOutput {
         &self.outputs
     }
 
@@ -311,6 +312,7 @@ where
 }
 
 impl Prague<'_> {
+    /// Finds deposit logs for the most recent receipt.
     fn find_deposit_logs(&mut self) {
         let receipt =
             self.cancun.shanghai.outputs.receipts().last().expect("produced in shanghai lifecycle");
@@ -328,7 +330,8 @@ impl Prague<'_> {
 
     /// Apply the pre-block logic for [EIP-2935]. This logic was introduced in
     /// Prague and updates historical block hashes in a special system
-    /// contract. Unlike other system transactions, this is NOT modeled as a transaction.
+    /// contract. Unlike other system actions, this is NOT modeled as a
+    /// transaction.
     ///
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
     pub fn apply_eip2935<Ext, Db>(

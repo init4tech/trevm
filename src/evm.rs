@@ -786,8 +786,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
     }
 
     /// Open a block and return the EVM ready for the next transaction. This is
-    /// a convenience API, and is equivalent to `open_block(filler,
-    /// BasicContext::default())`.
+    /// a convenience API and uses [`BasicContext`] for the block context.
     ///
     /// This is a shortcut for `open_block(filler, BasicContext::default())`.
     /// It will not perform any pre-block or post-block logic, and will not
