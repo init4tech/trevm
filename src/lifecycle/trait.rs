@@ -11,6 +11,8 @@ use revm::{
 /// be applied to the EVM. This is useful for implementing EIPs that require
 /// special system actions to be taken before and after the block is processed.
 ///
+/// ### Provided contexts
+///
 /// Contexts are provided for [Shanghai], [Cancun], and [Prague]. While most
 /// Contexts do not modify previous behavior, older context modify things like
 /// the block reward in place. The [Prague] lifecycle is a superset of the
@@ -33,7 +35,56 @@ pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
         b: &B,
     ) -> Result<(), Self::Error>;
 
-    /// Apply the transaction to the evm state
+    /// Apply post-transaction logic and then commit the transaction to the evm
+    /// state. This will be called by [`Trevm`] for each transaction in a block.
+    ///
+    /// This is the hook to produce receipts, update cumulative gas used,
+    /// inspect logs, etc etc.
+    ///
+    /// Generally this should end by calling `evm.db_mut().commit(result.state)`
+    /// however, it is allowed to discard the transaction instead of committing
+    /// it.
+    ///
+    /// ```
+    /// # use revm::{
+    /// #     primitives::{EVMError, ResultAndState},
+    /// #     Database, DatabaseCommit, Evm,
+    /// # };
+    /// # use trevm::BlockContext;
+    /// # struct MyContext;
+    /// #
+    /// # impl MyContext { fn make_receipt(&self, result: &ResultAndState) {} }
+    /// #
+    /// impl<Ext, Db> BlockContext<Ext, Db> for MyContext
+    /// where
+    ///     Db: Database + DatabaseCommit
+    /// {
+    /// #    type Error = EVMError<Db::Error>;
+    /// #    fn open_block<B: trevm::Block>(
+    /// #       &mut self,
+    /// #       _evm: &mut Evm<'_, Ext, Db>,
+    /// #       _b: &B
+    /// #    ) -> Result<(), Self::Error> { Ok(()) }
+    ///     fn apply_tx(
+    ///        &mut self,
+    ///        evm: &mut Evm<'_, Ext, Db>,
+    ///        result: ResultAndState
+    ///     ) {
+    ///         // Do something with the result
+    ///         self.make_receipt(&result);
+    ///         evm.db_mut().commit(result.state);
+    ///     }
+    /// #
+    /// #    fn close_block(
+    /// #       &mut self,
+    /// #       _evm: &mut Evm<'_, Ext, Db>
+    /// #     ) -> Result<(), Self::Error> {
+    /// #       Ok(())
+    /// #     }
+    /// }
+    /// ```
+    ///
+    /// [`Trevm`]: crate::Trevm
     fn apply_tx(&mut self, trevm: &mut Evm<'_, Ext, Db>, result: ResultAndState);
 
     /// Apply post-block logic and close the block.
