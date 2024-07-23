@@ -103,8 +103,8 @@ pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
     /// ```
     ///
     /// [`Trevm`]: crate::Trevm
-    fn after_tx(&mut self, trevm: &mut Evm<'_, Ext, Db>, result: ResultAndState);
+    fn after_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState);
 
     /// Apply post-block logic and close the block.
-    fn close_block(&mut self, trevm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error>;
+    fn close_block(&mut self, evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error>;
 }
