@@ -44,7 +44,17 @@ pub type EvmNeedsNextBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsNextBlock>;
 /// [`Tx`]: crate::Tx
 pub type EvmNeedsTx<'a, Ext, Db, C> = Trevm<'a, Ext, Db, NeedsTx<C>>;
 
+/// A [`Trevm`] that is ready to execute a transaction.
+///
+/// The transaction may be executed with [`EvmReady::run`] or cleared
+/// with [`EvmReady::clear_tx`]
+pub type EvmReady<'a, Ext, Db, C> = Trevm<'a, Ext, Db, Ready<C>>;
+
 /// A [`Trevm`] that encountered an error during transaction execution.
+///
+/// Expected continuations include:
+/// - [`EvmTransacted::reject`]
+/// - [`EvmTransacted::accept`]
 pub type EvmTransacted<'a, Ext, Db, C> = Trevm<'a, Ext, Db, TransactedState<C>>;
 
 /// A [`Trevm`] that encountered an error during transaction execution.
@@ -54,12 +64,6 @@ pub type EvmTransacted<'a, Ext, Db, C> = Trevm<'a, Ext, Db, TransactedState<C>>;
 /// - [`EvmErrored::into_error`]
 pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext<Ext, Db>>::Error> =
     Trevm<'a, Ext, Db, ErroredState<C, E>>;
-
-/// A [`Trevm`] that is ready to execute a transaction.
-///
-/// The transaction may be executed with [`EvmReady::run`] or cleared
-/// with [`EvmReady::clear_tx`]
-pub type EvmReady<'a, Ext, Db, C> = Trevm<'a, Ext, Db, Ready<C>>;
 
 #[allow(dead_code)]
 #[allow(unnameable_types)]
@@ -271,6 +275,21 @@ macro_rules! trevm_aliases {
             /// The transaction may be executed with [`Trevm::execute_tx`] or
             /// cleared with [`Trevm::clear_tx`]
             pub type EvmReady<'a, C> = $crate::EvmReady<'a, $ext, $db, C>;
+
+            /// A [`Trevm`] that encountered an error during transaction execution.
+            ///
+            /// Expected continuations include:
+            /// - [`EvmTransacted::reject`]
+            /// - [`EvmTransacted::accept`]
+            pub type EvmTransacted<'a, C> = $crate::EvmTransacted<'a, $ext, $db, C>;
+
+            /// A [`Trevm`] that encountered an error during transaction execution.
+            ///
+            /// Expected continuations include:
+            /// - [`EvmErrored::discard_error`]
+            /// - [`EvmErrored::into_error`]
+            pub type EvmErrored<'a, C, E = <C as $crate::BlockContext<$ext, $db>>::Error> =
+                $crate::EvmErrored<'a, $ext, $db, C, E>;
         }
     };
 
@@ -337,6 +356,21 @@ macro_rules! trevm_aliases {
             /// The transaction may be executed with [`Trevm::execute_tx`] or
             /// cleared with [`Trevm::clear_tx`]
             pub type EvmReady<C> = $crate::EvmReady<'static, $ext, $db, C>;
+
+            /// A [`Trevm`] that encountered an error during transaction execution.
+            ///
+            /// Expected continuations include:
+            /// - [`EvmTransacted::reject`]
+            /// - [`EvmTransacted::accept`]
+            pub type EvmTransacted<C> = $crate::EvmTransacted<'static, $ext, $db, C>;
+
+            /// A [`Trevm`] that encountered an error during transaction execution.
+            ///
+            /// Expected continuations include:
+            /// - [`EvmErrored::discard_error`]
+            /// - [`EvmErrored::into_error`]
+            pub type EvmErrored<C, E = <C as $crate::BlockContext<$ext, $db>>::Error> =
+                $crate::EvmErrored<'static, $ext, $db, C, E>;
         }
     };
 }
