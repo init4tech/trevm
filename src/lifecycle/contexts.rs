@@ -5,14 +5,14 @@ use crate::{
     },
     Block, BlockContext, BlockOutput,
 };
-use alloy_consensus::{Receipt, ReceiptEnvelope, Request};
+use alloy_consensus::{Receipt, ReceiptEnvelope, Request, TxReceipt};
 use alloy_eips::{
     eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE},
     eip4895::Withdrawal,
     eip7002::WithdrawalRequest,
     eip7251::ConsolidationRequest,
 };
-use alloy_primitives::{B256, U256};
+use alloy_primitives::{Bloom, Log, B256, U256};
 use alloy_sol_types::SolEvent;
 use revm::{
     primitives::{
@@ -21,7 +21,7 @@ use revm::{
     },
     Database, DatabaseCommit, Evm,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
 
 /// A context that performs the fewest meaingful actions. Specifically, it
 /// fills the block, and applies transactions to the EVM db.
@@ -154,6 +154,32 @@ impl Shanghai<'_> {
 
         Ok(())
     }
+
+    /// Get the block outputs. This contains receipts and senders.
+    pub fn outputs(&self) -> &BlockOutput {
+        &self.outputs
+    }
+
+    /// Get the receipts produced in the block.
+    pub fn receipts(&self) -> &[ReceiptEnvelope] {
+        self.outputs.receipts()
+    }
+
+    /// Get the logs produced in the block.
+    pub fn logs(&self) -> impl Iterator<Item = &Log> {
+        self.outputs.logs()
+    }
+
+    /// Calculate the bloom filter for the block.
+    pub fn bloom(&self) -> &Bloom {
+        static BLOOM: OnceLock<Bloom> = OnceLock::new();
+
+        BLOOM.get_or_init(|| {
+            let mut bloom: Bloom = Bloom::default();
+            self.outputs.receipts().iter().for_each(|r| bloom.accrue_bloom(&r.bloom()));
+            bloom
+        })
+    }
 }
 
 /// Cancun lifecycle. This applies the [EIP-4788] pre-block beacon root update
@@ -169,6 +195,20 @@ pub struct Cancun<'a> {
 
     /// The Cancun lifecycle is a superset of the Shanghai lifecycle.
     pub shanghai: Shanghai<'a>,
+}
+
+impl<'a> std::ops::Deref for Cancun<'a> {
+    type Target = Shanghai<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.shanghai
+    }
+}
+
+impl<'a> std::ops::DerefMut for Cancun<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.shanghai
+    }
 }
 
 impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Cancun<'_> {
@@ -227,6 +267,20 @@ pub struct Prague<'a> {
     /// Requests produced in the block. These include Deposit, Withdrawal, and
     /// Consolidation requests.
     pub requests: Vec<Request>,
+}
+
+impl<'a> std::ops::Deref for Prague<'a> {
+    type Target = Cancun<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.cancun
+    }
+}
+
+impl<'a> std::ops::DerefMut for Prague<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.cancun
+    }
 }
 
 impl<Ext, Db> BlockContext<Ext, Db> for Prague<'_>

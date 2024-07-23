@@ -1,4 +1,4 @@
-use alloy_consensus::{Receipt, TxReceipt};
+use alloy_consensus::{ReceiptEnvelope, TxReceipt};
 use alloy_primitives::{Address, Log};
 
 /// Information externalized during block execution.
@@ -6,7 +6,7 @@ use alloy_primitives::{Address, Log};
 /// This struct is used to collect the results of executing a block of
 /// transactions. It accumulates the receipts and senders of the transactions.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockOutput<T: TxReceipt = Receipt> {
+pub struct BlockOutput<T: TxReceipt = ReceiptEnvelope> {
     /// The receipts of the transactions in the block, in order.
     receipts: Vec<T>,
 
