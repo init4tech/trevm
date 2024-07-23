@@ -60,29 +60,16 @@
 //!     .run_tx(tx);
 //! # Ok(())
 //! # }
-//!
 //! ```
-//!
-//! ## Writing an application
-//!
-//! When writing your code, we strongly recommend using the aliases:
-//!
-//! - [`Trevm`] for the EVM typestate machine in no specific state.
-//! - [`EvmNeedsCfg`] for the initial state.
-//! - [`EvmNeedsFirstBlock`] for the state after configuring the EVM.
-//! - [`EvmNeedsTx`] for the state after opening a block.
-//! - [`EvmReady`] for the state after filling a transaction.
-//! - [`EvmTransacted`] for the state after executing a transaction.
-//! - [`EvmErrored`] for the state after encountering an error.
-//! - [`EvmBlockComplete`] for the state after closing a block.
-//! - [`EvmNeedsNextBlock`] for the state after taking or discarding block
-//!   context.
-//!
 //! If you get stuck, don't worry! You _cannot_ invoke the wrong function or
 //! mess up the inner state unless you access a method marked `_unchecked`.
 //! While the states and generics may seem intimidating at first, they fade
 //! into the background when you start writing your application.
 //!
+//! ## Writing an application
+//!
+//! When writing your code, we strongly recommend using the `Evm____` type
+//! aliases to simplify your code.
 //!
 //! We also recommend defining concrete types for `Ext` and `Db` whenever
 //! possible, to simplify your code and remove bounds. Most users will want
