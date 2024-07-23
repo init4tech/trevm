@@ -401,7 +401,7 @@ mod evm;
 pub use evm::Trevm;
 
 mod fill;
-pub use fill::{Block, Cfg, Tx};
+pub use fill::{Block, Cfg, NoopBlock, NoopCfg, Tx};
 
 mod lifecycle;
 pub use lifecycle::{
