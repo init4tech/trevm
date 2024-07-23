@@ -156,9 +156,17 @@
 //!
 //! ### [`BlockContext`]
 //!
-//! Trevm handles pre- and post-block logic through the [`BlockContext`] trait.
-//! The block context trait can be invoked by [`Trevm::open_block`] and
-//! [`Trevm::close_block`]. Trevm provides a few block context implementations:
+//! Trevm handles transaction application, receipts, and pre- and post-block
+//! logic through the [`BlockContext`] trait. The [`BlockContext`] trait is
+//! invoked by [`Trevm`] to manage the lifecycle of a single block. At the start
+//! of a block, the context is opened with [`BlockContext::open_block`], and at
+//! the end of the block, the context is closed with
+//! [`BlockContext::close_block`]. After each transaction, the context's
+//! [`BlockContext::apply_tx`] logic controls how and whether the execution
+//! result is applied to the EVM state, and handles per-transaction logic like
+//! generating receipts and tracking senders.
+//!
+//! Trevm provides a few block context implementations:
 //!
 //! - [`Shanghai`]: Shanghai context applies the post-block system
 //!   action (withdrawals) introduced by [EIP-4895].
@@ -168,6 +176,9 @@
 //!   [`Cancun`] as well as the pre-block logic of [EIP-2935], the
 //!   post-block logic introduced by [EIP-7002] and [EIP-7251], and the
 //!   withdrawal request accumulation logic introduced in [EIP-6110].
+//! - [`BasicContext`]: Basic context applies no pre- or post-block logic, and
+//!   is useful for testing or for applications that do not require the
+//!   real system state.
 //!
 //! Contexts before Shanghai are not currently implemented. In particular,
 //! block and ommer rewards for pre-merge blocks are not implemented.
@@ -265,7 +276,8 @@
 //! - Implement the [`PostTx`] trait to apply post-transaction logic/changes.
 //! - Implement your own [`Cfg`], [`Block`], and
 //!   [`Tx`] to fill the EVM from your own data structures.
-//! - Implement your own [`BlockContext`] to apply pre- and post-block logic.
+//! - Implement your own [`BlockContext`] to apply pre- and post-block logic,
+//!   use custom receipt types, or more.
 //!
 //! ```
 //! # use trevm::Tx;

@@ -11,6 +11,19 @@ use revm::{
 /// be applied to the EVM. This is useful for implementing EIPs that require
 /// special system actions to be taken before and after the block is processed.
 ///
+/// ### Mutability and the EVM
+///
+/// The [`BlockContext`] trait has mutable access to the EVM, allowing it to
+/// modify the EVM state as needed. This is useful for implementing EIPs that
+/// require special system actions to be taken before and after the block is
+/// processed.
+///
+/// Because the EVM is passed as a mutable reference, the [`BlockContext`] trait
+/// can make ANY modificatiopn to the EVM state. This includes potentially
+/// changing the [`BlockEnv`] and [`CfgEnv`] objects, the [`SpecId`], or any
+/// other property. As such, block contexts are allowed to violate [`Trevm`]
+/// state guarantees. Please be careful.
+///
 /// ### Provided contexts
 ///
 /// Contexts are provided for [Shanghai], [Cancun], and [Prague]. While most
@@ -23,6 +36,10 @@ use revm::{
 /// [Shanghai]: crate::Shanghai
 /// [Cancun]: crate::Cancun
 /// [Prague]: crate::Prague
+/// [`BlockEnv`]: revm::primitives::BlockEnv
+/// [`CfgEnv`]: revm::primitives::CfgEnv
+/// [`SpecId`]: revm::primitives::SpecId
+/// [`Trevm`]: crate::Trevm
 pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
     /// The error type for the context. This captures logic errors that occur
     /// during the lifecycle.
