@@ -6,9 +6,9 @@ use alloy_provider::ProviderBuilder;
 use alloy_sol_types::sol;
 use alloy_sol_types::SolCall;
 use revm::{
-    db::{AlloyDB, CacheDB, EmptyDB},
-    primitives::{address, ExecutionResult, TxKind, U256},
-    Database, Evm,
+    db::{AlloyDB, CacheDB},
+    primitives::{address, TxKind, U256},
+    Evm,
 };
 use trevm::Block;
 use trevm::Cfg;
@@ -66,51 +66,30 @@ async fn main() -> eyre::Result<()> {
     // storage[11] = kLast: uint256                                //
     // =========================================================== //
 
-    // choose slot of storage that you would like to transact with
-    let slot = U256::from(8);
-
     // initialize new AlloyDB
-    let mut alloydb = AlloyDB::new(client, BlockId::default()).unwrap();
-
-    // query basic properties of an account incl bytecode
-    let acc_info = alloydb.basic(POOL_ADDRESS).unwrap().unwrap();
-
-    // query value of storage slot at account address
-    let value = alloydb.storage(POOL_ADDRESS, slot).unwrap();
+    let alloydb = AlloyDB::new(client, BlockId::default()).unwrap();
 
     // initialise empty in-memory-db
-    let mut cache_db = CacheDB::new(EmptyDB::default());
-
-    // insert basic account info which was generated via Web3DB with the corresponding address
-    cache_db.insert_account_info(POOL_ADDRESS, acc_info);
-
-    // insert our pre-loaded storage slot to the corresponding contract key (address) in the DB
-    cache_db.insert_account_storage(POOL_ADDRESS, slot, value).unwrap();
+    let cache_db = CacheDB::new(alloydb);
 
     // initialise an empty (default) EVM
-    let evm = Evm::builder().with_db(cache_db).build_trevm();
+    let evm = Evm::builder()
+        .with_db(cache_db)
+        .build_trevm()
+        .fill_cfg(&NoopCfg)
+        .open_block(&NoopBlock, Shanghai::default())
+        .unwrap()
+        .fill_tx(&GetReservesFiller)
+        .execute_tx()
+        .inspect_err(|e| panic!("Execution error {e:?}"))
+        .unwrap();
 
-    let evm = evm.fill_cfg(&NoopCfg);
-    let evm = evm.open_block(&NoopBlock, Shanghai::default()).unwrap();
-
-    let evm = evm.fill_tx(&GetReservesFiller).execute_tx();
-
-    let value = match evm {
-        Ok(res) => {
-            let exec_result = res.result();
-            println!("Execution result: {:#?}", res.result());
-            match exec_result {
-                ExecutionResult::Success { output, .. } => output.to_owned(),
-                _ => panic!("Execution failed"),
-            }
-        }
-        Err(e) => {
-            panic!("Execution error: {e:?}");
-        }
-    };
+    // Inspect the outcome of a transaction execution, and get the return value
+    println!("Execution result: {:#?}", evm.result());
+    let output = evm.output().expect("Execution halted");
 
     // decode bytes to reserves + ts via alloy's abi decode
-    let return_vals = getReservesCall::abi_decode_returns(value.data(), true)?;
+    let return_vals = getReservesCall::abi_decode_returns(output, true)?;
 
     // Print emulated getReserves() call output
     println!("Reserve0: {:#?}", return_vals.reserve0);

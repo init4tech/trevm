@@ -120,25 +120,77 @@ pub(crate) mod sealed {
 #[macro_export]
 /// Declare type aliases for trevm with a concrete `Ext` and `Db` type.
 ///
+/// This will create aliases with your concrete types for the following types:
+/// - [`EvmNeedsCfg`]
+/// - [`EvmNeedsFirstBlock`]
+/// - [`EvmBlockComplete`]
+/// - [`EvmNeedsNextBlock`]
+/// - [`EvmNeedsTx`]
+/// - [`EvmReady`]
+///
+/// ## Basic usage:
+///
+/// Invoking with just a DB type will use [`()`] for the ext
+///
 /// ```
+/// use trevm::trevm_aliases;
+/// use revm::db::InMemoryDB;
+///
+/// // produces types that look like this:
+/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<'static, (), InMemoryDB>;
+/// trevm_aliases!(revm::db::InMemoryDB);
+/// ```
+///
+/// Invoking with an ext and DB type will use the provided ext type and the
+/// static lifetime:
+///
+/// ```no_compile
 /// # use trevm::trevm_aliases;
 /// # use revm::db::InMemoryDB;
-/// trevm_aliases!(revm::db::InMemoryDB);
+///
+/// // produces types that look like this:
+/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<'static, SomeExtType, InMemoryDB>;
+/// trevm_aliases!(SomeExtType, InMemoryDB);
+/// ```
+///
+/// To add a lifetime to the ext type, add the word lifetime:
+///
+/// ```
+/// # mod t {
+/// # use trevm::trevm_aliases;
+/// # use revm::db::InMemoryDB;
+/// # pub struct SomeExtType;
+/// // produces types that look like this:
+/// // type EvmNeedsCfg<'a> = trevm::EvmNeedsCfg<'a, SomeExtType, InMemoryDB>;
+/// trevm_aliases!(lifetime: SomeExtType, InMemoryDB);
+/// # }
 /// ```
 macro_rules! trevm_aliases {
     ($db:ty) => {
-        trevm_aliases!((), $db)
+        trevm_aliases!((), $db);
     };
-    ($ext:ty, $db:ty) => {
+
+    (lifetime: $ext:ty, $db:ty) => {
+        #[allow(unused_imports, unreachable_pub, dead_code)]
         pub use __aliases::*;
-        pub mod __aliases {
+
+        #[allow(unused_imports, unreachable_pub, dead_code)]
+        mod __aliases {
+            use super::*;
+            // bring these in scope so that doclinks work in generated docs
+            use $crate::Block;
+            use $crate::Cfg;
+            use $crate::Trevm;
+            use $crate::Tx;
+
             /// A [`Trevm`] that requires a [`Cfg`].
             ///
             /// Expected continuations include:
             /// - [`Trevm::fill_cfg`]
             ///
             /// [`Cfg`]: crate::Cfg
-            pub type EvmNeedsCfg<'a, State> = $crate::Trevm<'a, $ext, $db, State>;
+            /// [`Trevm`]: crate::Trevm
+            pub type EvmNeedsCfg<'a> = $crate::EvmNeedsCfg<'a, $ext, $db>;
 
             /// A [`Trevm`] that requires a [`Block`] and contains no
             /// outputs. This EVM has not yet executed any transactions or state changes.
@@ -178,9 +230,75 @@ macro_rules! trevm_aliases {
 
             /// A [`Trevm`] that is ready to execute a transaction.
             ///
-            /// The transaction may be executed with [`Trevm::execute_tx`] or cleared
-            /// with [`Trevm::clear_tx`]
+            /// The transaction may be executed with [`Trevm::execute_tx`] or
+            /// cleared with [`Trevm::clear_tx`]
             pub type EvmReady<'a, C> = $crate::EvmReady<'a, $ext, $db, C>;
+        }
+    };
+
+    ($ext:ty, $db:ty) => {
+        #[allow(unused_imports, unreachable_pub, dead_code)]
+        pub use __aliases::*;
+
+        #[allow(unused_imports, unreachable_pub, dead_code)]
+        mod __aliases {
+            use super::*;
+            // bring these in scope so that doclinks work in generated docs
+            use $crate::Block;
+            use $crate::Cfg;
+            use $crate::Trevm;
+            use $crate::Tx;
+
+            /// A [`Trevm`] that requires a [`Cfg`].
+            ///
+            /// Expected continuations include:
+            /// - [`Trevm::fill_cfg`]
+            ///
+            /// [`Cfg`]: crate::Cfg
+            /// [`Trevm`]: crate::Trevm
+            pub type EvmNeedsCfg = $crate::EvmNeedsCfg<'static, $ext, $db>;
+
+            /// A [`Trevm`] that requires a [`Block`] and contains no
+            /// outputs. This EVM has not yet executed any transactions or state changes.
+            ///
+            /// Expected continuations include:
+            /// - [`EvmNeedsFirstBlock::open_block`]
+            ///
+            /// [`Block`]: crate::Block
+            pub type EvmNeedsFirstBlock = $crate::EvmNeedsFirstBlock<'static, $ext, $db>;
+
+            /// A [`Trevm`] that has completed a block and contains the block's populated
+            /// lifecycle object.
+            ///
+            /// Expected continuations include:
+            /// - [`EvmBlockComplete::into_parts`]
+            /// - [`EvmBlockComplete::discard_context`]
+            pub type EvmBlockComplete<C> = $crate::EvmBlockComplete<'static, $ext, $db, C>;
+
+            /// A [`Trevm`] that requires a [`Block`].
+            ///
+            /// Expected continuations include:
+            /// - [`EvmNeedsFirstBlock::open_block`]
+            ///
+            /// [`Block`]: crate::Block
+            pub type EvmNeedsNextBlock = $crate::EvmNeedsNextBlock<'static, $ext, $db>;
+
+            /// A [`Trevm`] that requires a [`Tx`].
+            //
+            /// Expected continuations include:
+            /// - [`EvmNeedsTx::fill_tx`]
+            /// - [`EvmNeedsTx::execute_tx`]
+            /// - [`EvmNeedsTx::apply_tx`]
+            /// - [`EvmNeedsTx::finish`]
+            ///
+            /// [`Tx`]: crate::Tx
+            pub type EvmNeedsTx<C> = $crate::EvmNeedsTx<'static, $ext, $db, C>;
+
+            /// A [`Trevm`] that is ready to execute a transaction.
+            ///
+            /// The transaction may be executed with [`Trevm::execute_tx`] or
+            /// cleared with [`Trevm::clear_tx`]
+            pub type EvmReady<C> = $crate::EvmReady<'static, $ext, $db, C>;
         }
     };
 }

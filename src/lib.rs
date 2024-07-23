@@ -44,8 +44,7 @@
 //!
 //! ### Running a transaction
 //!
-//! This example runs a transaction, and returns any errors encountered during
-//! execution:
+//! Running transactions is simple with Trevm. Here's a basic example:
 //!
 //! ```
 //! use revm::{EvmBuilder, db::InMemoryDB};
@@ -58,12 +57,13 @@
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
-//!     .apply_tx(tx)
-//!     .map_err(TransactedError::into_error)?;
+//!     .apply_tx(tx);
 //! # Ok(())
 //! # }
 //!
 //! ```
+//!
+//! ## Writing an application
 //!
 //! When writing your code, we strongly recommend using the aliases:
 //!
@@ -82,7 +82,6 @@
 //! While the states and generics may seem intimidating at first, they fade
 //! into the background when you start writing your application.
 //!
-//! ## Writing an application
 //!
 //! We also recommend defining concrete types for `Ext` and `Db` whenever
 //! possible, to simplify your code and remove bounds. Most users will want
@@ -90,6 +89,15 @@
 //!
 //! To help you use concrete types, we provide the [`trevm_aliases`] macro. This
 //! macro generates type aliases for the Trevm states with a concrete `Ext` and
+//!
+//! ```
+//! use trevm::trevm_aliases;
+//! use revm::db::InMemoryDB;
+//!
+//! // produces types that look like this:
+//! // type EvmNeedsCfg = trevm::EvmNeedsCfg<'static, (), InMemoryDB>;
+//! trevm_aliases!(revm::db::InMemoryDB);
+//! ```
 //!
 //! ## Understanding the state machine
 //!
