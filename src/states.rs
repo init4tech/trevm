@@ -4,7 +4,7 @@ use sealed::*;
 /// A [`Trevm`] that requires a [`Cfg`].
 ///
 /// Expected continuations include:
-/// - [`Trevm::fill_cfg`]
+/// - [`EvmNeedsCfg::fill_cfg`]
 ///
 /// [`Cfg`]: crate::Cfg
 pub type EvmNeedsCfg<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsCfg>;
@@ -38,7 +38,7 @@ pub type EvmNeedsNextBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsNextBlock>;
 ///
 /// Expected continuations include:
 /// - [`EvmNeedsTx::fill_tx`]
-/// - [`EvmNeedsTx::execute_tx`]
+/// - [`EvmNeedsTx::run_tx`]
 /// - [`EvmNeedsTx::finish`]
 ///
 /// [`Tx`]: crate::Tx
@@ -57,8 +57,8 @@ pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext<Ext, Db>>::Error> =
 
 /// A [`Trevm`] that is ready to execute a transaction.
 ///
-/// The transaction may be executed with [`Trevm::execute_tx`] or cleared
-/// with [`Trevm::clear_tx`]
+/// The transaction may be executed with [`EvmReady::run`] or cleared
+/// with [`EvmReady::clear_tx`]
 pub type EvmReady<'a, Ext, Db, C> = Trevm<'a, Ext, Db, Ready<C>>;
 
 #[allow(dead_code)]
