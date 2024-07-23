@@ -795,10 +795,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
     /// real blocks on any network, and may produce inconsistent results when
     /// applied on networks that require pre-block or post-block logic.
     pub fn fill_block<B: Block>(self, filler: &B) -> EvmNeedsTx<'a, Ext, Db, BasicContext> {
-        match self.open_block(filler, BasicContext::default()) {
-            Ok(evm) => evm,
-            _ => unreachable!("basic filler is infallible"),
-        }
+        self.open_block(filler, BasicContext)
+            .unwrap_or_else(|_| unreachable!("basic filler is infallible"))
     }
 }
 
