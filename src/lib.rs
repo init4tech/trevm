@@ -417,6 +417,10 @@ pub use states::{
 
 pub mod syscall;
 
+mod zenith;
+
+pub use revm;
+
 /// Utilities for testing Trevm or testing with Trevm.
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
