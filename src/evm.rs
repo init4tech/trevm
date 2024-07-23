@@ -871,11 +871,11 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
         self,
         filler: &T,
     ) -> Result<EvmTransacted<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
-        self.fill_tx(filler).execute_tx()
+        self.fill_tx(filler).execute()
     }
 
     /// Execute a transaction, accept the output, and ignore errors.
-    pub fn run_tx<T: Tx>(self, filler: &T) -> Self {
+    pub fn run_tx_ignore_err<T: Tx>(self, filler: &T) -> Self {
         match self.execute_tx(filler) {
             Ok(evm) => evm.accept(),
             Err(evm) => evm.discard_error(),
@@ -893,9 +893,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
     }
 
     /// Execute the loaded transaction.
-    pub fn execute_tx(
-        mut self,
-    ) -> Result<EvmTransacted<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
+    pub fn execute(mut self) -> Result<EvmTransacted<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
         let result = self.inner.transact();
 
         let Trevm { inner, state: Ready(context) } = self;
@@ -909,8 +907,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
     }
 
     /// Execute the loaded transaction, accept the output, and ignore errors.
-    pub fn run(self) -> EvmNeedsTx<'a, Ext, Db, C> {
-        match self.execute_tx() {
+    pub fn run_ignore_err(self) -> EvmNeedsTx<'a, Ext, Db, C> {
+        match self.execute() {
             Ok(evm) => evm.accept(),
             Err(evm) => evm.discard_error(),
         }

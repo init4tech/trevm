@@ -80,7 +80,7 @@ async fn main() -> eyre::Result<()> {
         .open_block(&NoopBlock, Shanghai::default())
         .unwrap()
         .fill_tx(&GetReservesFiller)
-        .execute_tx()
+        .execute()
         .inspect_err(|e| panic!("Execution error {e:?}"))
         .unwrap();
 

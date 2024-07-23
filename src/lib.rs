@@ -132,8 +132,18 @@
 //! // Filling the tx gets us to `EvmReady`.
 //! let trevm: EvmReady<'_, _, _, _> = trevm.fill_tx(tx);
 //!
-//! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx``.
-//! let trevm: EvmNeedsTx<'_, _, _, _> = trevm.run();
+//! let res: Result<
+//!     EvmTransacted<'_, _, _, _>,
+//!     EvmErrored<'_, _, _, _>,
+//! > = trevm.execute();
+//!
+//!
+//! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx`.
+//! // You could also make additional checks and discard the success result here
+//! let trevm: EvmNeedsTx<'_, _, _, _> = match res {
+//!    Ok(trevm) => trevm.accept(),
+//!    Err(e) => e.discard_error(),
+//! };
 //!
 //! // Clearing or closing a block gets us to `EvmNeedsNextBlock`, ready for the
 //! // next block.
