@@ -5,8 +5,7 @@
 //! correct usage of the EVM.
 //!
 //! Tevm is NOT an EVM implementation. It is a thin wrapper around the EVM
-//! provided by [`revm`], which is a Rust implementation of the Ethereum
-//! Virtual Machine.
+//! provided by [`revm`].
 //!
 //! [`Trevm`] models the EVM as a state machine with the following states:
 //!
@@ -19,6 +18,8 @@
 //! - [`TransactedError`]: The EVM has executed a transaction and encountered an
 //!   error.
 //! - [`Transacted`]: The EVM has executed a transaction successfully.
+//! - [`EvmBlockComplete`]: The EVM has executed and closed a block and contains
+//!   some a populated [`BlockContext`] object
 //! - [`EvmNeedsNextBlock`]: The EVM has executed a transaction (or several
 //!   transactions) successfully and the block has been closed. The EVM is now
 //!   ready to open the next block, or to yield its outputs.
@@ -36,9 +37,15 @@
 //! - Handle the result by calling [`Transacted::apply`] or
 //!   [`Transacted::discard`].
 //! - Call [`Trevm::close_block`] to close the block.
+//! - Call[ [`Trevm::take_context`] to get the context object or
+//!   [`Trevm::discard_context`] to drop it.
 //! - Then call [`Trevm::finish`] to get the outputs.
 //!
-//! Here is the simples possible example:
+//!
+//! ### Running a transaction
+//!
+//! This example runs a transaction, and returns any errors encountered during
+//! execution:
 //!
 //! ```
 //! use revm::{EvmBuilder, db::InMemoryDB};
@@ -52,8 +59,7 @@
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
 //!     .apply_tx(tx)
-//!     .map_err(TransactedError::into_error)?
-//!     .close_block();
+//!     .map_err(TransactedError::into_error)?;
 //! # Ok(())
 //! # }
 //!
@@ -67,11 +73,25 @@
 //! - [`EvmNeedsTx`] for the state after opening a block.
 //! - [`EvmReady`] for the state after filling a transaction.
 //! - [`Transacted`] for the state after executing a transaction.
-//! - [`EvmNeedsNextBlock`] for the state after closing a block.
+//! - [`EvmBlockComplete`] for the state after closing a block.
+//! - [`EvmNeedsNextBlock`] for the state after taking or discarding block
+//!   context.
+//!
+//! If you get stuck, don't worry! You _cannot_ invoke the wrong function or
+//! mess up the inner state unless you access a method marked `_unchecked`.
+//! While the states and generics may seem intimidating at first, they fade
+//! into the background when you start writing your application.
+//!
+//! ## Writing an application
 //!
 //! We also recommend defining concrete types for `Ext` and `Db` whenever
 //! possible, to simplify your code and remove bounds. Most users will want
 //! `()` for `Ext`, unless specifically using an inspector or a customized EVM.
+//!
+//! To help you use concrete types, we provide the [`trevm_aliases`] macro. This
+//! macro generates type aliases for the Trevm states with a concrete `Ext` and
+//!
+//! ## Understanding the state machine
 //!
 //! Here's a slightly more complex example, with states written out:
 //!
@@ -141,7 +161,7 @@
 //!   post-block logic introduced by [EIP-7002] and [EIP-7251], and the
 //!   withdrawal request accumulation logic introduced in [EIP-6110].
 //!
-//! s before Shanghai are not currently implemented. In particular,
+//! Contexts before Shanghai are not currently implemented. In particular,
 //! block and ommer rewards for pre-merge blocks are not implemented.
 //!
 //! The [`BlockContext`] trait methods take a mutable reference to allow the
@@ -153,8 +173,6 @@
 //! block. It may also be used to compute statistics or indices that are only
 //! available after the block is closed.
 //!
-//! Here's the above example using a lifecycle. Note that
-//!
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, TransactedError, Cfg, Block, Tx,
@@ -162,25 +180,27 @@
 //! # use alloy_primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! // Lifecycles are mutable and can be reused across multiple blocks.
-//! let mut lifecycle = Cancun::<'static> {
+//! // Contexts manage the lifecycle of a single block
+//! let mut context = Cancun::<'static> {
 //!    parent_beacon_root: B256::repeat_byte(0x42),
 //!    shanghai: Shanghai::default(),
 //! };
 //!
-//! EvmBuilder::default()
+//! let (context, trevm) = EvmBuilder::default()
 //!     .with_db(InMemoryDB::default())
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     // The pre-block logic is applied here
-//!     .open_block(block, lifecycle)
+//!     .open_block(block, context)
 //!     // Note that the logic is fallible, so we have to handle errors
 //!     .map_err(TransactedError::into_error)?
 //!     .apply_tx(tx)
 //!     .map_err(TransactedError::into_error)?
 //!     // Closing the block applies the post-block logic, and is also fallible
 //!     .close_block()
-//!     .map_err(TransactedError::into_error)?;
+//!     .map_err(TransactedError::into_error)?
+//!     // This splits the context, and puts trevm into `EvmNeedsNextBlock`
+//!     .take_context();
 //! # Ok(())
 //! # }
 //! ```
@@ -192,9 +212,9 @@
 //! provides a method to discard the error and continue execution. This is
 //! useful when you want to continue executing transactions even if one fails.
 //!
-//! Usually, errors will be [`EVMError<Db>`], but [`BlockContext`] implementations
-//! may return other errors. The [`TransactedError`] type is generic over the
-//! error type, so you can use it with any error type.
+//! Usually, errors will be [`EVMError<Db>`], but [`BlockContext`]
+//! implementations may return other errors. The [`TransactedError`] type is
+//! generic over the error type, so you can use it with any error type.
 //!
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
@@ -203,8 +223,8 @@
 //! # use alloy_primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! // Lifecycles are mutable and can be reused across multiple blocks.
-//! let mut lifecycle = Cancun::<'static> {
+//! // Contexts manage the lifecycle of a single block
+//! let mut context = Cancun::<'static> {
 //!    parent_beacon_root: B256::repeat_byte(0x42),
 //!    shanghai: Shanghai::default(),
 //! };
@@ -214,7 +234,7 @@
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     // The pre-block logic is applied here
-//!     .open_block(block, lifecycle) {
+//!     .open_block(block, context) {
 //!     Ok(trevm) => {
 //!         trevm
 //!     }
