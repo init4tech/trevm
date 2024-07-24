@@ -16,8 +16,8 @@ use alloy_primitives::{Bloom, Log, B256, U256};
 use alloy_sol_types::SolEvent;
 use revm::{
     primitives::{
-        Account, AccountInfo, Bytecode, EVMError, EvmStorageSlot, ExecutionResult, ResultAndState,
-        SpecId, BLOCKHASH_SERVE_WINDOW,
+        Account, AccountInfo, AccountStatus, Bytecode, EVMError, EvmStorageSlot, ExecutionResult,
+        ResultAndState, SpecId, BLOCKHASH_SERVE_WINDOW,
     },
     Database, DatabaseCommit, Evm,
 };
@@ -149,7 +149,10 @@ impl Shanghai<'_> {
                 Err(error) => return Err(EVMError::Database(error)),
             };
             info.balance = info.balance.saturating_add(U256::from(amount));
-            changes.insert(address, Account { info, ..Default::default() });
+            changes.insert(
+                address,
+                Account { info, status: AccountStatus::Touched, ..Default::default() },
+            );
         }
         evm.db_mut().commit(changes);
 
