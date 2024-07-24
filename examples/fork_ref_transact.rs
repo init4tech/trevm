@@ -10,28 +10,14 @@ use revm::{
     primitives::{address, TxKind, U256},
     Evm,
 };
-use trevm::Block;
-use trevm::Cfg;
-use trevm::Shanghai;
-use trevm::TrevmBuilder;
-use trevm::Tx;
+use trevm::{NoopBlock, NoopCfg, Shanghai, TrevmBuilder, Tx};
 
 sol! {
     #[allow(missing_docs)]
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
 }
 
-struct NoopCfg;
-struct NoopBlock;
 struct GetReservesFiller;
-
-impl Cfg for NoopCfg {
-    fn fill_cfg_env(&self, _: &mut revm::primitives::CfgEnv) {}
-}
-
-impl Block for NoopBlock {
-    fn fill_block_env(&self, _: &mut revm::primitives::BlockEnv) {}
-}
 
 impl Tx for GetReservesFiller {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
