@@ -459,3 +459,53 @@ impl Prague<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{NoopBlock, NoopCfg, TrevmBuilder};
+    use alloy_consensus::constants::GWEI_TO_WEI;
+    use alloy_primitives::{Address, U256};
+
+    use revm::{Evm, InMemoryDB};
+
+    #[test]
+    fn test_shanghai_syscall() {
+        let mut db = InMemoryDB::default();
+        let mut withdrawals = Vec::new();
+        let outputs = BlockOutput::default();
+
+        db.insert_account_info(
+            Address::with_last_byte(0x69),
+            AccountInfo {
+                balance: U256::ZERO,
+                nonce: 1,
+                code: None,
+                code_hash: Default::default(),
+            },
+        );
+
+        let withdrawal = Withdrawal {
+            validator_index: 1,
+            index: 1,
+            address: Address::with_last_byte(0x69),
+            amount: 100 * GWEI_TO_WEI,
+        };
+
+        withdrawals.push(withdrawal);
+
+        let shanghai = Shanghai { withdrawls: &withdrawals, outputs };
+
+        let balance = Evm::builder()
+            .with_db(db)
+            .build_trevm()
+            .fill_cfg(&NoopCfg)
+            .open_block(&NoopBlock, shanghai)
+            .unwrap()
+            .close_block()
+            .unwrap()
+            .read_balance(Address::with_last_byte(0x69));
+
+        assert_eq!(balance, U256::from(100 * GWEI_TO_WEI));
+    }
+}
