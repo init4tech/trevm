@@ -320,8 +320,10 @@ impl Prague<'_> {
         let receipt =
             self.cancun.shanghai.outputs.receipts().last().expect("produced in shanghai lifecycle");
 
-        for log in
-            receipt.logs().iter().filter(|log| log.address == eip6110::MAINNET_DEPOSIT_ADDRESS)
+        for log in receipt
+            .logs()
+            .iter()
+            .filter(|log| log.address == eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS)
         {
             // We assume that the log is valid because it was emitted by the
             // deposit contract.

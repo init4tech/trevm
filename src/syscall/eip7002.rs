@@ -1,11 +1,10 @@
 use crate::syscall::SystemTx;
-use alloy_primitives::{address, Address, Bytes};
+use alloy_primitives::{Address, Bytes};
 
 /// The address for the [EIP-7002] withdrawal requests contract.
 ///
 /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-pub const WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS: Address =
-    address!("00A3ca265EBcb825B45F985A16CEFB49958cE017");
+pub use alloy_eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS;
 
 /// The size of a withdrawal request in bytes.
 pub const WITHDRAWAL_REQUEST_BYTES: usize = 20 + 48 + 8;

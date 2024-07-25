@@ -1,11 +1,10 @@
 use crate::syscall::SystemTx;
-use alloy_primitives::{address, Address, Bytes};
+use alloy_primitives::{Address, Bytes};
 
 /// The address for the [EIP-7251] consolidation requests contract
 ///
 /// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
-pub const CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS: Address =
-    address!("00b42dbF2194e931E80326D950320f7d9Dbeac02");
+pub use alloy_eips::eip7251::CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS;
 
 /// The size of a consolidation request in bytes.
 pub const CONSOLIDATION_REQUEST_BYTES: usize = 20 + 48 + 48;
