@@ -1,10 +1,10 @@
 use crate::syscall::SystemTx;
-use alloy_primitives::{address, Address, Bytes, B256};
+use alloy_primitives::{Address, Bytes, B256};
 
 /// The address for the [EIP-4788] beacon roots contract.
 ///
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
-pub const BEACON_ROOTS_ADDRESS: Address = address!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02");
+pub use alloy_eips::eip4788::BEACON_ROOTS_ADDRESS;
 
 impl SystemTx {
     /// Instantiate a system call for the pre-block beacon roots as specified in

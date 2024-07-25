@@ -9,8 +9,8 @@ use alloy_primitives::{Address, Bytes, U256};
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState},
     primitives::{
-        Account, AccountInfo, Bytecode, EVMError, EvmState, EvmStorageSlot, ExecutionResult,
-        InvalidTransaction, ResultAndState, SpecId,
+        Account, AccountInfo, AccountStatus, Bytecode, EVMError, EvmState, EvmStorageSlot,
+        ExecutionResult, InvalidTransaction, ResultAndState, SpecId,
     },
     Database, DatabaseCommit, DatabaseRef, Evm, State,
 };
@@ -259,7 +259,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         f(&mut info);
 
         // Make a new account with the modified info
-        let mut acct = Account { info, ..Default::default() };
+        let mut acct = Account { info, status: AccountStatus::Touched, ..Default::default() };
         acct.mark_touch();
 
         // Create a state object with the modified account.

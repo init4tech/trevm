@@ -16,8 +16,8 @@ use alloy_primitives::{Bloom, Log, B256, U256};
 use alloy_sol_types::SolEvent;
 use revm::{
     primitives::{
-        Account, AccountInfo, Bytecode, EVMError, EvmStorageSlot, ExecutionResult, ResultAndState,
-        SpecId, BLOCKHASH_SERVE_WINDOW,
+        Account, AccountInfo, AccountStatus, Bytecode, EVMError, EvmStorageSlot, ExecutionResult,
+        ResultAndState, SpecId, BLOCKHASH_SERVE_WINDOW,
     },
     Database, DatabaseCommit, Evm,
 };
@@ -149,7 +149,10 @@ impl Shanghai<'_> {
                 Err(error) => return Err(EVMError::Database(error)),
             };
             info.balance = info.balance.saturating_add(U256::from(amount));
-            changes.insert(address, Account { info, ..Default::default() });
+            changes.insert(
+                address,
+                Account { info, status: AccountStatus::Touched, ..Default::default() },
+            );
         }
         evm.db_mut().commit(changes);
 
@@ -317,8 +320,10 @@ impl Prague<'_> {
         let receipt =
             self.cancun.shanghai.outputs.receipts().last().expect("produced in shanghai lifecycle");
 
-        for log in
-            receipt.logs().iter().filter(|log| log.address == eip6110::MAINNET_DEPOSIT_ADDRESS)
+        for log in receipt
+            .logs()
+            .iter()
+            .filter(|log| log.address == eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS)
         {
             // We assume that the log is valid because it was emitted by the
             // deposit contract.
@@ -457,5 +462,119 @@ impl Prague<'_> {
         }));
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{syscall::eip4788::BEACON_ROOTS_ADDRESS, NoopBlock, NoopCfg, TrevmBuilder};
+    use alloy_consensus::constants::GWEI_TO_WEI;
+    use alloy_primitives::{Address, U256};
+
+    use revm::{Evm, InMemoryDB};
+
+    const WITHDRAWALS: &[Withdrawal] = &[Withdrawal {
+        validator_index: 1,
+        index: 1,
+        address: Address::with_last_byte(0x69),
+        amount: 100 * GWEI_TO_WEI,
+    }];
+
+    fn get_shanghai_context<'a>() -> Shanghai<'a> {
+        let outputs = BlockOutput::default();
+        let mut withdrawals = Vec::new();
+
+        let withdrawal = Withdrawal {
+            validator_index: 1,
+            index: 1,
+            address: Address::with_last_byte(0x69),
+            amount: 100 * GWEI_TO_WEI,
+        };
+
+        withdrawals.push(withdrawal);
+
+        Shanghai { withdrawls: WITHDRAWALS, outputs }
+    }
+
+    #[test]
+    fn test_shanghai_syscall() {
+        let mut db = InMemoryDB::default();
+
+        db.insert_account_info(
+            Address::with_last_byte(0x69),
+            AccountInfo {
+                balance: U256::ZERO,
+                nonce: 1,
+                code: None,
+                code_hash: Default::default(),
+            },
+        );
+
+        let shanghai = get_shanghai_context();
+
+        let balance = Evm::builder()
+            .with_db(db)
+            .build_trevm()
+            .fill_cfg(&NoopCfg)
+            .open_block(&NoopBlock, shanghai)
+            .unwrap()
+            .close_block()
+            .unwrap()
+            .read_balance(Address::with_last_byte(0x69));
+
+        assert_eq!(balance, U256::from(100 * GWEI_TO_WEI));
+    }
+
+    #[test]
+    fn test_cancun_syscall() {
+        // Pre-cancun setup (Shanghai)
+        let mut db = InMemoryDB::default();
+
+        db.insert_account_info(
+            Address::with_last_byte(0x69),
+            AccountInfo {
+                balance: U256::ZERO,
+                nonce: 1,
+                code: None,
+                code_hash: Default::default(),
+            },
+        );
+
+        let shanghai = get_shanghai_context();
+
+        // Set up cancun
+        // 1. Insert the beacon root contract into the EVM
+        let bytecode = Bytecode::new_raw(alloy_eips::eip4788::BEACON_ROOTS_CODE.clone());
+        let mut beacon_roots_info = AccountInfo {
+            nonce: 1,
+            code_hash: bytecode.hash_slow(),
+            code: Some(bytecode),
+            ..Default::default()
+        };
+
+        db.insert_contract(&mut beacon_roots_info);
+        db.insert_account_info(BEACON_ROOTS_ADDRESS, beacon_roots_info);
+
+        // 2. Set up the Cancun context, by loading the parent beacon root,
+        // which we expect to be 0x21 (33).
+        let expected_beacon_root = B256::with_last_byte(0x21);
+        let cancun = Cancun { parent_beacon_root: expected_beacon_root, shanghai };
+
+        // We expect the root to be stored at timestamp % HISTORY_BUFFER_LENGTH + HISTORY_BUFFER_LENGTH.
+        // In this case, 0 % 8192 + 8192 = 8192. quick maffs
+        let expected_beacon_root_slot = U256::from(8192);
+
+        let stored_beacon_root = Evm::builder()
+            .with_db(db)
+            .build_trevm()
+            .fill_cfg(&NoopCfg)
+            .open_block(&NoopBlock, cancun)
+            .unwrap()
+            .close_block()
+            .unwrap()
+            .read_storage(BEACON_ROOTS_ADDRESS, expected_beacon_root_slot);
+
+        assert_eq!(stored_beacon_root, expected_beacon_root.into());
     }
 }

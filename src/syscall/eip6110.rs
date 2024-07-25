@@ -1,9 +1,9 @@
 use alloy_eips::eip6110::DepositRequest;
-use alloy_primitives::{address, Address, Log};
+use alloy_primitives::Log;
 use alloy_sol_types::sol;
 
 /// The address for the Ethereum 2.0 deposit contract on the mainnet.
-pub const MAINNET_DEPOSIT_ADDRESS: Address = address!("00000000219ab540356cbb839cbe05303d7705fa");
+pub use alloy_eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS;
 
 sol! {
     #[allow(missing_docs)]
