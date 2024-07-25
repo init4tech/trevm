@@ -3,22 +3,6 @@ use revm::{
     Database, Evm,
 };
 
-/// A no-op block filler.
-#[derive(Debug)]
-pub struct NoopBlock;
-
-impl Block for NoopBlock {
-    fn fill_block_env(&self, _: &mut BlockEnv) {}
-}
-
-/// A no-op configuration filler.
-#[derive(Debug)]
-pub struct NoopCfg;
-
-impl Cfg for NoopCfg {
-    fn fill_cfg_env(&self, _: &mut CfgEnv) {}
-}
-
 /// Types that can fill the EVM transaction environment [`TxEnv`].
 pub trait Tx {
     /// Fill the transaction environment.

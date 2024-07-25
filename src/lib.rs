@@ -320,6 +320,11 @@
 //!
 //! - `dev` - Enable all Cfg features.
 //!
+//! Trevm also provides the following:
+//!
+//! - `test-utils` - activates revm's `test-utils` feature, and provides
+//!   convenience functions for instantiating [`Trevm`] with an in-memory DB.
+//!
 //! ### Testing using Trevm
 //!
 //! Trevm provides a `test-utils` module for easy testing. The test-utils gives
@@ -395,8 +400,6 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-mod alloy;
-
 mod evm;
 pub use evm::Trevm;
 
@@ -416,8 +419,6 @@ pub use states::{
 };
 
 pub mod syscall;
-
-mod zenith;
 
 pub use revm;
 
