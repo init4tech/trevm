@@ -254,7 +254,7 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Cancun<'_> {
 
 impl<'a> Cancun<'a> {
     /// Create a new Cancun context.
-    pub fn new(parent_beacon_root: B256, shanghai: Shanghai<'a>) -> Self {
+    pub const fn new(parent_beacon_root: B256, shanghai: Shanghai<'a>) -> Self {
         Self { parent_beacon_root, shanghai }
     }
 }
