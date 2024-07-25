@@ -116,6 +116,12 @@ impl<'a> Shanghai<'a> {
     pub fn new(withdrawals: &'a [Withdrawal]) -> Self {
         Self { withdrawals, outputs: Default::default() }
     }
+
+    /// Destroy the Shanghai context and return the withdrawals and block
+    /// outputs.
+    pub fn into_parts(self) -> (&'a [Withdrawal], BlockOutput) {
+        (self.withdrawals, self.outputs)
+    }
 }
 
 impl Shanghai<'_> {
@@ -348,6 +354,12 @@ impl<'a> Prague<'a> {
     /// Get the requests produced in the block.
     pub fn requests(&self) -> &[Request] {
         &self.requests
+    }
+
+    /// Destructure the Prague context and return the Cancun context and the
+    /// requests produced during the block.
+    pub fn into_parts(self) -> (Cancun<'a>, Vec<Request>) {
+        (self.cancun, self.requests)
     }
 }
 
