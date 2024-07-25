@@ -492,7 +492,7 @@ mod tests {
 
         withdrawals.push(withdrawal);
 
-        Shanghai { withdrawls: &WITHDRAWALS, outputs }
+        Shanghai { withdrawls: WITHDRAWALS, outputs }
     }
 
     #[test]
