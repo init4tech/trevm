@@ -56,15 +56,15 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for BasicContext 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Shanghai<'a> {
     /// The withdrawals to be processed.
-    pub withdrawls: &'a [Withdrawal],
+    pub withdrawals: &'a [Withdrawal],
 
     /// The block outputs.
     pub outputs: BlockOutput<ReceiptEnvelope>,
 }
 
 impl<'a> From<&'a [Withdrawal]> for Shanghai<'a> {
-    fn from(withdrawls: &'a [Withdrawal]) -> Self {
-        Self { withdrawls, outputs: Default::default() }
+    fn from(withdrawals: &'a [Withdrawal]) -> Self {
+        Self { withdrawals, outputs: Default::default() }
     }
 }
 
@@ -141,7 +141,7 @@ impl Shanghai<'_> {
         let mut changes = HashMap::new();
 
         let increments = self
-            .withdrawls
+            .withdrawals
             .iter()
             .map(|withdrawal| (withdrawal.address, withdrawal.amount as u128))
             .filter(|(_, amount)| *amount != 0);
@@ -435,6 +435,8 @@ impl Prague<'_> {
     /// Apply a system transaction as specified in [EIP-7251]. The EIP-7251
     /// post-block action calls the consolidation request contract to process
     /// consolidation requests.
+    ///
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
     pub fn apply_eip7251<Ext, Db>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
@@ -445,7 +447,6 @@ impl Prague<'_> {
         if evm.spec_id() < SpecId::PRAGUE {
             return Ok(());
         }
-
         let res = execute_system_tx(evm, &SystemTx::eip7251())?;
 
         // We make assumptions here:
@@ -473,9 +474,13 @@ impl Prague<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{syscall::eip4788::BEACON_ROOTS_ADDRESS, NoopBlock, NoopCfg, TrevmBuilder};
-    use alloy_consensus::constants::GWEI_TO_WEI;
-    use alloy_primitives::{Address, U256};
+    use crate::{syscall::eip4788::BEACON_ROOTS_ADDRESS, NoopBlock, NoopCfg, TrevmBuilder, Tx};
+    use alloy_consensus::constants::{ETH_TO_WEI, GWEI_TO_WEI};
+    use alloy_eips::{
+        eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS,
+        eip7251::CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS,
+    };
+    use alloy_primitives::{fixed_bytes, Address, Bytes, FixedBytes, TxKind, U256};
 
     use revm::{Evm, InMemoryDB};
 
@@ -485,6 +490,45 @@ mod tests {
         address: Address::with_last_byte(0x69),
         amount: 100 * GWEI_TO_WEI,
     }];
+
+    // Withdrawal tx
+    const WITHDRAWAL_ADDR: Address = Address::with_last_byte(0x42);
+    const WITHDRAWAL_AMOUNT: FixedBytes<8> = fixed_bytes!("2222222222222222");
+    const VALIDATOR_PUBKEY: FixedBytes<48> = fixed_bytes!("111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
+    const TARGET_VALIDATOR_PUBKEY: FixedBytes<48> = fixed_bytes!("111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
+
+    // TODO: Remove once https://github.com/alloy-rs/alloy/issues/1103 is resolved.
+    const CONSOLIDATION_REQUEST_PREDEPLOY_CODE: &str = "3373fffffffffffffffffffffffffffffffffffffffe146098573615156028575f545f5260205ff35b36606014156101445760115f54600182026001905f5b5f82111560595781019083028483029004916001019190603e565b90939004341061014457600154600101600155600354806004026004013381556001015f35815560010160203581556001016040359055600101600355005b6003546002548082038060011160ac575060015b5f5b81811460f15780607402838201600402600401805490600101805490600101805490600101549260601b84529083601401528260340152906054015260010160ae565b9101809214610103579060025561010e565b90505f6002555f6003555b5f548061049d141561011d57505f5b6001546001828201116101325750505f610138565b01600190035b5f555f6001556074025ff35b5f5ffd";
+
+    struct WithdrawalTx;
+
+    impl Tx for WithdrawalTx {
+        fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
+            // https://github.com/lightclient/7002asm/blob/e0d68e04d15f25057af7b6d180423d94b6b3bdb3/test/Contract.t.sol.in#L49-L64
+            let input: Bytes = [&VALIDATOR_PUBKEY[..], &WITHDRAWAL_AMOUNT[..]].concat().into();
+
+            tx_env.caller = WITHDRAWAL_ADDR;
+            tx_env.data = input;
+            tx_env.transact_to = TxKind::Call(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS);
+            // `MIN_WITHDRAWAL_REQUEST_FEE`
+            tx_env.value = U256::from(1);
+        }
+    }
+
+    struct ConsolidationTx;
+
+    impl Tx for ConsolidationTx {
+        fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
+            let input: Bytes =
+                [&VALIDATOR_PUBKEY[..], &TARGET_VALIDATOR_PUBKEY[..]].concat().into();
+
+            tx_env.caller = WITHDRAWAL_ADDR;
+            tx_env.data = input;
+            tx_env.transact_to = TxKind::Call(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS);
+            // `MIN_CONSOLIDATION_REQUEST_FEE`
+            tx_env.value = U256::from(1);
+        }
+    }
 
     fn get_shanghai_context<'a>() -> Shanghai<'a> {
         let outputs = BlockOutput::default();
@@ -499,7 +543,7 @@ mod tests {
 
         withdrawals.push(withdrawal);
 
-        Shanghai { withdrawls: WITHDRAWALS, outputs }
+        Shanghai { withdrawals: WITHDRAWALS, outputs }
     }
 
     #[test]
@@ -581,5 +625,120 @@ mod tests {
             .read_storage(BEACON_ROOTS_ADDRESS, expected_beacon_root_slot);
 
         assert_eq!(stored_beacon_root, expected_beacon_root.into());
+    }
+
+    #[test]
+    fn test_prague_syscalls() {
+        // Pre-prague setup (Shanghai)
+        let mut db = InMemoryDB::default();
+
+        db.insert_account_info(
+            Address::with_last_byte(0x69),
+            AccountInfo {
+                balance: U256::ZERO,
+                nonce: 1,
+                code: None,
+                code_hash: Default::default(),
+            },
+        );
+
+        let shanghai = get_shanghai_context();
+
+        // Pre-prague setup (Cancun)
+        // 1. Insert the beacon root contract into the EVM
+        let bytecode = Bytecode::new_raw(alloy_eips::eip4788::BEACON_ROOTS_CODE.clone());
+        let mut beacon_roots_info = AccountInfo {
+            nonce: 1,
+            code_hash: bytecode.hash_slow(),
+            code: Some(bytecode),
+            ..Default::default()
+        };
+
+        db.insert_contract(&mut beacon_roots_info);
+        db.insert_account_info(BEACON_ROOTS_ADDRESS, beacon_roots_info);
+
+        // 2. Set up the Cancun context, by loading the parent beacon root,
+        // which we expect to be 0x21 (33).
+        let expected_beacon_root = B256::with_last_byte(0x21);
+        let cancun = Cancun { parent_beacon_root: expected_beacon_root, shanghai };
+
+        // Prague setup
+        // 1. Set up EIP-7002 by inserting the withdrawals contract into the EVM
+        let bytecode =
+            Bytecode::new_raw(alloy_eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_CODE.clone());
+        let mut withdrawal_request_info = AccountInfo {
+            nonce: 1,
+            code_hash: bytecode.hash_slow(),
+            code: Some(bytecode),
+            ..Default::default()
+        };
+
+        db.insert_contract(&mut withdrawal_request_info);
+        db.insert_account_info(
+            alloy_eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS,
+            withdrawal_request_info,
+        );
+
+        // 2. Insert the consolidation requests contract into the EVM
+        let bytecode = Bytecode::new_raw(
+            alloy_primitives::hex::decode(CONSOLIDATION_REQUEST_PREDEPLOY_CODE).unwrap().into(),
+        );
+        let mut consolidation_request_info = AccountInfo {
+            nonce: 1,
+            code_hash: bytecode.hash_slow(),
+            code: Some(bytecode),
+            ..Default::default()
+        };
+
+        db.insert_contract(&mut consolidation_request_info);
+        db.insert_account_info(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS, consolidation_request_info);
+
+        // 3. Insert an user account, which will send a withdrawal and consolidation request.
+        let user_account_info = AccountInfo {
+            balance: U256::from(100 * ETH_TO_WEI),
+            nonce: 1,
+            code: None,
+            code_hash: Default::default(),
+        };
+
+        db.insert_account_info(WITHDRAWAL_ADDR, user_account_info);
+
+        // 4. Set up the Prague context, by loading the parent beacon root,
+        let prague = Prague { cancun, requests: Vec::new() };
+
+        // 5. Set up the EVM along with the Prague context and transactions.
+        let evm = Evm::builder()
+            .with_db(db)
+            .with_spec_id(SpecId::PRAGUE)
+            .build_trevm()
+            .fill_cfg(&NoopCfg)
+            .open_block(&NoopBlock, prague)
+            .unwrap()
+            .fill_tx(&WithdrawalTx)
+            .run()
+            .unwrap()
+            .accept()
+            .fill_tx(&ConsolidationTx)
+            .run()
+            .unwrap()
+            .accept()
+            .close_block()
+            .unwrap();
+
+        let (prague, _) = evm.take_context();
+
+        // We should have 1 withdrawal request processed by 7002 and one consolidation request processed by 7251.
+        assert_eq!(2, prague.requests.len());
+
+        let withdrawal_request = prague.requests[0].as_withdrawal_request().unwrap();
+
+        assert_eq!(withdrawal_request.validator_pubkey, VALIDATOR_PUBKEY);
+        assert_eq!(withdrawal_request.source_address, WITHDRAWAL_ADDR);
+
+        let consolidation_request = prague.requests[1].as_consolidation_request().unwrap();
+
+        assert_eq!(consolidation_request.source_address, WITHDRAWAL_ADDR);
+        assert_eq!(consolidation_request.source_pubkey, VALIDATOR_PUBKEY);
+        assert_eq!(consolidation_request.target_pubkey, TARGET_VALIDATOR_PUBKEY);
     }
 }

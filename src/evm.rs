@@ -900,6 +900,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
 
         match result {
             Ok(result) => Ok(Trevm { inner, state: TransactedState { context, result } }),
+
             Err(error) => {
                 Err(EvmErrored { inner, state: ErroredState { context, error: error.into() } })
             }
