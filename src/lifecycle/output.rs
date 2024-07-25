@@ -14,9 +14,9 @@ pub struct BlockOutput<T: TxReceipt = ReceiptEnvelope> {
     senders: Vec<Address>,
 }
 
-impl<T: TxReceipt> Default for BlockOutput<T> {
+impl Default for BlockOutput {
     fn default() -> Self {
-        Self::with_capacity(10)
+        Self::with_capacity(0)
     }
 }
 
@@ -25,6 +25,12 @@ impl<T: TxReceipt> BlockOutput<T> {
     /// transaction outcomes.
     pub fn with_capacity(capacity: usize) -> Self {
         Self { receipts: Vec::with_capacity(capacity), senders: Vec::with_capacity(capacity) }
+    }
+
+    /// Reserve memory for `capacity` transaction outcomes.
+    pub fn reserve(&mut self, capacity: usize) {
+        self.receipts.reserve(capacity);
+        self.senders.reserve(capacity);
     }
 
     /// Get a reference to the receipts of the transactions in the block.

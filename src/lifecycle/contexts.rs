@@ -76,6 +76,9 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Shanghai<'_> 
         evm: &mut Evm<'_, Ext, Db>,
         b: &B,
     ) -> Result<(), Self::Error> {
+        if let Some(hint) = b.tx_count_hint() {
+            self.outputs.reserve(hint);
+        }
         b.fill_block(evm);
         Ok(())
     }
