@@ -87,68 +87,6 @@
 //! trevm_aliases!(revm::db::InMemoryDB);
 //! ```
 //!
-//! ## Understanding the state machine
-//!
-//! Here's a slightly more complex example, with states written out:
-//!
-//! ```
-//! # use revm::{EvmBuilder, db::{InMemoryDB, BundleState}, State,
-//! # StateBuilder};
-//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, BlockOutput,
-//! # EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsTx, EvmReady, EvmNeedsNextBlock,
-//! # EvmBlockComplete, Shanghai, EvmTransacted};
-//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
-//! # -> Result<(), Box<dyn std::error::Error>> {
-//! let state = StateBuilder::new_with_database(InMemoryDB::default()).build();
-//!
-//! // Trevm starts in `EvmNeedsCfg`.
-//! let trevm: EvmNeedsCfg<'_, _, _> = EvmBuilder::default()
-//!     .with_db(state)
-//!     .build_trevm();
-//!
-//! // Once the cfg is filled, we move to `EvmNeedsFirstBlock`.
-//! let trevm: EvmNeedsFirstBlock<'_, _, _> = trevm.fill_cfg(cfg);
-//!
-//! // Filling the block gets us to `EvmNeedsTx`. `open_block` takes a
-//! // context object that will apply pre- and post-block logic, accumulate
-//! // receipts, and perform other lifecycle tasks.
-//! let trevm: EvmNeedsTx<'_, _, _, _> = trevm.open_block(
-//!     block,
-//!     Shanghai::default()
-//! ).map_err(EvmErrored::into_error)?;
-//! // Filling the tx gets us to `EvmReady`.
-//! let trevm: EvmReady<'_, _, _, _> = trevm.fill_tx(tx);
-//!
-//! let res: Result<
-//!     EvmTransacted<'_, _, _, _>,
-//!     EvmErrored<'_, _, _, _>,
-//! > = trevm.run();
-//!
-//!
-//! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx`.
-//! // You could also make additional checks and discard the success result here
-//! let trevm: EvmNeedsTx<'_, _, _, _> = match res {
-//!    Ok(trevm) => trevm.accept(),
-//!    Err(e) => e.discard_error(),
-//! };
-//!
-//! // Clearing or closing a block gets us to `EvmNeedsNextBlock`, ready for the
-//! // next block.
-//! let trevm: EvmBlockComplete<'_, _, _, _> = trevm
-//!     .close_block()
-//!     .map_err(EvmErrored::into_error)?;;
-//!
-//! // During block execution, a context object
-//! let (context, trevm): (Shanghai<'_>, EvmNeedsNextBlock<'_, _, _>) = trevm
-//!     .take_context();
-//!
-//! // Finishing the EVM gets us the final changes and a list of block outputs
-//! // that includes the transaction receipts.
-//! let bundle: BundleState = trevm.finish();
-//! # Ok(())
-//! # }
-//! ```
-//!
 //! ### [`BlockContext`]
 //!
 //! Trevm handles transaction application, receipts, and pre- and post-block
@@ -335,6 +273,67 @@
 //! - set balance, nonce, codehash for any account
 //! - a single-function setup for a blank EVM
 //! - pre-funding for any number of accounts
+//! ## Understanding the state machine
+//!
+//! Here's an example, with states written out:
+//!
+//! ```
+//! # use revm::{EvmBuilder, db::{InMemoryDB, BundleState}, State,
+//! # StateBuilder};
+//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, BlockOutput,
+//! # EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsTx, EvmReady, EvmNeedsNextBlock,
+//! # EvmBlockComplete, Shanghai, EvmTransacted};
+//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
+//! # -> Result<(), Box<dyn std::error::Error>> {
+//! let state = StateBuilder::new_with_database(InMemoryDB::default()).build();
+//!
+//! // Trevm starts in `EvmNeedsCfg`.
+//! let trevm: EvmNeedsCfg<'_, _, _> = EvmBuilder::default()
+//!     .with_db(state)
+//!     .build_trevm();
+//!
+//! // Once the cfg is filled, we move to `EvmNeedsFirstBlock`.
+//! let trevm: EvmNeedsFirstBlock<'_, _, _> = trevm.fill_cfg(cfg);
+//!
+//! // Filling the block gets us to `EvmNeedsTx`. `open_block` takes a
+//! // context object that will apply pre- and post-block logic, accumulate
+//! // receipts, and perform other lifecycle tasks.
+//! let trevm: EvmNeedsTx<'_, _, _, _> = trevm.open_block(
+//!     block,
+//!     Shanghai::default()
+//! ).map_err(EvmErrored::into_error)?;
+//! // Filling the tx gets us to `EvmReady`.
+//! let trevm: EvmReady<'_, _, _, _> = trevm.fill_tx(tx);
+//!
+//! let res: Result<
+//!     EvmTransacted<'_, _, _, _>,
+//!     EvmErrored<'_, _, _, _>,
+//! > = trevm.run();
+//!
+//!
+//! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx`.
+//! // You could also make additional checks and discard the success result here
+//! let trevm: EvmNeedsTx<'_, _, _, _> = match res {
+//!    Ok(trevm) => trevm.accept(),
+//!    Err(e) => e.discard_error(),
+//! };
+//!
+//! // Clearing or closing a block gets us to `EvmNeedsNextBlock`, ready for the
+//! // next block.
+//! let trevm: EvmBlockComplete<'_, _, _, _> = trevm
+//!     .close_block()
+//!     .map_err(EvmErrored::into_error)?;;
+//!
+//! // During block execution, a context object
+//! let (context, trevm): (Shanghai<'_>, EvmNeedsNextBlock<'_, _, _>) = trevm
+//!     .take_context();
+//!
+//! // Finishing the EVM gets us the final changes and a list of block outputs
+//! // that includes the transaction receipts.
+//! let bundle: BundleState = trevm.finish();
+//! # Ok(())
+//! # }
+//! ```
 //!
 //! ## Happy Path Loop
 //!
