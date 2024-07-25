@@ -306,6 +306,8 @@ where
     }
 
     fn after_tx<'a>(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState) {
+        // ordering is important here as the `find_deposit_logs` method relies
+        // on the receipt produced by the inner `after_tx` call.
         self.cancun.after_tx(evm, result);
         self.find_deposit_logs();
     }
