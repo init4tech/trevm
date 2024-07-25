@@ -45,19 +45,17 @@ fn main() {
     db.insert_contract(&mut acc_info.clone());
     db.insert_account_info(CONTRACT_ADDR, acc_info);
 
-    let evm: EvmNeedsCfg = EvmBuilder::default()
+    let evm = EvmBuilder::default()
         .with_db(db)
         .with_external_context(TracerEip3155::new(Box::new(std::io::stdout())))
         .append_handler_register(inspector_handle_register)
-        .build_trevm();
+        .build_trevm()
+        .fill_cfg(&NoopCfg)
+        .open_block(&NoopBlock, Shanghai::default())
+        .unwrap();
 
     let account = evm.read_account_ref(CONTRACT_ADDR).unwrap();
-
     println!("account: {account:?}");
-
-    let evm: EvmNeedsFirstBlock = evm.fill_cfg(&NoopCfg);
-
-    let evm = evm.open_block(&NoopBlock, Shanghai::default()).unwrap();
 
     let evm = evm.fill_tx(&SampleTx).run();
 

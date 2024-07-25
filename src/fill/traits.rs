@@ -40,7 +40,7 @@ pub trait Block {
         self.fill_block_env(block_env);
     }
 
-    /// Get the transaction count hint from the filler. This will be used for
+    /// Get the transaction count hint from the filler. This can be used for
     /// memory pre-allocation during block execution.
     fn tx_count_hint(&self) -> Option<usize> {
         None
