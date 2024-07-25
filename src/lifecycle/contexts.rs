@@ -59,7 +59,7 @@ pub struct Shanghai<'a> {
     pub withdrawals: &'a [Withdrawal],
 
     /// The block outputs.
-    pub outputs: BlockOutput<ReceiptEnvelope>,
+    outputs: BlockOutput<ReceiptEnvelope>,
 }
 
 impl<'a> From<&'a [Withdrawal]> for Shanghai<'a> {
@@ -108,6 +108,13 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Shanghai<'_> 
     fn close_block(&mut self, evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error> {
         self.apply_withdrawals(evm)?;
         Ok(())
+    }
+}
+
+impl<'a> Shanghai<'a> {
+    /// Instantiate a new Shanghai context.
+    pub fn new(withdrawals: &'a [Withdrawal]) -> Self {
+        Self { withdrawals, outputs: Default::default() }
     }
 }
 
@@ -239,6 +246,13 @@ impl<Ext, Db: Database + DatabaseCommit> BlockContext<Ext, Db> for Cancun<'_> {
     }
 }
 
+impl<'a> Cancun<'a> {
+    /// Create a new Cancun context.
+    pub fn new(parent_beacon_root: B256, shanghai: Shanghai<'a>) -> Self {
+        Self { parent_beacon_root, shanghai }
+    }
+}
+
 impl Cancun<'_> {
     /// Apply a system transaction as specified in [EIP-4788]. The EIP-4788
     /// pre-block action was introduced in Cancun, and calls the beacon root
@@ -273,7 +287,7 @@ pub struct Prague<'a> {
 
     /// Requests produced in the block. These include Deposit, Withdrawal, and
     /// Consolidation requests.
-    pub requests: Vec<Request>,
+    requests: Vec<Request>,
 }
 
 impl<'a> std::ops::Deref for Prague<'a> {
@@ -287,6 +301,12 @@ impl<'a> std::ops::Deref for Prague<'a> {
 impl<'a> std::ops::DerefMut for Prague<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.cancun
+    }
+}
+
+impl<'a> From<Cancun<'a>> for Prague<'a> {
+    fn from(cancun: Cancun<'a>) -> Self {
+        Self { cancun, requests: Vec::new() }
     }
 }
 
@@ -316,6 +336,18 @@ where
         self.apply_eip7002(evm)?;
         self.apply_eip7251(evm)?;
         self.cancun.close_block(evm)
+    }
+}
+
+impl<'a> Prague<'a> {
+    /// Create a new Prague context.
+    pub fn new(cancun: Cancun<'a>) -> Self {
+        Self { cancun, requests: Vec::new() }
+    }
+
+    /// Get the requests produced in the block.
+    pub fn requests(&self) -> &[Request] {
+        &self.requests
     }
 }
 
@@ -418,7 +450,9 @@ impl Prague<'_> {
         // - The output is a list of withdrawal requests.
         // - The output does not contain incomplete requests.
 
-        let Some(output) = res.output() else { panic!("no output") };
+        let Some(output) = res.output() else {
+            panic!("execution halted during withdrawal request system contract execution")
+        };
         self.requests.extend(output.chunks_exact(WITHDRAWAL_REQUEST_BYTES).map(|chunk| {
             let mut req: WithdrawalRequest = Default::default();
 
