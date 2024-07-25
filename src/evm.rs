@@ -895,11 +895,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
     /// Execute the loaded transaction.
     pub fn run(mut self) -> Result<EvmTransacted<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>> {
         let result = self.inner.transact();
-
         let Trevm { inner, state: Ready(context) } = self;
 
         match result {
-            Ok(result) => Ok(Trevm { inner, state: TransactedState { context, result } }),
+            Ok(result) => {
+                dbg!(result.clone());
+                Ok(Trevm { inner, state: TransactedState { context, result } })
+            }
             Err(error) => {
                 Err(EvmErrored { inner, state: ErroredState { context, error: error.into() } })
             }
