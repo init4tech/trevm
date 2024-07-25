@@ -491,9 +491,12 @@ mod tests {
 
     // Withdrawal tx
     const WITHDRAWAL_ADDR: Address = Address::with_last_byte(0x42);
+    const WITHDRAWAL_AMOUNT: FixedBytes<8> = fixed_bytes!("2222222222222222");
     const VALIDATOR_PUBKEY: FixedBytes<48> = fixed_bytes!("111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
     const TARGET_VALIDATOR_PUBKEY: FixedBytes<48> = fixed_bytes!("111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
-    const WITHDRAWAL_AMOUNT: FixedBytes<8> = fixed_bytes!("2222222222222222");
+
+    // TODO: Remove once https://github.com/alloy-rs/alloy/issues/1103 is resolved.
+    const CONSOLIDATION_REQUEST_PREDEPLOY_CODE: &str = "3373fffffffffffffffffffffffffffffffffffffffe146098573615156028575f545f5260205ff35b36606014156101445760115f54600182026001905f5b5f82111560595781019083028483029004916001019190603e565b90939004341061014457600154600101600155600354806004026004013381556001015f35815560010160203581556001016040359055600101600355005b6003546002548082038060011160ac575060015b5f5b81811460f15780607402838201600402600401805490600101805490600101805490600101549260601b84529083601401528260340152906054015260010160ae565b9101809214610103579060025561010e565b90505f6002555f6003555b5f548061049d141561011d57505f5b6001546001828201116101325750505f610138565b01600190035b5f555f6001556074025ff35b5f5ffd";
 
     struct WithdrawalTx;
 
@@ -675,8 +678,9 @@ mod tests {
         );
 
         // 2. Insert the consolidation requests contract into the EVM
-        let bytecode =
-            Bytecode::new_raw(alloy_eips::eip7251::CONSOLIDATION_REQUEST_PREDEPLOY_CODE.clone());
+        let bytecode = Bytecode::new_raw(
+            alloy_primitives::hex::decode(CONSOLIDATION_REQUEST_PREDEPLOY_CODE).unwrap().into(),
+        );
         let mut consolidation_request_info = AccountInfo {
             nonce: 1,
             code_hash: bytecode.hash_slow(),
@@ -715,19 +719,24 @@ mod tests {
             .fill_tx(&ConsolidationTx)
             .run()
             .unwrap()
-            .accept();
-        let db = evm.inner().db();
-        // .close_block()
-        // .unwrap();
-        dbg!(db);
-        // let (prague, _) = evm.take_context();
+            .accept()
+            .close_block()
+            .unwrap();
 
-        // dbg!(prague.requests.clone());
-        // // We should have 1 withdrawal request processed by 7002 and one consolidation request processed by 7251.
-        // assert_eq!(2, prague.requests.len());
+        let (prague, _) = evm.take_context();
 
-        // let withdrawal_request = prague.requests[0].as_withdrawal_request().unwrap();
-        // assert_eq!(withdrawal_request.validator_pubkey, VALIDATOR_PUBKEY);
-        // assert_eq!(withdrawal_request.source_address, WITHDRAWAL_ADDR);
+        // We should have 1 withdrawal request processed by 7002 and one consolidation request processed by 7251.
+        assert_eq!(2, prague.requests.len());
+
+        let withdrawal_request = prague.requests[0].as_withdrawal_request().unwrap();
+
+        assert_eq!(withdrawal_request.validator_pubkey, VALIDATOR_PUBKEY);
+        assert_eq!(withdrawal_request.source_address, WITHDRAWAL_ADDR);
+
+        let consolidation_request = prague.requests[1].as_consolidation_request().unwrap();
+
+        assert_eq!(consolidation_request.source_address, WITHDRAWAL_ADDR);
+        assert_eq!(consolidation_request.source_pubkey, VALIDATOR_PUBKEY);
+        assert_eq!(consolidation_request.target_pubkey, TARGET_VALIDATOR_PUBKEY);
     }
 }
