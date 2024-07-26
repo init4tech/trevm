@@ -1,16 +1,15 @@
 use crate::{
     states::EvmBlockComplete, BasicContext, Block, BlockComplete, BlockContext, Cfg, ErroredState,
-    EvmErrored, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx, EvmReady,
-    EvmTransacted, HasCfg, HasOutputs, NeedsBlock, NeedsCfg, NeedsNextBlock, NeedsTx, Ready,
-    TransactedState, Tx,
+    EvmErrored, EvmExtUnchecked, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
+    EvmReady, EvmTransacted, HasCfg, HasContext, HasOutputs, NeedsBlock, NeedsCfg, NeedsNextBlock,
+    NeedsTx, Ready, TransactedState, Tx,
 };
-use alloy_consensus::constants::KECCAK_EMPTY;
 use alloy_primitives::{Address, Bytes, U256};
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState},
     primitives::{
-        Account, AccountInfo, AccountStatus, Bytecode, EVMError, EvmState, EvmStorageSlot,
-        ExecutionResult, InvalidTransaction, ResultAndState, SpecId,
+        AccountInfo, Bytecode, EVMError, EvmState, ExecutionResult, InvalidTransaction,
+        ResultAndState, SpecId,
     },
     Database, DatabaseCommit, DatabaseRef, Evm, State,
 };
@@ -252,21 +251,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         address: Address,
         f: F,
     ) -> Result<AccountInfo, Db::Error> {
-        let db = self.inner_mut_unchecked().db_mut();
-
-        let mut info = db.basic(address)?.unwrap_or_default();
-        let old = info.clone();
-        f(&mut info);
-
-        // Make a new account with the modified info
-        let mut acct = Account { info, status: AccountStatus::Touched, ..Default::default() };
-        acct.mark_touch();
-
-        // Create a state object with the modified account.
-        let state = [(address, acct)].iter().cloned().collect();
-        self.commit_unchecked(state);
-
-        Ok(old)
+        self.inner.modify_account(address, f)
     }
 
     /// Set the nonce of an account, returning the previous nonce. This is a
@@ -276,7 +261,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         address: Address,
         nonce: u64,
     ) -> Result<u64, Db::Error> {
-        self.try_modify_account_unchecked(address, |info| info.nonce = nonce).map(|info| info.nonce)
+        self.inner.set_nonce(address, nonce)
     }
 
     /// Increment the nonce of an account, returning the previous nonce. This is
@@ -285,8 +270,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     /// If the nonce is already at the maximum value, it will not be
     /// incremented.
     pub fn try_increment_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error> {
-        self.try_modify_account_unchecked(address, |info| info.nonce = info.nonce.saturating_add(1))
-            .map(|info| info.nonce)
+        self.inner.increment_nonce(address)
     }
 
     /// Decrement the nonce of an account, returning the previous nonce. This is
@@ -294,8 +278,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     ///
     /// If the nonce is already 0, it will not be decremented.
     pub fn try_decrement_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error> {
-        self.try_modify_account_unchecked(address, |info| info.nonce = info.nonce.saturating_sub(1))
-            .map(|info| info.nonce)
+        self.inner.decrement_nonce(address)
     }
 
     /// Set the EVM storage at a slot. This is a low-level API, and is not
@@ -306,22 +289,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         slot: U256,
         value: U256,
     ) -> Result<U256, Db::Error> {
-        let db = self.inner_mut_unchecked().db_mut();
-        let info = db.basic(address)?.unwrap_or_default();
-        let old = db.storage(address, slot)?;
-
-        let change = EvmStorageSlot::new_changed(old, value);
-
-        // Make a new account with the modified storage
-        let storage = [(slot, change)].iter().cloned().collect();
-        let mut acct = Account { storage, info, ..Default::default() };
-        acct.mark_touch();
-
-        // Create a state object with the modified account.
-        let state = [(address, acct)].iter().cloned().collect();
-        self.commit_unchecked(state);
-
-        Ok(old)
+        self.inner.set_storage(address, slot, value)
     }
 
     /// Set the bytecode at a specific address, returning the previous bytecode
@@ -332,24 +300,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         address: Address,
         bytecode: Bytecode,
     ) -> Result<Option<Bytecode>, Db::Error> {
-        let db = self.inner_mut_unchecked().db_mut();
-        let mut info = db.basic(address)?.unwrap_or_default();
-
-        let old = if info.code_hash != KECCAK_EMPTY {
-            Some(db.code_by_hash(info.code_hash)?)
-        } else {
-            None
-        };
-
-        info.code_hash = if bytecode.is_empty() { KECCAK_EMPTY } else { bytecode.hash_slow() };
-        info.code = Some(bytecode);
-
-        let mut acct = Account { info, ..Default::default() };
-        acct.mark_touch();
-        let state = [(address, acct)].iter().cloned().collect();
-        self.commit_unchecked(state);
-
-        Ok(old)
+        self.inner.set_bytecode(address, bytecode)
     }
 
     /// Increase the balance of an account. Returns the previous balance. This
@@ -362,10 +313,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         address: Address,
         amount: U256,
     ) -> Result<U256, Db::Error> {
-        self.try_modify_account_unchecked(address, |info| {
-            info.balance = info.balance.saturating_add(amount)
-        })
-        .map(|info| info.balance)
+        self.inner.increase_balance(address, amount)
     }
 
     /// Decrease the balance of an account. Returns the previous balance. This
@@ -377,10 +325,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         address: Address,
         amount: U256,
     ) -> Result<U256, Db::Error> {
-        self.try_modify_account_unchecked(address, |info| {
-            info.balance = info.balance.saturating_sub(amount)
-        })
-        .map(|info| info.balance)
+        self.inner.decrease_balance(address, amount)
     }
 
     /// Set the balance of an account. Returns the previous balance. This is a
@@ -390,8 +335,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         address: Address,
         amount: U256,
     ) -> Result<U256, Db::Error> {
-        self.try_modify_account_unchecked(address, |info| info.balance = amount)
-            .map(|info| info.balance)
+        self.inner.set_balance(address, amount)
     }
 }
 
@@ -798,6 +742,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
     }
 }
 
+// --- HAS OUTPUTS
+
 impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
     Trevm<'a, Ext, State<Db>, Missing>
 {
@@ -820,6 +766,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
         bundle
     }
 }
+// --- BLOCK COMPLETE
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C> EvmBlockComplete<'a, Ext, Db, C> {
     /// Destructure the EVM and return the block context and the EVM ready for
@@ -831,6 +778,36 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C> EvmBlockComplete<'a, Ext, Db, C>
     /// Discard the block context and return the EVM ready for the next block.
     pub fn discard_context(self) -> EvmNeedsNextBlock<'a, Ext, Db> {
         self.take_context().1
+    }
+}
+
+// --- HAS CONTEXT
+
+impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasContext>
+    Trevm<'a, Ext, Db, TrevmState>
+{
+    /// Get a reference to the block context.
+    pub fn block_context(&self) -> &TrevmState::Context {
+        self.state.context()
+    }
+
+    /// Get a mutable reference to the block context.
+    pub fn block_context_mut(&mut self) -> &mut TrevmState::Context {
+        self.state.context_mut()
+    }
+
+    /// Apply a closure to the components. This allows for modifying the block
+    /// context and the EVM in a single operation, by (e.g.) passing the EVM
+    /// to a block context method.
+    ///
+    /// This is a low-level API and is not intended for general use.
+    pub fn with_parts_unchecked<F>(self, f: F) -> Self
+    where
+        F: FnOnce(&mut TrevmState, &mut Evm<'a, Ext, Db>),
+    {
+        let Trevm { mut inner, mut state } = self;
+        f(&mut state, &mut inner);
+        Trevm { inner, state }
     }
 }
 

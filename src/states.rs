@@ -65,8 +65,7 @@ pub type EvmTransacted<'a, Ext, Db, C> = Trevm<'a, Ext, Db, TransactedState<C>>;
 pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext<Ext, Db>>::Error> =
     Trevm<'a, Ext, Db, ErroredState<C, E>>;
 
-#[allow(dead_code)]
-#[allow(unnameable_types)]
+#[allow(unnameable_types, dead_code, unreachable_pub)]
 pub(crate) mod sealed {
     use revm::primitives::ResultAndState;
 
@@ -134,13 +133,11 @@ pub(crate) mod sealed {
     }
 
     /// Trait for states where block execution can be started.
-    #[allow(unnameable_types)]
     pub trait NeedsBlock {}
     impl NeedsBlock for NeedsFirstBlock {}
     impl NeedsBlock for NeedsNextBlock {}
 
     /// Trait for states where thcare outputs vec is non-empty.
-    #[allow(unnameable_types)]
     pub trait HasOutputs {}
     impl HasOutputs for NeedsNextBlock {}
     impl<T> HasOutputs for NeedsTx<T> {}
@@ -148,15 +145,81 @@ pub(crate) mod sealed {
     impl<T, E> HasOutputs for ErroredState<T, E> {}
     impl<T> HasOutputs for Ready<T> {}
 
-    #[allow(unnameable_types)]
     pub trait HasCfg {}
-    #[allow(unnameable_types)]
     impl HasCfg for NeedsFirstBlock {}
     impl HasCfg for NeedsNextBlock {}
     impl<T> HasCfg for NeedsTx<T> {}
     impl<T> HasCfg for TransactedState<T> {}
     impl<T, E> HasCfg for ErroredState<T, E> {}
     impl<T> HasCfg for Ready<T> {}
+
+    pub trait HasContext {
+        type Context;
+
+        fn context(&self) -> &Self::Context;
+
+        fn context_mut(&mut self) -> &mut Self::Context;
+    }
+
+    impl<T> HasContext for NeedsTx<T> {
+        type Context = T;
+
+        fn context(&self) -> &Self::Context {
+            &self.0
+        }
+
+        fn context_mut(&mut self) -> &mut Self::Context {
+            &mut self.0
+        }
+    }
+
+    impl<T> HasContext for BlockComplete<T> {
+        type Context = T;
+
+        fn context(&self) -> &Self::Context {
+            &self.0
+        }
+
+        fn context_mut(&mut self) -> &mut Self::Context {
+            &mut self.0
+        }
+    }
+
+    impl<T> HasContext for TransactedState<T> {
+        type Context = T;
+
+        fn context(&self) -> &Self::Context {
+            &self.context
+        }
+
+        fn context_mut(&mut self) -> &mut Self::Context {
+            &mut self.context
+        }
+    }
+
+    impl<T, E> HasContext for ErroredState<T, E> {
+        type Context = T;
+
+        fn context(&self) -> &Self::Context {
+            &self.context
+        }
+
+        fn context_mut(&mut self) -> &mut Self::Context {
+            &mut self.context
+        }
+    }
+
+    impl<T> HasContext for Ready<T> {
+        type Context = T;
+
+        fn context(&self) -> &Self::Context {
+            &self.0
+        }
+
+        fn context_mut(&mut self) -> &mut Self::Context {
+            &mut self.0
+        }
+    }
 }
 
 #[macro_export]

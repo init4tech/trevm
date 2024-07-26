@@ -402,6 +402,9 @@
 mod evm;
 pub use evm::Trevm;
 
+mod ext;
+pub use ext::EvmExtUnchecked;
+
 mod fill;
 pub use fill::{Block, Cfg, NoopBlock, NoopCfg, Tx};
 
