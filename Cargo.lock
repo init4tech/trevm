@@ -2977,7 +2977,7 @@ dependencies = [
 
 [[package]]
 name = "trevm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "alloy-consensus 0.2.0",
  "alloy-eips 0.2.0",
