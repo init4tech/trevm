@@ -2984,7 +2984,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-provider 0.2.0",
  "alloy-rlp",
- "alloy-signer 0.1.4",
+ "alloy-signer 0.2.0",
  "alloy-signer-local",
  "alloy-sol-types",
  "alloy-transport 0.2.0",
