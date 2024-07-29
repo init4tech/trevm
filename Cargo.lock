@@ -3365,9 +3365,9 @@ dependencies = [
 
 [[package]]
 name = "zenith-types"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "631c66a913e55b2b73b08e7271d5c8bea52464040b8f9e38ae183ca2aad79676"
+checksum = "fb775fb77218bcd9ae463374dfa08595da36ceb7fbcc794ee1ee8438d8401389"
 dependencies = [
  "alloy-consensus 0.1.4",
  "alloy-contract",
