@@ -452,14 +452,14 @@ dependencies = [
 
 [[package]]
 name = "alloy-signer-local"
-version = "0.1.4"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dfc9c26fe6c6f1bad818c9a976de9044dd12e1f75f1f156a801ee3e8148c1b6"
+checksum = "0b537f3e55f30753578f4623d5f66ddad8fa582af3fa6b15bad23dd1b9775228"
 dependencies = [
- "alloy-consensus 0.1.4",
- "alloy-network 0.1.4",
+ "alloy-consensus 0.2.0",
+ "alloy-network 0.2.0",
  "alloy-primitives",
- "alloy-signer 0.1.4",
+ "alloy-signer 0.2.0",
  "async-trait",
  "k256",
  "rand",
