@@ -153,6 +153,17 @@ pub(crate) mod sealed {
     impl<T, E> HasCfg for ErroredState<T, E> {}
     impl<T> HasCfg for Ready<T> {}
 
+    pub trait HasBlock {}
+    impl<T> HasBlock for NeedsTx<T> {}
+    impl<T> HasBlock for TransactedState<T> {}
+    impl<T, E> HasBlock for ErroredState<T, E> {}
+    impl<T> HasBlock for Ready<T> {}
+
+    pub trait HasTx {}
+    impl<T> HasTx for TransactedState<T> {}
+    impl<T, E> HasTx for ErroredState<T, E> {}
+    impl<T> HasTx for Ready<T> {}
+
     pub trait HasContext {
         type Context;
 
