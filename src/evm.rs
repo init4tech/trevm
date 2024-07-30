@@ -411,11 +411,20 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
     }
 }
 
+// --- ALL STATES
+
 impl<'a, Ext, Db: Database + DatabaseCommit, EvmState> Trevm<'a, Ext, State<Db>, EvmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
         self.inner.db_mut().set_state_clear_flag(flag)
+    }
+
+    /// Set the [SpecId], modifying the EVM handlers accordingly. This function
+    /// should be called at hardfork boundaries when running multi-block trevm
+    /// flows.
+    pub fn set_spec_id(&mut self, spec_id: SpecId) {
+        self.inner.modify_spec_id(spec_id)
     }
 }
 
