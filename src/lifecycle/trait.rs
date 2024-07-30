@@ -40,17 +40,17 @@ use revm::{
 /// [`CfgEnv`]: revm::primitives::CfgEnv
 /// [`SpecId`]: revm::primitives::SpecId
 /// [`Trevm`]: crate::Trevm
-pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
+pub trait BlockContext {
     /// The error type for the context. This captures logic errors that occur
     /// during the lifecycle.
-    type Error: From<EVMError<Db::Error>>;
+    type Error<Db: Database>: From<EVMError<Db::Error>>;
 
     /// Apply pre-block logic, and prep the EVM for the first user transaction.
-    fn open_block<B: Block>(
+    fn open_block<B: Block, Ext, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         b: &B,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), Self::Error<Db>>;
 
     /// Apply post-transaction logic and then commit the transaction to the evm
     /// state. This will be called by [`Trevm`] for each transaction in a block.
@@ -103,8 +103,15 @@ pub trait BlockContext<Ext, Db: Database + DatabaseCommit> {
     /// ```
     ///
     /// [`Trevm`]: crate::Trevm
-    fn after_tx(&mut self, evm: &mut Evm<'_, Ext, Db>, result: ResultAndState);
+    fn after_tx<Ext, Db: Database + DatabaseCommit>(
+        &mut self,
+        evm: &mut Evm<'_, Ext, Db>,
+        result: ResultAndState,
+    );
 
     /// Apply post-block logic and close the block.
-    fn close_block(&mut self, evm: &mut Evm<'_, Ext, Db>) -> Result<(), Self::Error>;
+    fn close_block<Ext, Db: Database + DatabaseCommit>(
+        &mut self,
+        evm: &mut Evm<'_, Ext, Db>,
+    ) -> Result<(), Self::Error<Db>>;
 }

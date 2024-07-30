@@ -43,6 +43,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> From<Evm<'a, Ext, Db>> for EvmNeeds
     }
 }
 
+// --- ALL STATES
+
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Get a reference to the current [`Evm`].
     pub fn inner(&self) -> &Evm<'a, Ext, Db> {
@@ -65,6 +67,30 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     /// calling [`Evm::spec_id`].
     pub fn spec_id(&self) -> SpecId {
         self.inner.spec_id()
+    }
+
+    /// Set the [SpecId], modifying the EVM handlers accordingly. This function
+    /// should be called at hardfork boundaries when running multi-block trevm
+    /// flows.
+    pub fn set_spec_id(&mut self, spec_id: SpecId) {
+        self.inner.modify_spec_id(spec_id)
+    }
+
+    /// Run a closure with a different [SpecId], then restore the previous
+    /// setting.
+    pub fn with_spec_id<F, NewState>(
+        mut self,
+        spec_id: SpecId,
+        f: F,
+    ) -> Trevm<'a, Ext, Db, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
+    {
+        let old = self.spec_id();
+        self.set_spec_id(spec_id);
+        let mut this = f(self);
+        this.set_spec_id(old);
+        this
     }
 
     /// Get the current account info for a specific address.
@@ -411,20 +437,13 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
     }
 }
 
-// --- ALL STATES
+// --- ALL STATES, WITH STATE<DB>
 
-impl<'a, Ext, Db: Database + DatabaseCommit, EvmState> Trevm<'a, Ext, State<Db>, EvmState> {
+impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, State<Db>, TrevmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
         self.inner.db_mut().set_state_clear_flag(flag)
-    }
-
-    /// Set the [SpecId], modifying the EVM handlers accordingly. This function
-    /// should be called at hardfork boundaries when running multi-block trevm
-    /// flows.
-    pub fn set_spec_id(&mut self, spec_id: SpecId) {
-        self.inner.modify_spec_id(spec_id)
     }
 }
 
@@ -742,7 +761,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
     ) -> Result<EvmNeedsTx<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>>
     where
         B: Block,
-        C: BlockContext<Ext, Db>,
+        C: BlockContext,
         Db: Database + DatabaseCommit,
     {
         let res = context.open_block(self.inner_mut_unchecked(), filler);
@@ -856,7 +875,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasContext>
 
 // --- NEEDS TX
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsTx<'a, Ext, Db, C> {
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> EvmNeedsTx<'a, Ext, Db, C> {
     /// Close the current block, applying some logic, and returning the EVM
     /// ready for the next block.
     ///
@@ -924,7 +943,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
 
 // --- READY
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<'a, Ext, Db, C> {
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> EvmReady<'a, Ext, Db, C> {
     /// Clear the current transaction environment.
     pub fn clear_tx(self) -> EvmNeedsTx<'a, Ext, Db, C> {
         // NB: we do not clear the tx env here, as we may read it during `BlockContext::post_tx`
@@ -956,9 +975,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
 
 // --- ERRORED
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
-    EvmErrored<'a, Ext, Db, C, E>
-{
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext, E> EvmErrored<'a, Ext, Db, C, E> {
     /// Get a reference to the error.
     pub const fn error(&self) -> &E {
         &self.state.error
@@ -990,7 +1007,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext>
     EvmErrored<'a, Ext, Db, C, EVMError<Db::Error>>
 {
     /// Check if the error is a transaction error. This is provided as a
@@ -1021,7 +1038,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
 
 // --- TRANSACTED
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<ResultAndState>
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> AsRef<ResultAndState>
     for EvmTransacted<'a, Ext, Db, C>
 {
     fn as_ref(&self) -> &ResultAndState {
@@ -1029,7 +1046,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<Res
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<ExecutionResult>
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> AsRef<ExecutionResult>
     for EvmTransacted<'a, Ext, Db, C>
 {
     fn as_ref(&self) -> &ExecutionResult {
@@ -1037,9 +1054,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<Exe
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
-    EvmTransacted<'a, Ext, Db, C>
-{
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> EvmTransacted<'a, Ext, Db, C> {
     /// Get a reference to the result.
     pub fn result(&self) -> &ExecutionResult {
         self.as_ref()

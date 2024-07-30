@@ -62,7 +62,7 @@ pub type EvmTransacted<'a, Ext, Db, C> = Trevm<'a, Ext, Db, TransactedState<C>>;
 /// Expected continuations include:
 /// - [`EvmErrored::discard_error`]
 /// - [`EvmErrored::into_error`]
-pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext<Ext, Db>>::Error> =
+pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext>::Error<Db>> =
     Trevm<'a, Ext, Db, ErroredState<C, E>>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]
