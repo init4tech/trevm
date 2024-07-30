@@ -36,7 +36,7 @@ zenith-types = "0.2.2"
 
 [dev-dependencies]
 revm = { version = "12.0.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
-tokio = { version = "1.28", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
 
 # alloydb
 alloy-provider = "0.2"
