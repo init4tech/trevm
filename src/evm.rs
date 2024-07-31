@@ -1,8 +1,8 @@
 use crate::{
     states::EvmBlockComplete, BasicContext, Block, BlockComplete, BlockContext, Cfg, ErroredState,
     EvmErrored, EvmExtUnchecked, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
-    EvmReady, EvmTransacted, HasCfg, HasContext, HasOutputs, NeedsBlock, NeedsCfg, NeedsNextBlock,
-    NeedsTx, Ready, TransactedState, Tx,
+    EvmReady, EvmTransacted, HasBlock, HasCfg, HasContext, HasOutputs, HasTx, NeedsBlock, NeedsCfg,
+    NeedsNextBlock, NeedsTx, Ready, TransactedState, Tx,
 };
 use alloy_primitives::{Address, Bytes, U256};
 use revm::{
@@ -481,6 +481,22 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
         self.set_code_size_limit(0x6000)
     }
 
+    /// Run a function with the provided configuration, then restore the
+    /// previous configuration. This will not affect the block and tx, if those
+    /// have been filled.
+    pub fn with_cfg<F, C, NewState>(mut self, f: F, cfg: &C) -> Trevm<'a, Ext, Db, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
+        C: Cfg,
+        NewState: HasCfg,
+    {
+        let previous = std::mem::take(self.inner.cfg_mut());
+        cfg.fill_cfg_env(self.inner.cfg_mut());
+        let mut this = f(self);
+        *this.inner.cfg_mut() = previous;
+        this
+    }
+
     /// Set the KZG settings used for point evaluation precompiles. By default
     /// this is set to the settings used in the Ethereum mainnet.
     ///
@@ -742,6 +758,24 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
     }
 }
 
+// --- HAS BLOCK
+
+impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState> {
+    /// Run a function with the provided block, then restore the previous block.
+    pub fn with_block<F, B, NewState>(mut self, f: F, b: &B) -> Trevm<'a, Ext, Db, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
+        B: Block,
+        NewState: HasBlock,
+    {
+        let previous = std::mem::take(self.inner.block_mut());
+        b.fill_block_env(self.inner.block_mut());
+        let mut this = f(self);
+        *this.inner.block_mut() = previous;
+        this
+    }
+}
+
 // --- HAS OUTPUTS
 
 impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
@@ -811,7 +845,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasContext>
     }
 }
 
-// --- NEEDS FIRST TX
+// --- NEEDS TX
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsTx<'a, Ext, Db, C> {
     /// Close the current block, applying some logic, and returning the EVM
@@ -857,6 +891,25 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsT
             Ok(evm) => evm.accept(),
             Err(evm) => evm.discard_error(),
         }
+    }
+}
+
+// --- HAS TX
+
+impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
+    /// Run a function with the provided transaction, then restore the previous
+    /// transaction.
+    pub fn with_tx<F, T, NewState>(mut self, f: F, t: &T) -> Trevm<'a, Ext, Db, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
+        T: Tx,
+        NewState: HasTx,
+    {
+        let previous = std::mem::take(self.inner.tx_mut());
+        t.fill_tx_env(self.inner.tx_mut());
+        let mut this = f(self);
+        *this.inner.tx_mut() = previous;
+        this
     }
 }
 
