@@ -384,8 +384,8 @@ macro_rules! trevm_aliases {
             /// A [`Trevm`] that encountered an error during [`ChainDriver`] execution.
             ///
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
-            pub type EvmChainDriverErrored<'a, 'b, $ext, C, T> =
-                $crate::EvmChainDriverErrored<'a, 'b, $db, C, T>;
+            pub type EvmChainDriverErrored<'a, 'b, C, T> =
+                $crate::EvmChainDriverErrored<'a, 'b, $ext, $db, C, T>;
         }
     };
 
