@@ -1,8 +1,8 @@
 use crate::{
-    states::EvmBlockComplete, BasicContext, Block, BlockComplete, BlockContext, Cfg, ErroredState,
-    EvmErrored, EvmExtUnchecked, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
-    EvmReady, EvmTransacted, HasBlock, HasCfg, HasContext, HasOutputs, HasTx, NeedsBlock, NeedsCfg,
-    NeedsNextBlock, NeedsTx, Ready, TransactedState, Tx,
+    driver::DriveBlockResult, BasicContext, Block, BlockComplete, BlockContext, BlockDriver, Cfg,
+    ChainDriver, DriveChainResult, ErroredState, EvmBlockComplete, EvmErrored, EvmExtUnchecked,
+    EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasContext,
+    HasTx, NeedsBlock, NeedsCfg, NeedsTx, Ready, TransactedState, Tx,
 };
 use alloy_primitives::{Address, Bytes, U256};
 use revm::{
@@ -43,6 +43,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> From<Evm<'a, Ext, Db>> for EvmNeeds
     }
 }
 
+// --- ALL STATES
+
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Get a reference to the current [`Evm`].
     pub fn inner(&self) -> &Evm<'a, Ext, Db> {
@@ -65,6 +67,30 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     /// calling [`Evm::spec_id`].
     pub fn spec_id(&self) -> SpecId {
         self.inner.spec_id()
+    }
+
+    /// Set the [SpecId], modifying the EVM handlers accordingly. This function
+    /// should be called at hardfork boundaries when running multi-block trevm
+    /// flows.
+    pub fn set_spec_id(&mut self, spec_id: SpecId) {
+        self.inner.modify_spec_id(spec_id)
+    }
+
+    /// Run a closure with a different [SpecId], then restore the previous
+    /// setting.
+    pub fn with_spec_id<F, NewState>(
+        mut self,
+        spec_id: SpecId,
+        f: F,
+    ) -> Trevm<'a, Ext, Db, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
+    {
+        let old = self.spec_id();
+        self.set_spec_id(spec_id);
+        let mut this = f(self);
+        this.set_spec_id(old);
+        this
     }
 
     /// Get the current account info for a specific address.
@@ -411,7 +437,9 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, EvmState> Trevm<'a, Ext, State<Db>, EvmState> {
+// --- ALL STATES, WITH STATE<DB>
+
+impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, State<Db>, TrevmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
@@ -423,7 +451,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, EvmState> Trevm<'a, Ext, State<Db>,
 
 impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsCfg<'a, Ext, Db> {
     /// Fill the configuration environment.
-    pub fn fill_cfg<T: Cfg>(mut self, filler: &T) -> EvmNeedsFirstBlock<'a, Ext, Db> {
+    pub fn fill_cfg<T: Cfg>(mut self, filler: &T) -> EvmNeedsBlock<'a, Ext, Db> {
         filler.fill_cfg(&mut self.inner);
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
@@ -715,9 +743,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
 
 // --- NEEDS BLOCK
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
-    Trevm<'a, Ext, Db, TrevmState>
-{
+impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
     /// Open a block, apply some logic, and return the EVM ready for the next
     /// transaction.
     ///
@@ -733,7 +759,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
     ) -> Result<EvmNeedsTx<'a, Ext, Db, C>, EvmErrored<'a, Ext, Db, C>>
     where
         B: Block,
-        C: BlockContext<Ext, Db>,
+        C: BlockContext,
         Db: Database + DatabaseCommit,
     {
         let res = context.open_block(self.inner_mut_unchecked(), filler);
@@ -742,6 +768,67 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: NeedsBlock>
             Ok(_) => Ok(Trevm { inner: self.inner, state: NeedsTx(context) }),
             Err(error) => Err(Trevm { inner: self.inner, state: ErroredState { context, error } }),
         }
+    }
+
+    /// Open a block, apply some logic, and return the EVM ready for the next
+    /// block.
+    pub fn drive_block<'b, B, C>(self, driver: &'b B) -> DriveBlockResult<'a, 'b, Ext, Db, C, B>
+    where
+        C: BlockContext,
+        B: BlockDriver<'b, C>,
+    {
+        let trevm = self
+            .open_block(driver.block(), driver.context())
+            .map_err(EvmErrored::err_into::<<B as BlockDriver<'b, C>>::Error<Db>>)?;
+        let trevm = driver.run_txns(trevm)?;
+
+        let trevm = trevm.close_block().map_err(EvmErrored::err_into)?;
+
+        match driver.post_block_checks(&trevm) {
+            Ok(_) => Ok(trevm),
+            Err(e) => Err(trevm.errored(e)),
+        }
+    }
+
+    /// Drive trevm through a set of blocks, returning the block contexts and
+    /// the EVM ready for the next block.
+    ///
+    /// # Panics
+    ///
+    /// If the driver contains no blocks.
+    pub fn drive_chain<'b, D, C>(self, driver: &'b mut D) -> DriveChainResult<'a, 'b, Ext, Db, C, D>
+    where
+        D: ChainDriver<'b, C>,
+        C: BlockContext,
+    {
+        let block_count = driver.blocks().len();
+        let mut contexts = Vec::with_capacity(block_count);
+
+        let trevm = self
+            .drive_block(&driver.blocks()[0])
+            .map_err(EvmErrored::err_into::<<D as ChainDriver<'b, C>>::Error<Db>>)?;
+
+        if let Err(e) = driver.check_interblock(&trevm, 0) {
+            return Err(trevm.errored(e));
+        }
+
+        let (context, mut trevm) = trevm.take_context();
+        contexts.push(context);
+
+        for i in 1..block_count {
+            let context;
+            (context, trevm) = {
+                let trevm = trevm
+                    .drive_block(&driver.blocks()[i])
+                    .map_err(EvmErrored::err_into::<<D as ChainDriver<'b, C>>::Error<Db>>)?;
+                if let Err(e) = driver.check_interblock(&trevm, i) {
+                    return Err(trevm.errored(e));
+                }
+                trevm.take_context()
+            };
+            contexts.push(context);
+        }
+        Ok((contexts, trevm))
     }
 
     /// Open a block and return the EVM ready for the next transaction. This is
@@ -776,11 +863,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
     }
 }
 
-// --- HAS OUTPUTS
+// --- Needs Block with State<Db>
 
-impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
-    Trevm<'a, Ext, State<Db>, Missing>
-{
+impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, State<Db>> {
     /// Finish execution and return the outputs.
     ///
     /// ## Panics
@@ -800,17 +885,18 @@ impl<'a, Ext, Db: Database + DatabaseCommit, Missing: HasOutputs>
         bundle
     }
 }
+
 // --- BLOCK COMPLETE
 
 impl<'a, Ext, Db: Database + DatabaseCommit, C> EvmBlockComplete<'a, Ext, Db, C> {
     /// Destructure the EVM and return the block context and the EVM ready for
     /// the next block.
-    pub fn take_context(self) -> (C, EvmNeedsNextBlock<'a, Ext, Db>) {
-        (self.state.0, EvmNeedsNextBlock { inner: self.inner, state: NeedsNextBlock::new() })
+    pub fn take_context(self) -> (C, EvmNeedsBlock<'a, Ext, Db>) {
+        (self.state.0, EvmNeedsBlock { inner: self.inner, state: NeedsBlock::new() })
     }
 
     /// Discard the block context and return the EVM ready for the next block.
-    pub fn discard_context(self) -> EvmNeedsNextBlock<'a, Ext, Db> {
+    pub fn discard_context(self) -> EvmNeedsBlock<'a, Ext, Db> {
         self.take_context().1
     }
 }
@@ -843,11 +929,25 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasContext>
         f(&mut state, &mut inner);
         Trevm { inner, state }
     }
+
+    /// Convert self into [`EvmErrored`] by supplying an error
+    pub fn errored<E>(
+        self,
+        error: E,
+    ) -> EvmErrored<'a, Ext, Db, <TrevmState as HasContext>::Context, E>
+    where
+        <TrevmState as HasContext>::Context: BlockContext,
+    {
+        EvmErrored {
+            inner: self.inner,
+            state: ErroredState { context: self.state.take_context(), error },
+        }
+    }
 }
 
 // --- NEEDS TX
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmNeedsTx<'a, Ext, Db, C> {
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> EvmNeedsTx<'a, Ext, Db, C> {
     /// Close the current block, applying some logic, and returning the EVM
     /// ready for the next block.
     ///
@@ -915,7 +1015,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
 
 // --- READY
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<'a, Ext, Db, C> {
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> EvmReady<'a, Ext, Db, C> {
     /// Clear the current transaction environment.
     pub fn clear_tx(self) -> EvmNeedsTx<'a, Ext, Db, C> {
         // NB: we do not clear the tx env here, as we may read it during `BlockContext::post_tx`
@@ -947,9 +1047,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> EvmReady<
 
 // --- ERRORED
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
-    EvmErrored<'a, Ext, Db, C, E>
-{
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext, E> EvmErrored<'a, Ext, Db, C, E> {
     /// Get a reference to the error.
     pub const fn error(&self) -> &E {
         &self.state.error
@@ -979,9 +1077,25 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>, E>
         let Trevm { inner, state: ErroredState { context, error } } = self;
         (Trevm { inner, state: NeedsTx(context) }, error)
     }
+
+    /// Transform the error into a new error type.
+    pub fn err_into<NewErr: From<E>>(self) -> EvmErrored<'a, Ext, Db, C, NewErr> {
+        self.map_err(Into::into)
+    }
+
+    /// Map the error to a new error type.
+    pub fn map_err<F, NewErr>(self, f: F) -> EvmErrored<'a, Ext, Db, C, NewErr>
+    where
+        F: FnOnce(E) -> NewErr,
+    {
+        Trevm {
+            inner: self.inner,
+            state: ErroredState { context: self.state.context, error: f(self.state.error) },
+        }
+    }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext>
     EvmErrored<'a, Ext, Db, C, EVMError<Db::Error>>
 {
     /// Check if the error is a transaction error. This is provided as a
@@ -1012,7 +1126,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
 
 // --- TRANSACTED
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<ResultAndState>
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> AsRef<ResultAndState>
     for EvmTransacted<'a, Ext, Db, C>
 {
     fn as_ref(&self) -> &ResultAndState {
@@ -1020,7 +1134,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<Res
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<ExecutionResult>
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> AsRef<ExecutionResult>
     for EvmTransacted<'a, Ext, Db, C>
 {
     fn as_ref(&self) -> &ExecutionResult {
@@ -1028,9 +1142,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>> AsRef<Exe
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext<Ext, Db>>
-    EvmTransacted<'a, Ext, Db, C>
-{
+impl<'a, Ext, Db: Database + DatabaseCommit, C: BlockContext> EvmTransacted<'a, Ext, Db, C> {
     /// Get a reference to the result.
     pub fn result(&self) -> &ExecutionResult {
         self.as_ref()
