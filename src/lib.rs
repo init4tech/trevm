@@ -18,7 +18,7 @@
 //!   error.
 //! - [`EvmTransacted`]: The EVM has executed a transaction successfully.
 //! - [`EvmBlockComplete`]: The EVM has executed and closed a block and contains
-//!   some a populated [`BlockContext`] object
+//!   some populated [`BlockContext`] object
 //!
 //! ## Quickstart
 //!
@@ -340,20 +340,20 @@
 //! +-----+      +-----------+
 //! |Start| ---> |EvmNeedsCfg|
 //! +-----+      +-----------+
-//!                   |                       +--------------------+
-//!                   +-- fill_cfg() -------> | EvmNeedsFirstBlock |
-//!                                           +--------------------+
-//!                                                          |
-//!         +----------------+                               |
-//!     +-- |EvmBlockComplete|--take_context()-+             |
-//!     |   +----------------+  or discard     |             |
-//!     |            ^                         V             |
-//!     |            |              +-----------------+      |
-//!   finish()       |              |EvmNeedsNextBlock|------+
-//!     |       close_block()       +-----------------+      |
-//!     V            |                                       |
-//!  +------+   +----------+                                 |
-//!  |Finish|   |EvmNeedsTx| <------ open_block() -----------+
+//!                   |                             +----------------+
+//!                   +-- fill_cfg() ----------+--> | EvmNeedsBliock |
+//!                                            |    +----------------+
+//!                                            |          |
+//!         +----------------+                 |          |
+//!     +-- |EvmBlockComplete|--take_context()-+          |
+//!     |   +----------------+  or discard                |
+//!     |            ^                                    |
+//!     |            |                                    |
+//!   finish()       |                                    |
+//!     |       close_block()                             |
+//!     V            |                                    |
+//!  +------+   +----------+                              |
+//!  |Finish|   |EvmNeedsTx| <------ open_block()---------+
 //!  +------+   +----------+
 //!              ^       |                           +--------+
 //!              |       +------- fill_tx() -------> |EvmReady|--+
