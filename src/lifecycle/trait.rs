@@ -73,17 +73,15 @@ pub trait BlockContext {
     /// #
     /// # impl MyContext { fn make_receipt(&self, result: &ResultAndState) {} }
     /// #
-    /// impl<Ext, Db> BlockContext<Ext, Db> for MyContext
-    /// where
-    ///     Db: Database + DatabaseCommit
+    /// impl BlockContext for MyContext
     /// {
-    /// #    type Error = EVMError<Db::Error>;
-    /// #    fn open_block<B: trevm::Block>(
+    /// #    type Error<Db: Database> = EVMError<Db::Error>;
+    /// #    fn open_block<B: trevm::Block, Ext, Db: Database + DatabaseCommit>(
     /// #       &mut self,
     /// #       _evm: &mut Evm<'_, Ext, Db>,
     /// #       _b: &B
-    /// #    ) -> Result<(), Self::Error> { Ok(()) }
-    ///     fn after_tx(
+    /// #    ) -> Result<(), Self::Error<Db>> { Ok(()) }
+    ///     fn after_tx<Ext, Db: Database + DatabaseCommit>(
     ///        &mut self,
     ///        evm: &mut Evm<'_, Ext, Db>,
     ///        result: ResultAndState
@@ -93,10 +91,10 @@ pub trait BlockContext {
     ///         evm.db_mut().commit(result.state);
     ///     }
     /// #
-    /// #    fn close_block(
+    /// #    fn close_block<Ext, Db: Database + DatabaseCommit>(
     /// #       &mut self,
     /// #       _evm: &mut Evm<'_, Ext, Db>
-    /// #     ) -> Result<(), Self::Error> {
+    /// #     ) -> Result<(), Self::Error<Db>> {
     /// #       Ok(())
     /// #     }
     /// }

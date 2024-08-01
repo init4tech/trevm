@@ -10,8 +10,7 @@
 //! [`Trevm`] models the EVM as a state machine with the following states:
 //!
 //! - [`EvmNeedsCfg`]: The EVM needs to be configured.
-//! - [`EvmNeedsFirstBlock`]: The EVM is configured and needs a block
-//!   environment.
+//! - [`EvmNeedsBlock`]: The EVM is configured and needs a block environment.
 //! - [`EvmNeedsTx`]: The EVM is configured and has a block environment, and
 //!   now needs a transaction to execute.
 //! - [`EvmReady`]: The EVM has a transaction loaded and is ready to execute it.
@@ -20,9 +19,6 @@
 //! - [`EvmTransacted`]: The EVM has executed a transaction successfully.
 //! - [`EvmBlockComplete`]: The EVM has executed and closed a block and contains
 //!   some a populated [`BlockContext`] object
-//! - [`EvmNeedsNextBlock`]: The EVM has executed a transaction (or several
-//!   transactions) successfully and the block has been closed. The EVM is now
-//!   ready to open the next block, or to yield its outputs.
 //!
 //! ## Quickstart
 //!
@@ -281,7 +277,7 @@
 //! # use revm::{EvmBuilder, db::{InMemoryDB, BundleState}, State,
 //! # StateBuilder};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, BlockOutput,
-//! # EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsTx, EvmReady, EvmNeedsNextBlock,
+//! # EvmNeedsCfg, EvmNeedsBlock, EvmNeedsTx, EvmReady,
 //! # EvmBlockComplete, Shanghai, EvmTransacted};
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
@@ -292,8 +288,8 @@
 //!     .with_db(state)
 //!     .build_trevm();
 //!
-//! // Once the cfg is filled, we move to `EvmNeedsFirstBlock`.
-//! let trevm: EvmNeedsFirstBlock<'_, _, _> = trevm.fill_cfg(cfg);
+//! // Once the cfg is filled, we move to `EvmNeedsBlock`.
+//! let trevm: EvmNeedsBlock<'_, _, _> = trevm.fill_cfg(cfg);
 //!
 //! // Filling the block gets us to `EvmNeedsTx`. `open_block` takes a
 //! // context object that will apply pre- and post-block logic, accumulate
@@ -325,7 +321,7 @@
 //!     .map_err(EvmErrored::into_error)?;;
 //!
 //! // During block execution, a context object
-//! let (context, trevm): (Shanghai<'_>, EvmNeedsNextBlock<'_, _, _>) = trevm
+//! let (context, trevm): (Shanghai<'_>, EvmNeedsBlock<'_, _, _>) = trevm
 //!     .take_context();
 //!
 //! // Finishing the EVM gets us the final changes and a list of block outputs
@@ -400,7 +396,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 mod driver;
-pub use driver::{BlockDriver, ChainDriver};
+pub use driver::{
+    AlloyBlockError, BlockDriver, ChainDriver, DriveBlockResult, DriveChainResult, RunTxResult,
+};
 
 mod evm;
 pub use evm::Trevm;
@@ -419,8 +417,8 @@ pub use lifecycle::{
 mod states;
 pub(crate) use states::sealed::*;
 pub use states::{
-    EvmBlockComplete, EvmErrored, EvmNeedsCfg, EvmNeedsFirstBlock, EvmNeedsNextBlock, EvmNeedsTx,
-    EvmReady, EvmTransacted,
+    EvmBlockComplete, EvmBlockDriverErrored, EvmChainDriverErrored, EvmErrored, EvmNeedsBlock,
+    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
 };
 
 pub mod syscall;
