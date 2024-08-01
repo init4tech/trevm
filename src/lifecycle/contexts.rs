@@ -29,10 +29,10 @@ use std::{collections::HashMap, sync::OnceLock};
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct BasicContext;
 
-impl BlockContext for BasicContext {
+impl<Ext> BlockContext<Ext> for BasicContext {
     type Error<Db: Database> = EVMError<Db::Error>;
 
-    fn open_block<B: Block, Ext, Db: Database + DatabaseCommit>(
+    fn open_block<B: Block, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         b: &B,
@@ -41,7 +41,7 @@ impl BlockContext for BasicContext {
         Ok(())
     }
 
-    fn after_tx<Ext, Db: Database + DatabaseCommit>(
+    fn after_tx<Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         result: revm::primitives::ResultAndState,
@@ -49,7 +49,7 @@ impl BlockContext for BasicContext {
         evm.db_mut().commit(result.state);
     }
 
-    fn close_block<Ext, Db: Database + DatabaseCommit>(
+    fn close_block<Db: Database + DatabaseCommit>(
         &mut self,
         _evm: &mut Evm<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
@@ -75,10 +75,10 @@ impl<'a> From<&'a [Withdrawal]> for Shanghai<'a> {
     }
 }
 
-impl BlockContext for Shanghai<'_> {
+impl<Ext> BlockContext<Ext> for Shanghai<'_> {
     type Error<Db: Database> = EVMError<Db::Error>;
 
-    fn open_block<B: Block, Ext, Db: Database + DatabaseCommit>(
+    fn open_block<B: Block, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         b: &B,
@@ -90,7 +90,7 @@ impl BlockContext for Shanghai<'_> {
         Ok(())
     }
 
-    fn after_tx<Ext, Db: Database + DatabaseCommit>(
+    fn after_tx<Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         result: ResultAndState,
@@ -116,7 +116,7 @@ impl BlockContext for Shanghai<'_> {
         self.outputs.push_result(receipt, sender);
     }
 
-    fn close_block<Ext, Db: Database + DatabaseCommit>(
+    fn close_block<Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
@@ -159,7 +159,7 @@ impl Shanghai<'_> {
     pub fn apply_withdrawals<Ext, Db>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
-    ) -> Result<(), <Self as BlockContext>::Error<Db>>
+    ) -> Result<(), <Self as BlockContext<Ext>>::Error<Db>>
     where
         Db: Database + DatabaseCommit,
     {
@@ -245,10 +245,10 @@ impl<'a> std::ops::DerefMut for Cancun<'a> {
     }
 }
 
-impl BlockContext for Cancun<'_> {
+impl<Ext> BlockContext<Ext> for Cancun<'_> {
     type Error<Db: Database> = EVMError<Db::Error>;
 
-    fn open_block<B: Block, Ext, Db: Database + DatabaseCommit>(
+    fn open_block<B: Block, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         b: &B,
@@ -257,7 +257,7 @@ impl BlockContext for Cancun<'_> {
         self.apply_eip4788(evm)
     }
 
-    fn after_tx<Ext, Db: Database + DatabaseCommit>(
+    fn after_tx<Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         result: ResultAndState,
@@ -265,7 +265,7 @@ impl BlockContext for Cancun<'_> {
         self.shanghai.after_tx(evm, result)
     }
 
-    fn close_block<Ext, Db: Database + DatabaseCommit>(
+    fn close_block<Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
@@ -289,7 +289,7 @@ impl Cancun<'_> {
     pub fn apply_eip4788<Ext, Db>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
-    ) -> Result<(), <Self as BlockContext>::Error<Db>>
+    ) -> Result<(), <Self as BlockContext<Ext>>::Error<Db>>
     where
         Db: Database + DatabaseCommit,
     {
@@ -337,10 +337,10 @@ impl<'a> From<Cancun<'a>> for Prague<'a> {
     }
 }
 
-impl BlockContext for Prague<'_> {
+impl<Ext> BlockContext<Ext> for Prague<'_> {
     type Error<Db: Database> = EVMError<Db::Error>;
 
-    fn open_block<'a, B: Block, Ext, Db: Database + DatabaseCommit>(
+    fn open_block<'a, B: Block, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         b: &B,
@@ -349,7 +349,7 @@ impl BlockContext for Prague<'_> {
         Self::apply_eip2935(evm)
     }
 
-    fn after_tx<'a, Ext, Db: Database + DatabaseCommit>(
+    fn after_tx<'a, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         result: ResultAndState,
@@ -360,7 +360,7 @@ impl BlockContext for Prague<'_> {
         self.find_deposit_logs();
     }
 
-    fn close_block<'a, Ext, Db: Database + DatabaseCommit>(
+    fn close_block<'a, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
@@ -415,7 +415,7 @@ impl Prague<'_> {
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
     pub fn apply_eip2935<Ext, Db>(
         evm: &mut Evm<'_, Ext, Db>,
-    ) -> Result<(), <Self as BlockContext>::Error<Db>>
+    ) -> Result<(), <Self as BlockContext<Ext>>::Error<Db>>
     where
         Db: Database + DatabaseCommit,
     {
@@ -471,7 +471,7 @@ impl Prague<'_> {
         &mut self,
 
         evm: &mut Evm<'_, Ext, Db>,
-    ) -> Result<(), <Self as BlockContext>::Error<Db>>
+    ) -> Result<(), <Self as BlockContext<Ext>>::Error<Db>>
     where
         Db: Database + DatabaseCommit,
     {
@@ -511,7 +511,7 @@ impl Prague<'_> {
     pub fn apply_eip7251<Ext, Db>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
-    ) -> Result<(), <Self as BlockContext>::Error<Db>>
+    ) -> Result<(), <Self as BlockContext<Ext>>::Error<Db>>
     where
         Db: Database + DatabaseCommit,
     {

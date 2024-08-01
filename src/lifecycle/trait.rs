@@ -40,13 +40,13 @@ use revm::{
 /// [`CfgEnv`]: revm::primitives::CfgEnv
 /// [`SpecId`]: revm::primitives::SpecId
 /// [`Trevm`]: crate::Trevm
-pub trait BlockContext {
+pub trait BlockContext<Ext> {
     /// The error type for the context. This captures logic errors that occur
     /// during the lifecycle.
     type Error<Db: Database>: From<EVMError<Db::Error>>;
 
     /// Apply pre-block logic, and prep the EVM for the first user transaction.
-    fn open_block<B: Block, Ext, Db: Database + DatabaseCommit>(
+    fn open_block<B: Block, Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         b: &B,
@@ -73,15 +73,15 @@ pub trait BlockContext {
     /// #
     /// # impl MyContext { fn make_receipt(&self, result: &ResultAndState) {} }
     /// #
-    /// impl BlockContext for MyContext
+    /// impl<Ext> BlockContext<Ext> for MyContext
     /// {
     /// #    type Error<Db: Database> = EVMError<Db::Error>;
-    /// #    fn open_block<B: trevm::Block, Ext, Db: Database + DatabaseCommit>(
+    /// #    fn open_block<B: trevm::Block, Db: Database + DatabaseCommit>(
     /// #       &mut self,
     /// #       _evm: &mut Evm<'_, Ext, Db>,
     /// #       _b: &B
     /// #    ) -> Result<(), Self::Error<Db>> { Ok(()) }
-    ///     fn after_tx<Ext, Db: Database + DatabaseCommit>(
+    ///     fn after_tx<Db: Database + DatabaseCommit>(
     ///        &mut self,
     ///        evm: &mut Evm<'_, Ext, Db>,
     ///        result: ResultAndState
@@ -91,7 +91,7 @@ pub trait BlockContext {
     ///         evm.db_mut().commit(result.state);
     ///     }
     /// #
-    /// #    fn close_block<Ext, Db: Database + DatabaseCommit>(
+    /// #    fn close_block< Db: Database + DatabaseCommit>(
     /// #       &mut self,
     /// #       _evm: &mut Evm<'_, Ext, Db>
     /// #     ) -> Result<(), Self::Error<Db>> {
@@ -101,14 +101,14 @@ pub trait BlockContext {
     /// ```
     ///
     /// [`Trevm`]: crate::Trevm
-    fn after_tx<Ext, Db: Database + DatabaseCommit>(
+    fn after_tx<Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
         result: ResultAndState,
     );
 
     /// Apply post-block logic and close the block.
-    fn close_block<Ext, Db: Database + DatabaseCommit>(
+    fn close_block<Db: Database + DatabaseCommit>(
         &mut self,
         evm: &mut Evm<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>>;

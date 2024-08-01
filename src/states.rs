@@ -56,20 +56,20 @@ pub type EvmTransacted<'a, Ext, Db, C> = Trevm<'a, Ext, Db, TransactedState<C>>;
 /// Expected continuations include:
 /// - [`EvmErrored::discard_error`]
 /// - [`EvmErrored::into_error`]
-pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext>::Error<Db>> =
+pub type EvmErrored<'a, Ext, Db, C, E = <C as BlockContext<Ext>>::Error<Db>> =
     Trevm<'a, Ext, Db, ErroredState<C, E>>;
 
 /// A [`Trevm`] that encountered an error during [`BlockDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
 pub type EvmBlockDriverErrored<'a, 'b, Ext, Db, C, T> =
-    EvmErrored<'a, Ext, Db, C, <T as BlockDriver<'b, C>>::Error<Db>>;
+    EvmErrored<'a, Ext, Db, C, <T as BlockDriver<'b, Ext, C>>::Error<Db>>;
 
 /// A [`Trevm`] that encountered an error during [`ChainDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
 pub type EvmChainDriverErrored<'a, 'b, Ext, Db, C, T> =
-    EvmErrored<'a, Ext, Db, C, <T as ChainDriver<'b, C>>::Error<Db>>;
+    EvmErrored<'a, Ext, Db, C, <T as ChainDriver<'b, Ext, C>>::Error<Db>>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]
 pub(crate) mod sealed {
@@ -372,7 +372,7 @@ macro_rules! trevm_aliases {
             /// Expected continuations include:
             /// - [`EvmErrored::discard_error`]
             /// - [`EvmErrored::into_error`]
-            pub type EvmErrored<'a, C, E = <C as $crate::BlockContext>::Error<$db>> =
+            pub type EvmErrored<'a, C, E = <C as $crate::BlockContext<$ext>>::Error<$db>> =
                 $crate::EvmErrored<'a, $ext, $db, C, E>;
 
             /// A [`Trevm`] that encountered an error during [`BlockDriver`] execution.
@@ -453,7 +453,7 @@ macro_rules! trevm_aliases {
             /// Expected continuations include:
             /// - [`EvmErrored::discard_error`]
             /// - [`EvmErrored::into_error`]
-            pub type EvmErrored<C, E = <C as $crate::BlockContext>::Error<$db>> =
+            pub type EvmErrored<C, E = <C as $crate::BlockContext<$ext>>::Error<$db>> =
                 $crate::EvmErrored<'static, $ext, $db, C, E>;
 
             /// A [`Trevm`] that encountered an error during [`BlockDriver`] execution.

@@ -12,7 +12,7 @@ pub type DriveBlockResult<'a, 'b, Ext, Db, C, T> =
 /// Driver for a single trevm block. This trait allows a type to specify the
 /// entire lifecycle of a trevm block, from opening the block to driving the
 /// trevm to completion.
-pub trait BlockDriver<'b, C: BlockContext>
+pub trait BlockDriver<'b, Ext, C: BlockContext<Ext>>
 where
     Self: 'b,
 {
@@ -22,7 +22,7 @@ where
     /// An error type for this driver.
     type Error<Db: Database>: std::error::Error
         + From<EVMError<Db::Error>>
-        + From<<C as BlockContext>::Error<Db>>;
+        + From<<C as BlockContext<Ext>>::Error<Db>>;
 
     /// Get a reference to the block filler for this driver.
     fn block(&self) -> &Self::Block;
@@ -31,13 +31,13 @@ where
     fn context(&'b self) -> C;
 
     /// Run the transactions for the block.
-    fn run_txns<'a, Ext, Db: Database + DatabaseCommit>(
+    fn run_txns<'a, Db: Database + DatabaseCommit>(
         &self,
         trevm: EvmNeedsTx<'a, Ext, Db, C>,
     ) -> RunTxResult<'a, 'b, Ext, Db, C, Self>;
 
     /// Run post
-    fn post_block_checks<Ext, Db: Database + DatabaseCommit>(
+    fn post_block_checks<Db: Database + DatabaseCommit>(
         &self,
         trevm: &EvmBlockComplete<'_, Ext, Db, C>,
     ) -> Result<(), Self::Error<Db>>;

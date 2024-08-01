@@ -63,10 +63,9 @@ impl<Db: Database> From<EVMError<Db::Error>> for AlloyBlockError<Db> {
     }
 }
 
-impl<'b> BlockDriver<'b, Shanghai<'b>> for alloy_rpc_types_eth::Block<TxEnvelope> {
+impl<'b, Ext> BlockDriver<'b, Ext, Shanghai<'b>> for alloy_rpc_types_eth::Block<TxEnvelope> {
     type Block = alloy_rpc_types_eth::Header;
 
-    // TODO: Implement this
     type Error<Db: Database> = AlloyBlockError<Db>;
 
     fn block(&self) -> &Self::Block {
@@ -77,7 +76,7 @@ impl<'b> BlockDriver<'b, Shanghai<'b>> for alloy_rpc_types_eth::Block<TxEnvelope
         self.withdrawals.as_ref().map(|w| Shanghai::new(w.as_slice())).unwrap_or_default()
     }
 
-    fn run_txns<'a, Ext, Db: Database + DatabaseCommit>(
+    fn run_txns<'a, Db: Database + DatabaseCommit>(
         &self,
         mut trevm: EvmNeedsTx<'a, Ext, Db, Shanghai<'b>>,
     ) -> RunTxResult<'a, 'b, Ext, Db, Shanghai<'b>, Self> {
@@ -91,7 +90,7 @@ impl<'b> BlockDriver<'b, Shanghai<'b>> for alloy_rpc_types_eth::Block<TxEnvelope
         Ok(trevm)
     }
 
-    fn post_block_checks<Ext, Db: Database + DatabaseCommit>(
+    fn post_block_checks<Db: Database + DatabaseCommit>(
         &self,
         _trevm: &crate::EvmBlockComplete<'_, Ext, Db, Shanghai<'b>>,
     ) -> Result<(), Self::Error<Db>> {
