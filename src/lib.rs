@@ -394,6 +394,8 @@
 )]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![deny(unused_must_use, rust_2018_idioms)]
+#![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
 
 mod driver;
 pub use driver::{

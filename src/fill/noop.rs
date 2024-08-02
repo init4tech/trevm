@@ -3,7 +3,7 @@ use revm::primitives::{BlockEnv, CfgEnv};
 use crate::{Block, Cfg};
 
 /// A no-op block filler.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct NoopBlock;
 
 impl Block for NoopBlock {
@@ -11,7 +11,7 @@ impl Block for NoopBlock {
 }
 
 /// A no-op configuration filler.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct NoopCfg;
 
 impl Cfg for NoopCfg {

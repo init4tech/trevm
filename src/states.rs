@@ -82,7 +82,7 @@ pub(crate) mod sealed {
                 /// A state for the [`Trevm`].
                 ///
                 /// [`Trevm`]: crate::Trevm
-                #[derive(Debug)]
+                #[derive(Debug, Copy, Clone)]
                 pub struct $name { _private: () }
 
                 impl $name {
