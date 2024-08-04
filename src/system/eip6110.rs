@@ -1,6 +1,7 @@
+use alloy_consensus::ReceiptEnvelope;
 use alloy_eips::eip6110::DepositRequest;
 use alloy_primitives::Log;
-use alloy_sol_types::sol;
+use alloy_sol_types::{sol, SolEvent};
 
 /// The address for the Ethereum 2.0 deposit contract on the mainnet.
 pub use alloy_eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS;
@@ -57,6 +58,40 @@ pub fn parse_deposit_from_log(log: &Log<DepositEvent>) -> DepositRequest {
     }
 }
 
+/// Check an iterator of logs for deposit events, parsing them into
+/// [`DepositRequest`]s.
+///
+/// When parsing logs, the following assumptions are made
+///
+/// - The `DepositEvent` is the only event in the deposit contract.
+/// - The deposit contract enforces the length of the fields.
+pub fn check_logs_for_deposits<'a, I>(logs: I) -> impl Iterator<Item = DepositRequest> + 'a
+where
+    I: IntoIterator<Item = &'a Log>,
+    I::IntoIter: 'a,
+{
+    logs.into_iter().filter(|log| log.address == MAINNET_DEPOSIT_CONTRACT_ADDRESS).map(|log| {
+        // We assume that the log is valid because it was emitted by the
+        // deposit contract.
+        let decoded_log = DepositEvent::decode_log(log, false).expect("invalid log");
+        parse_deposit_from_log(&decoded_log)
+    })
+}
+
+/// Find deposit logs in a receipt. Iterates over the logs in the receipt and
+/// returns a [`DepositRequest`] for each log that is emitted by the
+/// deposit contract.
+///
+/// When parsing logs, the following assumptions are made
+///
+/// - The `DepositEvent` is the only event in the deposit contract.
+/// - The deposit contract enforces the length of the fields.
+pub fn check_receipt_for_deposits(
+    receipt: &ReceiptEnvelope,
+) -> impl Iterator<Item = DepositRequest> + '_ {
+    check_logs_for_deposits(receipt.logs())
+}
+
 // Some code above is reproduced from `reth`. It is reused here under the MIT
 // license.
 //
@@ -81,3 +116,46 @@ pub fn parse_deposit_from_log(log: &Log<DepositEvent>) -> DepositRequest {
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+
+#[cfg(test)]
+mod test {
+    use alloy_consensus::{Receipt, ReceiptEnvelope};
+    use alloy_eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS;
+    use alloy_primitives::{Log, LogData};
+    use alloy_sol_types::SolEvent;
+
+    use super::DepositEvent;
+
+    #[test]
+    fn test_eip6110() {
+        let receipt = Receipt {
+            logs: vec![Log {
+                address: MAINNET_DEPOSIT_CONTRACT_ADDRESS,
+                data: LogData::new_unchecked(
+                    vec![DepositEvent::SIGNATURE_HASH],
+                    DepositEvent {
+                        pubkey: [1; 48].to_vec().into(),
+                        withdrawal_credentials: [2; 32].to_vec().into(),
+                        amount: [3; 8].to_vec().into(),
+                        signature: [4; 96].to_vec().into(),
+                        index: [5; 8].to_vec().into(),
+                    }
+                    .encode_data()
+                    .into(),
+                ),
+            }],
+            status: true.into(),
+            cumulative_gas_used: 0,
+        };
+
+        let deposits: Vec<_> =
+            super::check_receipt_for_deposits(&ReceiptEnvelope::Eip1559(receipt.into())).collect();
+
+        assert_eq!(deposits.len(), 1);
+        assert_eq!(deposits[0].pubkey, [1; 48]);
+        assert_eq!(deposits[0].withdrawal_credentials, [2; 32]);
+        assert_eq!(deposits[0].amount, 0x0303030303030303);
+        assert_eq!(deposits[0].signature, [4; 96]);
+        assert_eq!(deposits[0].index, 0x0505050505050505);
+    }
+}

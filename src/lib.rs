@@ -17,8 +17,6 @@
 //! - [`EvmErrored`]: The EVM has executed a transaction and encountered an
 //!   error.
 //! - [`EvmTransacted`]: The EVM has executed a transaction successfully.
-//! - [`EvmBlockComplete`]: The EVM has executed and closed a block and contains
-//!   some populated [`BlockContext`] object
 //!
 //! ## Quickstart
 //!
@@ -27,14 +25,12 @@
 //! there, you should do the following:
 //!
 //! - Fill a Cfg by calling [`Trevm::fill_cfg`] with a [`Cfg`].
-//! - Open a block by calling [`Trevm::open_block`] with a [`Block`].
+//! - Open a block by calling [`Trevm::fill_block`] with a [`Block`].
 //! - Fill a Tx by calling [`Trevm::fill_tx`] with a [`Tx`].
 //! - Run the transaction by calling [`Trevm::run_tx`].
 //! - Handle the result by calling [`EvmTransacted::accept`] or
 //!   [`EvmTransacted::reject`].
 //! - Call [`Trevm::close_block`] to close the block.
-//! - Call[ [`Trevm::take_context`] to get the context object or
-//!   [`Trevm::discard_context`] to drop it.
 //! - Then call [`Trevm::finish`] to get the outputs.
 //!
 //!
@@ -83,76 +79,56 @@
 //! trevm_aliases!(revm::db::InMemoryDB);
 //! ```
 //!
-//! ### [`BlockContext`]
+//! ### [`BlockDriver`] and [`ChainDriver`]
 //!
 //! Trevm handles transaction application, receipts, and pre- and post-block
-//! logic through the [`BlockContext`] trait. The [`BlockContext`] trait is
-//! invoked by [`Trevm`] to manage the lifecycle of a single block. At the start
-//! of a block, the context is opened with [`BlockContext::open_block`], and at
-//! the end of the block, the context is closed with
-//! [`BlockContext::close_block`]. After each transaction, the context's
-//! [`BlockContext::after_tx`] logic controls how and whether the execution
-//! result is applied to the EVM state, and handles per-transaction logic like
-//! generating receipts and tracking senders.
+//! logic through the [`BlockDriver`] and [`ChainDriver`] traits. These
+//! traits invoked by [`Trevm`] via [`EvmNeedsBlock::drive_block`] and
+//! [`EvmNeedsCfg::drive_chain`], respectively.
 //!
-//! Trevm provides a few block context implementations:
+//! To aid in the creation of drivers, Trevm offers helper functions for
+//! common eips:
 //!
-//! - [`Shanghai`]: Shanghai context applies the post-block system
-//!   action (withdrawals) introduced by [EIP-4895].
-//! - [`Cancun`]: Cancun context applies the [`Shanghai`]
-//!   as well as the post-block logic introduced by [EIP-4788].
-//! - [`Prague`]: Prague context applies [`Shanghai`] and
-//!   [`Cancun`] as well as the pre-block logic of [EIP-2935], the
-//!   post-block logic introduced by [EIP-7002] and [EIP-7251], and the
-//!   withdrawal request accumulation logic introduced in [EIP-6110].
-//! - [`BasicContext`]: Basic context applies no pre- or post-block logic, and
-//!   is useful for testing or for applications that do not require the
-//!   real system state.
+//! - [`eip2935`] - Prague's [EIP-2935], which updates historical block
+//!   hashes in a special system contract.
+//! - [`eip4788`] - Cancun's [EIP-4788], which updates historical beacon
+//!   roots in a special system contract.
+//! - [`eip4895`] - Cancun's [EIP-4895], which processes withdrawal
+//!   requests by crediting accounts.
+//! - [`eip6110`] - Prague's [EIP-6110], which extracts deposit
+//!   requests from the withdrawal contract events.
+//! - [`eip7002`] - Prague's [EIP-7002], which extracts [`WithdrawalRequest`]s
+//!   from the system withdrwal contract state.
+//! - [`eip7251`] - Prague's [EIP-7251], which extracts
+//!   [`ConsolidationRequest`]s from the system consolidation contract state.
 //!
-//! Contexts before Shanghai are not currently implemented. In particular,
-//! block and ommer rewards for pre-merge blocks are not implemented.
-//!
-//! The [`BlockContext`] trait methods take a mutable reference to allow the
-//! context to accumulate information about the execution. This is useful for
-//! accumulating receipts, senders, or other information that is more readily
-//! available during execution. It is also useful for pre-block logic, where
-//! the lifecycle may need to accumulate information about the block before the
-//! first transaction is executed, and re-use that information to close the
-//! block. It may also be used to compute statistics or indices that are only
-//! available after the block is closed.
+//! The [`BlockDriver`] and [`ChainDriver`] trait methods take a mutable
+//! reference to allow the driver to accumulate information about the
+//! execution. This is useful for accumulating receipts, senders, or other
+//! information that is more readily available during execution. It is also
+//! useful for pre-block logic, where the lifecycle may need to accumulate
+//! information about the block before the first transaction is executed, and
+//! re-use that information to close the block. It may also be used to compute
+//! statistics or indices that are only available after the block is closed.
 //!
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
-//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx,
-//! # Shanghai, Cancun};
+//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, BlockDriver};
 //! # use alloy_primitives::B256;
-//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
+//! # fn t<C: Cfg, D: BlockDriver<()>>(cfg: &C, mut driver: D)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! // Contexts manage the lifecycle of a single block
-//! let mut context = Cancun::<'static> {
-//!    parent_beacon_root: B256::repeat_byte(0x42),
-//!    shanghai: Shanghai::default(),
-//! };
-//!
-//! let (context, trevm) = EvmBuilder::default()
+//! let trevm = EvmBuilder::default()
 //!     .with_db(InMemoryDB::default())
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
-//!     // The pre-block logic is applied here
-//!     .open_block(block, context)
-//!     // Note that the logic is fallible, so we have to handle errors
-//!     .map_err(EvmErrored::into_error)?
-//!     .run_tx(tx)
-//!     .map_err(EvmErrored::into_error)?
-//!     .accept()
-//!     // Closing the block applies the post-block logic, and is also fallible
-//!     .close_block()
-//!     .map_err(EvmErrored::into_error)?
-//!     // This splits the context, and puts trevm into `EvmNeedsNextBlock`
-//!     .take_context();
+//!     .drive_block(&mut driver);
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! [`BlockDriver`] and [`ChainDriver`] implementations are generic over the
+//! `Ext` type. This means that you can use customized revm extensions and
+//! inspectors in your driver logic.
 //!
 //! ### Handling execution errors
 //!
@@ -161,39 +137,26 @@
 //! provides a method to discard the error and continue execution. This is
 //! useful when you want to continue executing transactions even if one fails.
 //!
-//! Usually, errors will be [`EVMError<Db>`], but [`BlockContext`]
-//! implementations may return other errors. The [`EvmErrored`] type is
-//! generic over the error type, so you can use it with any error type.
+//! Usually, errors will be [`EVMError<Db>`], but [`BlockDriver`] and
+//! [`ChainDriver`] implementations may return other errors. The [`EvmErrored`]
+//! type is generic over the error type, so you can use it with any error type.
 //!
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
-//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx,
-//! # Shanghai, Cancun};
+//! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx};
 //! # use alloy_primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! // Contexts manage the lifecycle of a single block
-//! let mut context = Cancun::<'static> {
-//!    parent_beacon_root: B256::repeat_byte(0x42),
-//!    shanghai: Shanghai::default(),
-//! };
-//!
-//! match EvmBuilder::default()
+//! let trevm = match EvmBuilder::default()
 //!     .with_db(InMemoryDB::default())
 //!     .build_trevm()
 //!     .fill_cfg(cfg)
-//!     // The pre-block logic is applied here
-//!     .open_block(block, context) {
-//!     Ok(trevm) => {
-//!         trevm
-//!     }
-//!     Err(transacted_error) => {
-//!         let (trevm, error) = transacted_error.take_error();
-//!         // Handle the error here, and return the EVM if you want
-//!         // to keep going
-//!         trevm
-//!     }
-//! };
+//!     .fill_block(block)
+//!     .fill_tx(tx)
+//!     .run() {
+//!         Ok(trevm) => trevm.accept_state(),
+//!         Err(e) => e.discard_error(),
+//!     };
 //! # Ok(())
 //! # }
 //! ```
@@ -206,7 +169,7 @@
 //! - Implement the [`PostTx`] trait to apply post-transaction logic/changes.
 //! - Implement your own [`Cfg`], [`Block`], and
 //!   [`Tx`] to fill the EVM from your own data structures.
-//! - Implement your own [`BlockContext`] to apply pre- and post-block logic,
+//! - Implement your own [`BlockDriver`] to apply pre- and post-block logic,
 //!   use custom receipt types, or more.
 //!
 //! ```
@@ -277,8 +240,7 @@
 //! # use revm::{EvmBuilder, db::{InMemoryDB, BundleState}, State,
 //! # StateBuilder};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, BlockOutput,
-//! # EvmNeedsCfg, EvmNeedsBlock, EvmNeedsTx, EvmReady,
-//! # EvmBlockComplete, Shanghai, EvmTransacted};
+//! # EvmNeedsCfg, EvmNeedsBlock, EvmNeedsTx, EvmReady, EvmTransacted};
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! let state = StateBuilder::new_with_database(InMemoryDB::default()).build();
@@ -291,38 +253,30 @@
 //! // Once the cfg is filled, we move to `EvmNeedsBlock`.
 //! let trevm: EvmNeedsBlock<'_, _, _> = trevm.fill_cfg(cfg);
 //!
-//! // Filling the block gets us to `EvmNeedsTx`. `open_block` takes a
-//! // context object that will apply pre- and post-block logic, accumulate
-//! // receipts, and perform other lifecycle tasks.
-//! let trevm: EvmNeedsTx<'_, _, _, _> = trevm.open_block(
+//! // Filling the block gets us to `EvmNeedsTx`.
+//! let trevm: EvmNeedsTx<'_, _, _> = trevm.fill_block(
 //!     block,
-//!     Shanghai::default()
-//! ).map_err(EvmErrored::into_error)?;
+//! );
 //! // Filling the tx gets us to `EvmReady`.
-//! let trevm: EvmReady<'_, _, _, _> = trevm.fill_tx(tx);
+//! let trevm: EvmReady<'_, _, _> = trevm.fill_tx(tx);
 //!
 //! let res: Result<
-//!     EvmTransacted<'_, _, _, _>,
+//!     EvmTransacted<'_, _, _>,
 //!     EvmErrored<'_, _, _, _>,
 //! > = trevm.run();
 //!
 //!
 //! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx`.
 //! // You could also make additional checks and discard the success result here
-//! let trevm: EvmNeedsTx<'_, _, _, _> = match res {
-//!    Ok(trevm) => trevm.accept(),
+//! let trevm: EvmNeedsTx<'_, _, _> = match res {
+//!    Ok(trevm) => trevm.accept_state(),
 //!    Err(e) => e.discard_error(),
 //! };
 //!
-//! // Clearing or closing a block gets us to `EvmNeedsNextBlock`, ready for the
+//! // Clearing or closing a block gets us to `EvmNeedsBlock`, ready for the
 //! // next block.
-//! let trevm: EvmBlockComplete<'_, _, _, _> = trevm
-//!     .close_block()
-//!     .map_err(EvmErrored::into_error)?;;
-//!
-//! // During block execution, a context object
-//! let (context, trevm): (Shanghai<'_>, EvmNeedsBlock<'_, _, _>) = trevm
-//!     .take_context();
+//! let trevm: EvmNeedsBlock<'_, _, _> = trevm
+//!     .close_block();
 //!
 //! // Finishing the EVM gets us the final changes and a list of block outputs
 //! // that includes the transaction receipts.
@@ -340,27 +294,28 @@
 //! +-----+      +-----------+
 //! |Start| ---> |EvmNeedsCfg|
 //! +-----+      +-----------+
-//!                   |                             +----------------+
-//!                   +-- fill_cfg() ----------+--> | EvmNeedsBliock |
-//!                                            |    +----------------+
-//!                                            |          |
-//!         +----------------+                 |          |
-//!     +-- |EvmBlockComplete|--take_context()-+          |
-//!     |   +----------------+  or discard                |
-//!     |            ^                                    |
-//!     |            |                                    |
-//!   finish()       |                                    |
-//!     |       close_block()                             |
-//!     V            |                                    |
-//!  +------+   +----------+                              |
-//!  |Finish|   |EvmNeedsTx| <------ open_block()---------+
-//!  +------+   +----------+
-//!              ^       |                           +--------+
-//!              |       +------- fill_tx() -------> |EvmReady|--+
-//!              |                                   +--------+  |
-//!              |             +-------------+                   |
-//!              +- accept() --|EvmTransacted| <-- run_tx() -----+
-//!              or reject()   +-------------+
+//!                   |
+//!                   +-- fill_cfg() --+
+//!                                    |
+//!                                    V
+//! +------+             +-------------+
+//! |Finish|<- finish() -|EvmNeedsBlock|---+
+//! +------+             +-------------+   |
+//!                        ^               |
+//!                        |               |
+//!            +-----------+               |
+//!            |                           |
+//!       close_block()                    |
+//!            |                           |
+//!   +----------+                         |
+//!   |EvmNeedsTx| <---- fill_block() -----+
+//!   +----------+
+//!    ^       |                           +--------+
+//!    |       +------- fill_tx() -------> |EvmReady|--+
+//!    |                                   +--------+  |
+//!    |             +-------------+                   |
+//!    +- accept() --|EvmTransacted| <-- run_tx() -----+
+//!    or reject()   +-------------+
 //! ```
 //!
 //! A basic block loop should look like this:
@@ -368,7 +323,7 @@
 //! ```no_compile
 //! let mut evm = evm
 //!     .fill_cfg(cfg);
-//!     .open_block(block, pre_block_logic);
+//!     .fill_block(block, pre_block_logic);
 //!
 //! for tx in txs {
 //!     // apply the transaction, discard the error if any
@@ -383,10 +338,20 @@
 //! [typestate pattern]: https://cliffle.com/blog/rust-typestate/
 //! [crate readme]: https://github.com/init4tt/trevm
 //! [EIP-2537]: https://eips.ethereum.org/EIPS/eip-2537
+//! [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
 //! [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
 //! [EIP-4895]: https://eips.ethereum.org/EIPS/eip-4895
+//! [EIP-6110]: https://eips.ethereum.org/EIPS/eip-6110
 //! [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
 //! [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+//! [`eip2935`]: crate::system::eip2935
+//! [`eip4788`]: crate::system::eip4788
+//! [`eip4895`]: crate::system::eip4895
+//! [`eip6110`]: crate::system::eip6110
+//! [`eip7002`]: crate::system::eip7002
+//! [`eip7251`]: crate::system::eip7251
+//! [`WithdrawalRequest`]: alloy_eips::eip7002::WithdrawalRequest
+//! [`ConsolidationRequest`]: alloy_eips::eip7251::ConsolidationRequest
 
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg",
@@ -398,9 +363,7 @@
 #![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
 
 mod driver;
-pub use driver::{
-    AlloyBlockError, BlockDriver, ChainDriver, DriveBlockResult, DriveChainResult, RunTxResult,
-};
+pub use driver::{BlockDriver, ChainDriver, DriveBlockResult, DriveChainResult, RunTxResult};
 
 mod evm;
 pub use evm::Trevm;
@@ -412,23 +375,21 @@ mod fill;
 pub use fill::{Block, Cfg, NoopBlock, NoopCfg, Tx};
 
 mod lifecycle;
-pub use lifecycle::{
-    BasicContext, BlockContext, BlockOutput, Cancun, PostTx, PostflightResult, Prague, Shanghai,
-};
+pub use lifecycle::{ethereum_receipt, BlockOutput, PostTx, PostflightResult};
 
 mod states;
 pub(crate) use states::sealed::*;
 pub use states::{
-    EvmBlockComplete, EvmBlockDriverErrored, EvmChainDriverErrored, EvmErrored, EvmNeedsBlock,
-    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
+    EvmBlockDriverErrored, EvmChainDriverErrored, EvmErrored, EvmNeedsBlock, EvmNeedsCfg,
+    EvmNeedsTx, EvmReady, EvmTransacted,
 };
 
-pub mod syscall;
+pub mod system;
 
 pub use revm;
 
 /// Utilities for testing Trevm or testing with Trevm.
-#[cfg(feature = "test-utils")]
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 
 use revm::{Database, DatabaseCommit, EvmBuilder};

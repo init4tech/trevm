@@ -10,7 +10,7 @@ use revm::{
     primitives::{address, TxKind, U256},
     Evm,
 };
-use trevm::{NoopBlock, NoopCfg, Shanghai, TrevmBuilder, Tx};
+use trevm::{NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 sol! {
     #[allow(missing_docs)]
@@ -63,8 +63,7 @@ async fn main() -> eyre::Result<()> {
         .with_db(cache_db)
         .build_trevm()
         .fill_cfg(&NoopCfg)
-        .open_block(&NoopBlock, Shanghai::default())
-        .unwrap()
+        .fill_block(&NoopBlock)
         .fill_tx(&GetReservesFiller)
         .run()
         .inspect_err(|e| panic!("Execution error {e:?}"))

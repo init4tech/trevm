@@ -1,6 +1,6 @@
 use alloy_consensus::Signed;
 use alloy_primitives::U256;
-use revm::primitives::{BlockEnv, TxEnv};
+use revm::primitives::{BlobExcessGasAndPrice, BlockEnv, TxEnv};
 
 use crate::{Block, Tx};
 
@@ -246,6 +246,40 @@ impl Block for alloy_consensus::Header {
 
     fn tx_count_hint(&self) -> Option<usize> {
         None
+    }
+}
+
+impl Block for alloy_rpc_types_eth::Header {
+    fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
+        let BlockEnv {
+            number,
+            coinbase,
+            timestamp,
+            gas_limit,
+            basefee,
+            difficulty,
+            prevrandao,
+            blob_excess_gas_and_price,
+        } = block_env;
+        *number = U256::from(self.number.unwrap_or_default());
+        *coinbase = self.miner;
+        *timestamp = U256::from(self.timestamp);
+        *gas_limit = U256::from(self.gas_limit);
+        *basefee = U256::from(self.base_fee_per_gas.unwrap_or_default());
+        *difficulty = U256::from(self.difficulty);
+        *prevrandao = self.mix_hash;
+        *blob_excess_gas_and_price =
+            self.blob_gas_used.map(|ebg| BlobExcessGasAndPrice::new(ebg as u64));
+    }
+}
+
+impl<T> Block for alloy_rpc_types_eth::Block<T> {
+    fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
+        self.header.fill_block_env(block_env);
+    }
+
+    fn tx_count_hint(&self) -> Option<usize> {
+        Some(self.transactions.len())
     }
 }
 

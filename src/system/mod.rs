@@ -23,10 +23,18 @@
 mod fill;
 pub use fill::{SystemTx, DEFAULT_SYSTEM_CALLER};
 
+/// Helpers for Prague historical block hash [EIP-2935] system actions.
+pub mod eip2935;
+
 /// Helpers for Cancun beacon root [EIP-4788] system actions.
 ///
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
 pub mod eip4788;
+
+/// Helpers for Cancun withdrawal [EIP-4895] system actions.
+///
+/// [EIP-4895]: https://eips.ethereum.org/EIPS/eip-4895
+pub mod eip4895;
 
 /// Helpers for Shanghai withdrawal [EIP-6110] system actions.
 ///
@@ -43,12 +51,23 @@ pub mod eip7002;
 /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
 pub mod eip7251;
 
-use crate::Tx;
-use alloy_primitives::U256;
+use crate::{EvmExtUnchecked, Tx};
+use alloy_primitives::{Address, Bytes, U256};
 use revm::{
-    primitives::{EVMError, ExecutionResult, ResultAndState},
+    primitives::{Bytecode, EVMError, ExecutionResult, ResultAndState, KECCAK_EMPTY},
     Database, DatabaseCommit, Evm,
 };
+
+fn checked_insert_code<'a, Ext, Db: Database + DatabaseCommit>(
+    evm: &mut Evm<'_, Ext, Db>,
+    address: Address,
+    code: &Bytes,
+) -> Result<(), EVMError<Db::Error>> {
+    if evm.account(address).map_err(EVMError::Database)?.info.code_hash == KECCAK_EMPTY {
+        evm.set_bytecode(address, Bytecode::new_raw(code.clone())).map_err(EVMError::Database)?;
+    }
+    Ok(())
+}
 
 /// Clean up the system call, restoring the block env.
 fn cleanup_syscall<Ext, Db>(
@@ -78,7 +97,7 @@ fn cleanup_syscall<Ext, Db>(
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
 /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
 /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-pub fn execute_system_tx<Ext, Db>(
+pub(crate) fn execute_system_tx<Ext, Db>(
     evm: &mut Evm<'_, Ext, Db>,
     syscall: &SystemTx,
 ) -> Result<ExecutionResult, EVMError<Db::Error>>

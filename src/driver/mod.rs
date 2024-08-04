@@ -1,6 +1,3 @@
-mod alloy;
-pub use alloy::AlloyBlockError;
-
 mod block;
 pub use block::{BlockDriver, DriveBlockResult, RunTxResult};
 
