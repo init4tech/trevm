@@ -45,7 +45,7 @@ impl SystemTx {
 ///
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
 pub fn eip4788_timestamp_slot(timestamp: u64) -> U256 {
-    U256::from(timestamp % HISTORY_BUFFER_LENGTH as u64)
+    U256::from(timestamp % HISTORY_BUFFER_LENGTH)
 }
 
 /// The slot for the [EIP-4788] root storage.

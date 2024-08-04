@@ -58,7 +58,7 @@ use revm::{
     Database, DatabaseCommit, Evm,
 };
 
-fn checked_insert_code<'a, Ext, Db: Database + DatabaseCommit>(
+fn checked_insert_code<Ext, Db: Database + DatabaseCommit>(
     evm: &mut Evm<'_, Ext, Db>,
     address: Address,
     code: &Bytes,
