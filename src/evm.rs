@@ -853,14 +853,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, State<Db>> {
 // --- NEEDS TX
 
 impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
-    /// Close the current block, applying some logic, and returning the EVM
-    /// ready for the next block.
-    ///
-    /// This is intended to be used for post-block logic, such as applying
-    /// post-block hooks introduced in [EIP-7002] or [EIP-7251].
-    ///
-    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+    /// Close the current block, returning the EVM ready for the next block.
     pub fn close_block(self) -> EvmNeedsBlock<'a, Ext, Db> {
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
@@ -913,7 +906,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         unsafe { std::mem::transmute(self) }
     }
 
-    /// Execute the loaded transaction.
+    /// Execute the loaded transaction. This is a wrapper around
+    /// [`Evm::transact`] and produces either [`EvmTransacted`] or
+    /// [`EvmErrored`].
     pub fn run(mut self) -> Result<EvmTransacted<'a, Ext, Db>, EvmErrored<'a, Ext, Db>> {
         let result = self.inner.transact();
 
@@ -935,7 +930,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, E> EvmErrored<'a, Ext, Db, E> {
     }
 
     /// Inspect the error with a closure.
-    pub fn inspect_error<F, T>(&self, f: F) -> T
+    pub fn inspect_err<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&E) -> T,
     {
@@ -954,7 +949,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, E> EvmErrored<'a, Ext, Db, E> {
 
     /// Reset the EVM, returning the error and the EVM ready for the next
     /// transaction.
-    pub fn take_error(self) -> (E, EvmNeedsTx<'a, Ext, Db>) {
+    pub fn take_err(self) -> (E, EvmNeedsTx<'a, Ext, Db>) {
         let Trevm { inner, state: ErroredState { error } } = self;
         (error, Trevm { inner, state: NeedsTx::new() })
     }
@@ -982,7 +977,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmErrored<'a, Ext, Db, EVMError<Db
     }
 
     /// Fallible cast to a [`InvalidTransaction`].
-    pub const fn as_transaction_err(&self) -> Option<&InvalidTransaction> {
+    pub const fn as_transaction_error(&self) -> Option<&InvalidTransaction> {
         match &self.state.error {
             EVMError::Transaction(err) => Some(err),
             _ => None,
