@@ -363,7 +363,10 @@
 #![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
 
 mod driver;
-pub use driver::{BlockDriver, ChainDriver, DriveBlockResult, DriveChainResult, RunTxResult};
+pub use driver::{
+    BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
+    RunTxResult,
+};
 
 mod evm;
 pub use evm::Trevm;

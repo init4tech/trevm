@@ -1,4 +1,4 @@
-use crate::{BlockDriver, ChainDriver, Trevm};
+use crate::{driver::BundleDriver, BlockDriver, ChainDriver, Trevm};
 use revm::{primitives::EVMError, Database};
 use sealed::*;
 
@@ -63,6 +63,12 @@ pub type EvmBlockDriverErrored<'a, Ext, Db, T> =
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
 pub type EvmChainDriverErrored<'a, Ext, Db, T> =
     EvmErrored<'a, Ext, Db, <T as ChainDriver<Ext>>::Error<Db>>;
+
+/// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
+///
+/// This is an [`EvmErrored`] parameterized with the driver's error type.
+pub(crate) type EvmBundleDriverErrored<'a, Ext, Db, T> =
+    EvmErrored<'a, Ext, Db, <T as BundleDriver<Ext>>::Error<Db>>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]
 pub(crate) mod sealed {

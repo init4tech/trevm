@@ -1,7 +1,8 @@
 use crate::{
-    driver::DriveBlockResult, Block, BlockDriver, Cfg, ChainDriver, DriveChainResult, ErroredState,
-    EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
-    HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
+    driver::DriveBlockResult, Block, BlockDriver, BundleDriver, Cfg, ChainDriver,
+    DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock,
+    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
+    TransactedState, Tx,
 };
 use alloy_primitives::{Address, Bytes, U256};
 use revm::{
@@ -857,6 +858,20 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     pub fn close_block(self) -> EvmNeedsBlock<'a, Ext, Db> {
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { std::mem::transmute(self) }
+    }
+
+    /// Drive a bundle to completion, apply some post-bundle logic, and return the
+    /// EVM ready for the next bundle or tx.
+    pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<'a, Ext, Db, D>
+    where
+        D: BundleDriver<Ext>,
+    {
+        let trevm = driver.run_txns(self)?;
+
+        match driver.post_bundle(&trevm) {
+            Ok(_) => Ok(trevm),
+            Err(e) => Err(trevm.errored(e)),
+        }
     }
 
     /// Fill the transaction environment.
