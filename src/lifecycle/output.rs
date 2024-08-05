@@ -1,4 +1,5 @@
 use alloy_consensus::{ReceiptEnvelope, TxReceipt};
+use alloy_eips::eip6110::DepositRequest;
 use alloy_primitives::{Address, Log};
 
 /// Information externalized during block execution.
@@ -71,5 +72,12 @@ impl<T: TxReceipt> BlockOutput<T> {
     /// Push a sender onto the list of senders.
     fn push_sender(&mut self, sender: Address) {
         self.senders.push(sender);
+    }
+
+    /// Find deposits in the logs of the transactions in the block.
+    pub fn find_deposit_logs(&self) -> impl Iterator<Item = DepositRequest> + '_ {
+        crate::system::eip6110::check_logs_for_deposits(
+            self.receipts().iter().flat_map(TxReceipt::logs),
+        )
     }
 }

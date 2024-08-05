@@ -7,7 +7,7 @@ use revm::{
     primitives::{hex, AccountInfo, Address, Bytecode, TransactTo, U256},
     EvmBuilder, InMemoryDB,
 };
-use trevm::{trevm_aliases, NoopBlock, NoopCfg, Shanghai, TrevmBuilder, Tx};
+use trevm::{trevm_aliases, NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 /// Foundry's default Counter.sol contract bytecode.
 const CONTRACT_BYTECODE: &str = "0x6080604052348015600f57600080fd5b5060043610603c5760003560e01c80633fb5c1cb1460415780638381f58a146053578063d09de08a14606d575b600080fd5b6051604c3660046083565b600055565b005b605b60005481565b60405190815260200160405180910390f35b6051600080549080607c83609b565b9190505550565b600060208284031215609457600080fd5b5035919050565b60006001820160ba57634e487b7160e01b600052601160045260246000fd5b506001019056fea2646970667358221220091e48831e9eee32d4571d6291233a4fdaaa34b7dced8770f36f5368be825c5264736f6c63430008190033";
@@ -51,8 +51,7 @@ fn main() {
         .append_handler_register(inspector_handle_register)
         .build_trevm()
         .fill_cfg(&NoopCfg)
-        .open_block(&NoopBlock, Shanghai::default())
-        .unwrap();
+        .fill_block(&NoopBlock);
 
     let account = evm.read_account_ref(CONTRACT_ADDR).unwrap();
     println!("account: {account:?}");

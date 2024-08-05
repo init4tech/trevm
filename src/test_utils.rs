@@ -3,33 +3,12 @@ use alloy_primitives::{Address, U256};
 use revm::{
     db::{CacheDB, EmptyDB, InMemoryDB},
     inspector_handle_register,
+    inspectors::TracerEip3155,
     primitives::{AccountInfo, Bytecode},
-    Database, DatabaseCommit, EvmBuilder, GetInspector,
+    EvmBuilder, GetInspector,
 };
 
 pub use revm::test_utils as revm_test_utils;
-
-impl<'a, Ext, Db: Database + DatabaseCommit, State> Trevm<'a, Ext, Db, State> {
-    /// Make a new [`Trevm`] with a [`InMemoryDB`].
-    pub fn test_trevm() -> EvmNeedsCfg<'static, (), InMemoryDB> {
-        test_trevm()
-    }
-
-    /// Make a new [`Trevm`], funding the provided accounts with the given
-    /// amounts.
-    pub fn test_trevm_with_funds<'b, I>(i: I) -> EvmNeedsCfg<'static, (), InMemoryDB>
-    where
-        I: IntoIterator<Item = &'b (Address, U256)>,
-    {
-        let mut trevm = test_trevm();
-
-        for (address, amount) in i {
-            trevm.test_set_balance(*address, *amount);
-        }
-
-        trevm
-    }
-}
 
 impl<'a, Ext, State> Trevm<'a, Ext, InMemoryDB, State> {
     /// Modify an account with the provide closure. Returns the original
@@ -107,7 +86,28 @@ where
         .build_trevm()
 }
 
+/// Make a new [`Trevm`], funding the provided accounts with the given
+/// amounts.
+pub fn test_trevm_with_funds<'b, I>(i: I) -> EvmNeedsCfg<'static, (), InMemoryDB>
+where
+    I: IntoIterator<Item = &'b (Address, U256)>,
+{
+    let mut trevm = test_trevm();
+
+    for (address, amount) in i {
+        trevm.test_set_balance(*address, *amount);
+    }
+
+    trevm
+}
+
 /// Make a new [`Trevm`] with an in-memory database.
 pub fn test_trevm() -> EvmNeedsCfg<'static, (), CacheDB<EmptyDB>> {
     EvmBuilder::default().with_db(CacheDB::new(EmptyDB::default())).build_trevm()
+}
+
+/// Make a new [`Trevm`] with an in-memory database and a tracer inspector.
+/// The tracer will print all EVM instructions to stdout.
+pub fn test_trevm_tracing() -> EvmNeedsCfg<'static, TracerEip3155, CacheDB<EmptyDB>> {
+    test_trevm_with_inspector(TracerEip3155::new(Box::new(std::io::stdout())))
 }
