@@ -866,7 +866,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     where
         D: BundleDriver<Ext>,
     {
-        let trevm = driver.run_txns(self)?;
+        let trevm = driver.run_bundle(self)?;
 
         match driver.post_bundle(&trevm) {
             Ok(_) => Ok(trevm),

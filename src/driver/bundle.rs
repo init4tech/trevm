@@ -12,7 +12,7 @@ pub trait BundleDriver<Ext> {
     type Error<Db: Database>: std::error::Error + From<EVMError<Db::Error>>;
 
     /// Run the transactions contained in the bundle.
-    fn run_txns<'a, Db: Database + DatabaseCommit>(
+    fn run_bundle<'a, Db: Database + DatabaseCommit>(
         &mut self,
         trevm: EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self>;
