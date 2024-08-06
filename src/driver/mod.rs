@@ -1,3 +1,5 @@
+mod alloy;
+
 mod block;
 pub use block::{BlockDriver, DriveBlockResult, RunTxResult};
 
