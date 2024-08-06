@@ -2,7 +2,7 @@ use crate::{Block, BundleDriver, DriveBundleResult};
 use alloy_consensus::TxEnvelope;
 use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
 use alloy_primitives::U256;
-use alloy_rpc_types_mev::EthCallBundle;
+use alloy_rpc_types_mev::{EthCallBundle, EthSendBundle};
 use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
 
@@ -12,6 +12,9 @@ pub enum BundleError<Db: revm::Database> {
     /// The block number of the bundle does not match the block number of the revm block configuration.
     #[error("revm block number must match the bundle block number")]
     BlockNumberMismatch,
+    /// The timestamp of the bundle is out of range.
+    #[error("timestamp out of range")]
+    TimestampOutOfRange,
     /// The bundle was reverted (or halted).
     #[error("bundle reverted")]
     BundleReverted,
@@ -35,6 +38,7 @@ impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
 impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::TimestampOutOfRange => write!(f, "TimestampOutOfRange"),
             Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
             Self::BundleReverted => write!(f, "BundleReverted"),
             Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
@@ -137,6 +141,77 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
             Ok(trevm) => Ok(trevm),
             Err(e) => Err(e),
         }
+    }
+
+    fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(
+        &mut self,
+        _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
+    ) -> Result<(), Self::Error<Db>> {
+        Ok(())
+    }
+}
+
+impl<Ext> BundleDriver<Ext> for EthSendBundle {
+    type Error<Db: revm::Database> = BundleError<Db>;
+
+    fn run_bundle<'a, Db: revm::Database + revm::DatabaseCommit>(
+        &mut self,
+        trevm: crate::EvmNeedsTx<'a, Ext, Db>,
+    ) -> DriveBundleResult<'a, Ext, Db, Self> {
+        // 1. Check if the block we're in is valid for this bundle. Both must match
+        if trevm.inner().block().number.to::<u64>() != self.block_number {
+            return Err(trevm.errored(BundleError::BlockNumberMismatch));
+        }
+
+        // 2. Check for start timestamp range validity
+        if let Some(min_timestamp) = self.min_timestamp {
+            if trevm.inner().block().timestamp.to::<u64>() < min_timestamp {
+                return Err(trevm.errored(BundleError::TimestampOutOfRange));
+            }
+        }
+
+        // 3. Check for end timestamp range validity
+        if let Some(max_timestamp) = self.max_timestamp {
+            if trevm.inner().block().timestamp.to::<u64>() > max_timestamp {
+                return Err(trevm.errored(BundleError::TimestampOutOfRange));
+            }
+        }
+
+        let mut t = trevm;
+
+        for raw_tx in self.txs.clone().into_iter() {
+            // Decode the transaction
+            let tx = TxEnvelope::decode_2718(&mut raw_tx.to_vec().as_slice());
+
+            let tx = match tx {
+                Ok(tx) => tx,
+                Err(e) => return Err(t.errored(BundleError::TransactionDecodingError(e))),
+            };
+
+            // Run the transaction
+            let run_result = match t.run_tx(&tx) {
+                Ok(res) => res,
+                Err(e) => return Err(e.map_err(|e| BundleError::EVMError { inner: e })),
+            };
+
+            // Accept the state if the transaction was successful and the bundle did not revert or halt
+            let trevm = match run_result.result() {
+                ExecutionResult::Success { .. } => run_result.accept_state(),
+                ExecutionResult::Revert { .. } | ExecutionResult::Halt { .. } => {
+                    // If the transaction reverted but it is contained in the set of transactions allowed to revert,
+                    // then we discard the state and move on.
+                    if self.reverting_tx_hashes.contains(tx.tx_hash()) {
+                        run_result.reject()
+                    } else {
+                        return Err(run_result.errored(BundleError::BundleReverted));
+                    }
+                }
+            };
+
+            t = trevm;
+        }
+
+        Ok(t)
     }
 
     fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(
