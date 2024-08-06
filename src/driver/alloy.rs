@@ -100,44 +100,39 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
 
         let bundle_filler = BundleBlockFiller::from(self.clone());
 
-        let run_result = trevm.try_with_block(
-            |trevm| {
-                let mut trevm = trevm;
+        let run_result = trevm.try_with_block(&bundle_filler, |trevm| {
+            let mut trevm = trevm;
 
-                for raw_tx in self.txs.clone().into_iter() {
-                    let tx = TxEnvelope::decode(&mut raw_tx.to_vec().as_slice());
+            for raw_tx in self.txs.clone().into_iter() {
+                let tx = TxEnvelope::decode(&mut raw_tx.to_vec().as_slice());
 
-                    let tx = match tx {
-                        Ok(tx) => tx,
-                        Err(e) => {
-                            return Err(trevm.errored(BundleError::TransactionDecodingError(e)))
-                        }
-                    };
+                let tx = match tx {
+                    Ok(tx) => tx,
+                    Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
+                };
 
-                    let run_result = trevm.run_tx(&tx);
+                let run_result = trevm.run_tx(&tx);
 
-                    match run_result {
-                        // return immediately if errored
-                        Err(e) => {
-                            return Err(e.map_err(|e| BundleError::EVMError { inner: e }));
-                        }
-                        // Accept the state, and move on
-                        Ok(res) => match res.result() {
-                            ExecutionResult::Revert { .. } | ExecutionResult::Halt { .. } => {
-                                return Err(res.errored(BundleError::BundleReverted));
-                            }
-                            ExecutionResult::Success { .. } => {
-                                trevm = res.accept_state();
-                            }
-                        },
+                match run_result {
+                    // return immediately if errored
+                    Err(e) => {
+                        return Err(e.map_err(|e| BundleError::EVMError { inner: e }));
                     }
+                    // Accept the state, and move on
+                    Ok(res) => match res.result() {
+                        ExecutionResult::Revert { .. } | ExecutionResult::Halt { .. } => {
+                            return Err(res.errored(BundleError::BundleReverted));
+                        }
+                        ExecutionResult::Success { .. } => {
+                            trevm = res.accept_state();
+                        }
+                    },
                 }
+            }
 
-                // return the final state
-                Ok(trevm)
-            },
-            &bundle_filler,
-        );
+            // return the final state
+            Ok(trevm)
+        });
 
         match run_result {
             Ok(trevm) => Ok(trevm),

@@ -814,7 +814,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
 
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState> {
     /// Run a function with the provided block, then restore the previous block.
-    pub fn with_block<F, B, NewState>(mut self, f: F, b: &B) -> Trevm<'a, Ext, Db, NewState>
+    pub fn with_block<F, B, NewState>(mut self, b: &B, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
         F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         B: Block,
@@ -830,8 +830,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
     /// Run a fallible function with the provided block, then restore the previous block.
     pub fn try_with_block<F, B, NewState, E>(
         mut self,
-        f: F,
         b: &B,
+        f: F,
     ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>
     where
         F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>,
