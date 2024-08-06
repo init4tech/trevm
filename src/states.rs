@@ -148,6 +148,7 @@ pub(crate) mod sealed {
 /// - [`EvmErrored`]
 /// - [`EvmBlockDriverErrored`]
 /// - [`EvmChainDriverErrored`]
+/// - [`EvmBundleDriverErrored`]
 ///
 /// ## Basic usage:
 ///
@@ -266,6 +267,12 @@ macro_rules! trevm_aliases {
             ///
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
             pub type EvmChainDriverErrored<'a, T> = $crate::EvmChainDriverErrored<'a, $ext, $db, T>;
+
+            /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
+            ///
+            /// This is an [`EvmErrored`] parameterized with the driver's error type.
+            pub type EvmBundleDriverErrored<'a, T> =
+                $crate::EvmBundleDriverErrored<'a, $ext, $db, T>;
         }
     };
 
@@ -338,6 +345,12 @@ macro_rules! trevm_aliases {
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
             pub type EvmChainDriverErrored<'a, T> =
                 $crate::EvmChainDriverErrored<'static, $ext, $db, T>;
+
+            /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
+            ///
+            /// This is an [`EvmErrored`] parameterized with the driver's error type.
+            pub type EvmBundleDriverErrored<'a, T> =
+                $crate::EvmBundleDriverErrored<'static, $ext, $db, T>;
         }
     };
 }
