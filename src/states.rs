@@ -67,7 +67,7 @@ pub type EvmChainDriverErrored<'a, Ext, Db, T> =
 /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
-pub(crate) type EvmBundleDriverErrored<'a, Ext, Db, T> =
+pub type EvmBundleDriverErrored<'a, Ext, Db, T> =
     EvmErrored<'a, Ext, Db, <T as BundleDriver<Ext>>::Error<Db>>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]

@@ -7,16 +7,24 @@ use alloy_rpc_types_mev::EthCallBundle;
 use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
 
+/// Possible errors that can occur while driving a bundle.
 #[derive(Clone, Error)]
-enum BundleError<Db: revm::Database> {
+pub enum BundleError<Db: revm::Database> {
+    /// The block number of the bundle does not match the block number of the revm block configuration.
     #[error("revm block number must match the bundle block number")]
     BlockNumberMismatch,
+    /// The bundle was reverted (or halted).
     #[error("bundle reverted")]
     BundleReverted,
+    /// An error occurred while decoding a transaction contained in the bundle.
     #[error("transaction decoding error")]
     TransactionDecodingError(#[from] alloy_rlp::Error),
+    /// An error occurred while running the EVM.
     #[error("internal EVM Error")]
-    EVMError { inner: EVMError<Db::Error> },
+    EVMError {
+        /// The error that occurred while running the EVM.
+        inner: EVMError<Db::Error>,
+    },
 }
 
 impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
@@ -60,6 +68,9 @@ impl Block for BundleBlockFiller {
         if let Some(base_fee) = self.base_fee {
             block_env.basefee = U256::from(base_fee);
         }
+        if let Some(block_number) = self.block_number.as_number() {
+            block_env.number = U256::from(block_number);
+        }
     }
 }
 
@@ -83,22 +94,24 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
         // 1. Check if the block we're in is valid for this bundle. Both must match
-        if trevm.inner().block().number.to() != self.block_number {
+        if trevm.inner().block().number.to::<u64>() != self.block_number {
             return Err(trevm.errored(BundleError::BlockNumberMismatch));
         }
 
         let bundle_filler = BundleBlockFiller::from(self.clone());
 
-        let trevm = trevm.with_block(
+        let run_result = trevm.try_with_block(
             |trevm| {
                 let mut trevm = trevm;
 
-                for raw_tx in self.txs.into_iter() {
+                for raw_tx in self.txs.clone().into_iter() {
                     let tx = TxEnvelope::decode(&mut raw_tx.to_vec().as_slice());
 
                     let tx = match tx {
                         Ok(tx) => tx,
-                        Err(e) => return trevm.errored(BundleError::TransactionDecodingError(e)),
+                        Err(e) => {
+                            return Err(trevm.errored(BundleError::TransactionDecodingError(e)))
+                        }
                     };
 
                     let run_result = trevm.run_tx(&tx);
@@ -106,14 +119,12 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
                     match run_result {
                         // return immediately if errored
                         Err(e) => {
-                            return trevm.errored(BundleError::EVMError {
-                                inner: EVMError::Database(e.error()),
-                            })
+                            return Err(e.map_err(|e| BundleError::EVMError { inner: e }));
                         }
                         // Accept the state, and move on
                         Ok(res) => match res.result() {
                             ExecutionResult::Revert { .. } | ExecutionResult::Halt { .. } => {
-                                return trevm.errored(BundleError::BundleReverted);
+                                return Err(res.errored(BundleError::BundleReverted));
                             }
                             ExecutionResult::Success { .. } => {
                                 trevm = res.accept_state();
@@ -123,12 +134,15 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
                 }
 
                 // return the final state
-                trevm
+                Ok(trevm)
             },
             &bundle_filler,
         );
 
-        Ok(trevm)
+        match run_result {
+            Ok(trevm) => Ok(trevm),
+            Err(e) => Err(e),
+        }
     }
 
     fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(

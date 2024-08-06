@@ -364,8 +364,8 @@
 
 mod driver;
 pub use driver::{
-    BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
-    RunTxResult,
+    BlockDriver, BundleDriver, BundleError, ChainDriver, DriveBlockResult, DriveBundleResult,
+    DriveChainResult, RunTxResult,
 };
 
 mod evm;
@@ -383,8 +383,8 @@ pub use lifecycle::{ethereum_receipt, BlockOutput, PostTx, PostflightResult};
 mod states;
 pub(crate) use states::sealed::*;
 pub use states::{
-    EvmBlockDriverErrored, EvmChainDriverErrored, EvmErrored, EvmNeedsBlock, EvmNeedsCfg,
-    EvmNeedsTx, EvmReady, EvmTransacted,
+    EvmBlockDriverErrored, EvmBundleDriverErrored, EvmChainDriverErrored, EvmErrored,
+    EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
 };
 
 pub mod system;

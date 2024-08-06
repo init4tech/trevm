@@ -1,4 +1,5 @@
 mod alloy;
+pub use alloy::BundleError;
 
 mod block;
 pub use block::{BlockDriver, DriveBlockResult, RunTxResult};

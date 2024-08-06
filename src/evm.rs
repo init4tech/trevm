@@ -826,6 +826,31 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
         *this.inner.block_mut() = previous;
         this
     }
+
+    /// Run a fallible function with the provided block, then restore the previous block.
+    pub fn try_with_block<F, B, NewState, E>(
+        mut self,
+        f: F,
+        b: &B,
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>
+    where
+        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>,
+        B: Block,
+        NewState: HasBlock,
+    {
+        let previous = std::mem::take(self.inner.block_mut());
+        b.fill_block_env(self.inner.block_mut());
+        match f(self) {
+            Ok(mut evm) => {
+                *evm.inner.block_mut() = previous;
+                Ok(evm)
+            }
+            Err(mut evm) => {
+                *evm.inner.block_mut() = previous;
+                Err(evm)
+            }
+        }
+    }
 }
 
 // --- Needs Block with State<Db>
