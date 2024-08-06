@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{Block, BundleDriver, DriveBundleResult};
 use alloy_consensus::TxEnvelope;
 use alloy_eips::BlockNumberOrTag;
@@ -11,8 +13,14 @@ use thiserror::Error;
 enum BundleError<Db: revm::Database> {
     #[error("revm block number must match the bundle block number")]
     BlockNumberMimatch,
-    #[error(transparent)]
-    DatabaseError(#[from] EVMError<Db::Error>),
+    #[error("Internal EVM Error")]
+    EVMError { inner: EVMError<Db::Error> },
+}
+
+impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
+    fn from(inner: EVMError<Db::Error>) -> Self {
+        Self::EVMError { inner }
+    }
 }
 
 /// A block filler for the bundle, used to fill in the block data specified for the bundle.
