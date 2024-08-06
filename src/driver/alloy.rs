@@ -1,8 +1,7 @@
 use crate::{Block, BundleDriver, DriveBundleResult};
 use alloy_consensus::TxEnvelope;
-use alloy_eips::BlockNumberOrTag;
+use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
 use alloy_primitives::U256;
-use alloy_rlp::Decodable;
 use alloy_rpc_types_mev::EthCallBundle;
 use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
@@ -18,7 +17,7 @@ pub enum BundleError<Db: revm::Database> {
     BundleReverted,
     /// An error occurred while decoding a transaction contained in the bundle.
     #[error("transaction decoding error")]
-    TransactionDecodingError(#[from] alloy_rlp::Error),
+    TransactionDecodingError(#[from] alloy_eips::eip2718::Eip2718Error),
     /// An error occurred while running the EVM.
     #[error("internal EVM Error")]
     EVMError {
@@ -104,7 +103,7 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
             let mut trevm = trevm;
 
             for raw_tx in self.txs.clone().into_iter() {
-                let tx = TxEnvelope::decode(&mut raw_tx.to_vec().as_slice());
+                let tx = TxEnvelope::decode_2718(&mut raw_tx.to_vec().as_slice());
 
                 let tx = match tx {
                     Ok(tx) => tx,
