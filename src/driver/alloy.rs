@@ -1,5 +1,3 @@
-use std::{f32::consts::E, fmt::Debug};
-
 use crate::{Block, BundleDriver, DriveBundleResult};
 use alloy_consensus::TxEnvelope;
 use alloy_eips::BlockNumberOrTag;
@@ -9,7 +7,7 @@ use alloy_rpc_types_mev::EthCallBundle;
 use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
 
-#[derive(Debug, Clone, Error)]
+#[derive(Clone, Error)]
 enum BundleError<Db: revm::Database> {
     #[error("revm block number must match the bundle block number")]
     BlockNumberMismatch,
@@ -24,6 +22,17 @@ enum BundleError<Db: revm::Database> {
 impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
     fn from(inner: EVMError<Db::Error>) -> Self {
         Self::EVMError { inner }
+    }
+}
+
+impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
+            Self::BundleReverted => write!(f, "BundleReverted"),
+            Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
+            Self::EVMError { .. } => write!(f, "EVMError"),
+        }
     }
 }
 
