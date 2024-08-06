@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{f32::consts::E, fmt::Debug};
 
 use crate::{Block, BundleDriver, DriveBundleResult};
 use alloy_consensus::TxEnvelope;
@@ -6,14 +6,18 @@ use alloy_eips::BlockNumberOrTag;
 use alloy_primitives::U256;
 use alloy_rlp::Decodable;
 use alloy_rpc_types_mev::EthCallBundle;
-use revm::primitives::EVMError;
+use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
 enum BundleError<Db: revm::Database> {
     #[error("revm block number must match the bundle block number")]
-    BlockNumberMimatch,
-    #[error("Internal EVM Error")]
+    BlockNumberMismatch,
+    #[error("bundle reverted")]
+    BundleReverted,
+    #[error("transaction decoding error")]
+    TransactionDecodingError(#[from] alloy_rlp::Error),
+    #[error("internal EVM Error")]
     EVMError { inner: EVMError<Db::Error> },
 }
 
@@ -71,7 +75,7 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
         // 1. Check if the block we're in is valid for this bundle. Both must match
         if trevm.inner().block().number.to() != self.block_number {
-            return Err(trevm.errored(BundleError::BlockNumberMimatch));
+            return Err(trevm.errored(BundleError::BlockNumberMismatch));
         }
 
         let bundle_filler = BundleBlockFiller::from(self.clone());
@@ -81,16 +85,31 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
                 let mut trevm = trevm;
 
                 for raw_tx in self.txs.into_iter() {
-                    let tx = TxEnvelope::decode(&mut raw_tx.to_vec().as_slice()).unwrap();
+                    let tx = TxEnvelope::decode(&mut raw_tx.to_vec().as_slice());
+
+                    let tx = match tx {
+                        Ok(tx) => tx,
+                        Err(e) => return trevm.errored(BundleError::TransactionDecodingError(e)),
+                    };
+
                     let run_result = trevm.run_tx(&tx);
 
                     match run_result {
                         // return immediately if errored
-                        Err(e) => return e,
-                        // Accept the state, and move on
-                        Ok(res) => {
-                            trevm = res.accept_state();
+                        Err(e) => {
+                            return trevm.errored(BundleError::EVMError {
+                                inner: EVMError::Database(e.error()),
+                            })
                         }
+                        // Accept the state, and move on
+                        Ok(res) => match res.result() {
+                            ExecutionResult::Revert { .. } | ExecutionResult::Halt { .. } => {
+                                return trevm.errored(BundleError::BundleReverted);
+                            }
+                            ExecutionResult::Success { .. } => {
+                                trevm = res.accept_state();
+                            }
+                        },
                     }
                 }
 
