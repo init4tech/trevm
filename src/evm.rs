@@ -517,10 +517,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
     /// Run a function with the provided configuration, then restore the
     /// previous configuration. This will not affect the block and tx, if those
     /// have been filled.
-    pub fn with_cfg<F, C, NewState>(mut self, f: F, cfg: &C) -> Trevm<'a, Ext, Db, NewState>
+    pub fn with_cfg<C, F, NewState>(mut self, cfg: &C, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
-        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         C: Cfg,
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasCfg,
     {
         let previous = std::mem::take(self.inner.cfg_mut());
@@ -814,10 +814,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
 
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState> {
     /// Run a function with the provided block, then restore the previous block.
-    pub fn with_block<F, B, NewState>(mut self, b: &B, f: F) -> Trevm<'a, Ext, Db, NewState>
+    pub fn with_block<B, F, NewState>(mut self, b: &B, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
-        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         B: Block,
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasBlock,
     {
         let previous = std::mem::take(self.inner.block_mut());
@@ -828,7 +828,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
     }
 
     /// Run a fallible function with the provided block, then restore the previous block.
-    pub fn try_with_block<F, B, NewState, E>(
+    pub fn try_with_block<B, F, NewState, E>(
         mut self,
         b: &B,
         f: F,
@@ -920,10 +920,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
     /// Run a function with the provided transaction, then restore the previous
     /// transaction.
-    pub fn with_tx<F, T, NewState>(mut self, f: F, t: &T) -> Trevm<'a, Ext, Db, NewState>
+    pub fn with_tx<T, F, NewState>(mut self, t: &T, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
-        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         T: Tx,
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasTx,
     {
         let previous = std::mem::take(self.inner.tx_mut());
