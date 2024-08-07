@@ -364,7 +364,7 @@
 
 mod driver;
 pub use driver::{
-    BlockDriver, BundleDriver, BundleError, ChainDriver, DriveBlockResult, DriveBundleResult,
+    BlockDriver, BundleDriver, BundleError, BundleSimulator, ChainDriver, DriveBlockResult, DriveBundleResult,
     DriveChainResult, RunTxResult,
 };
 
