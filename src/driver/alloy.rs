@@ -1,7 +1,7 @@
 use crate::{Block, BundleDriver, DriveBundleResult};
 use alloy_consensus::TxEnvelope;
 use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
-use alloy_primitives::U256;
+use alloy_primitives::{bytes::Buf, U256};
 use alloy_rpc_types_mev::{EthCallBundle, EthSendBundle};
 use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
@@ -106,15 +106,18 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
         let run_result = trevm.try_with_block(&bundle_filler, |trevm| {
             let mut trevm = trevm;
 
-            for raw_tx in self.txs.clone().into_iter() {
-                let tx = TxEnvelope::decode_2718(&mut raw_tx.to_vec().as_slice());
+            let txs = self
+                .txs
+                .iter()
+                .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
+                .collect::<Result<Vec<_>, _>>();
+            let txs = match txs {
+                Ok(txs) => txs,
+                Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
+            };
 
-                let tx = match tx {
-                    Ok(tx) => tx,
-                    Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
-                };
-
-                let run_result = trevm.run_tx(&tx);
+            for tx in txs.iter() {
+                let run_result = trevm.run_tx(tx);
 
                 match run_result {
                     // return immediately if errored
@@ -177,19 +180,21 @@ impl<Ext> BundleDriver<Ext> for EthSendBundle {
             }
         }
 
+        let txs = self
+            .txs
+            .iter()
+            .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
+            .collect::<Result<Vec<_>, _>>();
+        let txs = match txs {
+            Ok(txs) => txs,
+            Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
+        };
+
         let mut t = trevm;
 
-        for raw_tx in self.txs.clone().into_iter() {
-            // Decode the transaction
-            let tx = TxEnvelope::decode_2718(&mut raw_tx.to_vec().as_slice());
-
-            let tx = match tx {
-                Ok(tx) => tx,
-                Err(e) => return Err(t.errored(BundleError::TransactionDecodingError(e))),
-            };
-
+        for tx in txs.iter() {
             // Run the transaction
-            let run_result = match t.run_tx(&tx) {
+            let run_result = match t.run_tx(tx) {
                 Ok(res) => res,
                 Err(e) => return Err(e.map_err(|e| BundleError::EVMError { inner: e })),
             };
@@ -199,15 +204,17 @@ impl<Ext> BundleDriver<Ext> for EthSendBundle {
                 ExecutionResult::Success { .. } => run_result.accept_state(),
                 ExecutionResult::Revert { .. } | ExecutionResult::Halt { .. } => {
                     // If the transaction reverted but it is contained in the set of transactions allowed to revert,
-                    // then we discard the state and move on.
+                    // then we _accept_ the state and move on.
+                    // See https://github.com/flashbots/rbuilder/blob/52fea312e5d8be1f1405c52d1fd207ecee2d14b1/crates/rbuilder/src/building/order_commit.rs#L546-L558
                     if self.reverting_tx_hashes.contains(tx.tx_hash()) {
-                        run_result.reject()
+                        run_result.accept_state()
                     } else {
                         return Err(run_result.errored(BundleError::BundleReverted));
                     }
                 }
             };
 
+            // Make sure to update the trevm instance we're using to simulate with the latest one
             t = trevm;
         }
 
