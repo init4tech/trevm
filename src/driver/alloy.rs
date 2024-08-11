@@ -2,7 +2,9 @@ use crate::{Block, BundleDriver, DriveBundleResult};
 use alloy_consensus::{Transaction, TxEnvelope};
 use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
 use alloy_primitives::{bytes::Buf, Address, TxKind, U256};
-use alloy_rpc_types_mev::{EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult, EthSendBundle};
+use alloy_rpc_types_mev::{
+    EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult, EthSendBundle,
+};
 use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
 
@@ -13,11 +15,8 @@ pub struct BundleSimulator<B, R> {
 }
 
 impl<B, R> BundleSimulator<B, R> {
-    pub fn new (bundle: B, response: R) -> Self {
-        Self {
-            bundle,
-            response,
-        }
+    pub fn new(bundle: B, response: R) -> Self {
+        Self { bundle, response }
     }
 }
 
@@ -25,15 +24,15 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
     type Error<Db: revm::Database> = BundleError<Db>;
 
     fn run_bundle<'a, Db: revm::Database + revm::DatabaseCommit>(
-            &mut self,
-            trevm: crate::EvmNeedsTx<'a, Ext, Db>,
-        ) -> DriveBundleResult<'a, Ext, Db, Self> {
+        &mut self,
+        trevm: crate::EvmNeedsTx<'a, Ext, Db>,
+    ) -> DriveBundleResult<'a, Ext, Db, Self> {
         // 1. Check if the block we're in is valid for this bundle. Both must match
         if trevm.inner().block().number.to::<u64>() != self.bundle.block_number {
             return Err(trevm.errored(BundleError::BlockNumberMismatch));
         }
 
-        let bundle_filler = BundleBlockFiller::from(self.bundle.clone());
+        let bundle_filler = BundleBlockFiller::from(&self.bundle);
 
         let run_result = trevm.try_with_block(&bundle_filler, |trevm| {
             let mut trevm = trevm;
@@ -66,7 +65,9 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                             let (execution_result, committed_trevm) = res.accept();
                             let block_env = committed_trevm.inner().block();
 
-                            let from_address = tx.recover_signer().map_err(|e| BundleError::TransactionSenderRecoveryError(e));
+                            let from_address = tx
+                                .recover_signer()
+                                .map_err(|e| BundleError::TransactionSenderRecoveryError(e));
                             let from_address = match from_address {
                                 Ok(addr) => addr,
                                 Err(e) => return Err(committed_trevm.errored(e)),
@@ -84,14 +85,27 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                             tx_response.gas_price = match tx {
                                 TxEnvelope::Legacy(tx) => U256::from(tx.tx().gas_price),
                                 TxEnvelope::Eip2930(tx) => U256::from(tx.tx().gas_price),
-                                TxEnvelope::Eip1559(tx) => U256::from(tx.tx().effective_gas_price(Some(block_env.basefee.to::<u64>()))),
+                                TxEnvelope::Eip1559(tx) => U256::from(
+                                    tx.tx()
+                                        .effective_gas_price(Some(block_env.basefee.to::<u64>())),
+                                ),
                                 TxEnvelope::Eip4844(_) => U256::ZERO,
                                 _ => panic!("Unsupported transaction type"),
                             };
                             tx_response.gas_fees = match tx {
-                                TxEnvelope::Legacy(tx) => U256::from(tx.tx().gas_price) * U256::from(execution_result.gas_used()),
-                                TxEnvelope::Eip2930(tx) => U256::from(tx.tx().gas_price) * U256::from(execution_result.gas_used()),
-                                TxEnvelope::Eip1559(tx) => (block_env.basefee +  U256::from(tx.tx().max_priority_fee_per_gas)) * U256::from(execution_result.gas_used()),
+                                TxEnvelope::Legacy(tx) => {
+                                    U256::from(tx.tx().gas_price)
+                                        * U256::from(execution_result.gas_used())
+                                }
+                                TxEnvelope::Eip2930(tx) => {
+                                    U256::from(tx.tx().gas_price)
+                                        * U256::from(execution_result.gas_used())
+                                }
+                                TxEnvelope::Eip1559(tx) => {
+                                    (block_env.basefee
+                                        + U256::from(tx.tx().max_priority_fee_per_gas))
+                                        * U256::from(execution_result.gas_used())
+                                }
                                 TxEnvelope::Eip4844(_) => U256::ZERO,
                                 _ => panic!("Unsupported transaction type"),
                             };
@@ -113,10 +127,10 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
     }
 
     fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(
-            &mut self,
-            _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
-        ) -> Result<(), Self::Error<Db>> {
-       Ok(()) 
+        &mut self,
+        _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
+    ) -> Result<(), Self::Error<Db>> {
+        Ok(())
     }
 }
 
@@ -159,7 +173,9 @@ impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
             Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
             Self::BundleReverted => write!(f, "BundleReverted"),
             Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
-            Self::TransactionSenderRecoveryError(e) => write!(f, "TransactionSenderRecoveryError({:?})", e),
+            Self::TransactionSenderRecoveryError(e) => {
+                write!(f, "TransactionSenderRecoveryError({:?})", e)
+            }
             Self::EVMError { .. } => write!(f, "EVMError"),
         }
     }
@@ -191,6 +207,18 @@ impl Block for BundleBlockFiller {
         }
         if let Some(block_number) = self.block_number.as_number() {
             block_env.number = U256::from(block_number);
+        }
+    }
+}
+
+impl From<&EthCallBundle> for BundleBlockFiller {
+    fn from(bundle: &EthCallBundle) -> Self {
+        Self {
+            block_number: bundle.state_block_number,
+            timestamp: bundle.timestamp,
+            gas_limit: bundle.gas_limit,
+            difficulty: bundle.difficulty,
+            base_fee: bundle.base_fee,
         }
     }
 }
