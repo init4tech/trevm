@@ -333,6 +333,8 @@ impl Block for BundleBlockFiller {
     fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
         if let Some(timestamp) = self.timestamp {
             block_env.timestamp = U256::from(timestamp);
+        } else {
+            block_env.timestamp += U256::from(12);
         }
         if let Some(gas_limit) = self.gas_limit {
             block_env.gas_limit = U256::from(gas_limit);
