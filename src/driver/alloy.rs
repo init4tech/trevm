@@ -9,13 +9,17 @@ use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
 
 /// A bundle simulator which can be used to drive a bundle with a [BundleDriver] and accumulate the results of the bundle.
+#[derive(Debug)]
 pub struct BundleSimulator<B, R> {
+    /// The bundle to simulate.
     pub bundle: B,
+    /// The response to the bundle simulation.
     pub response: R,
 }
 
 impl<B, R> BundleSimulator<B, R> {
-    pub fn new(bundle: B, response: R) -> Self {
+    /// Create a new bundle simulator with the given bundle and response.
+    pub const fn new(bundle: B, response: R) -> Self {
         Self { bundle, response }
     }
 }
@@ -48,6 +52,16 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                 Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
             };
 
+            let pre_bundle_coinbase_balance =
+                match trevm.try_read_balance(trevm.inner().block().coinbase) {
+                    Ok(balance) => balance,
+                    Err(e) => {
+                        return Err(trevm.errored(BundleError::EVMError {
+                            inner: revm::primitives::EVMError::Database(e),
+                        }))
+                    }
+                };
+
             for tx in txs.iter() {
                 let run_result = trevm.run_tx(tx);
 
@@ -62,8 +76,9 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                             return Err(res.errored(BundleError::BundleReverted));
                         }
                         ExecutionResult::Success { .. } => {
-                            let (execution_result, committed_trevm) = res.accept();
-                            let block_env = committed_trevm.inner().block();
+                            let (execution_result, mut committed_trevm) = res.accept();
+                            let coinbase = committed_trevm.inner().block().coinbase;
+                            let basefee = committed_trevm.inner().block().basefee;
 
                             let from_address = tx
                                 .recover_signer()
@@ -72,27 +87,26 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                                 Ok(addr) => addr,
                                 Err(e) => return Err(committed_trevm.errored(e)),
                             };
-
-                            let mut tx_response = EthCallBundleTransactionResult::default();
-                            tx_response.tx_hash = *tx.tx_hash();
-                            tx_response.value = execution_result.output().cloned();
-                            tx_response.gas_used = execution_result.gas_used();
-                            tx_response.from_address = from_address;
-                            tx_response.to_address = match tx.to() {
-                                TxKind::Call(to) => Some(to),
-                                _ => Some(Address::ZERO),
+                            let post_simulation_coinbase_balance = match committed_trevm
+                                .try_read_balance(coinbase)
+                            {
+                                Ok(balance) => balance,
+                                Err(e) => {
+                                    return Err(committed_trevm.errored(BundleError::EVMError {
+                                        inner: revm::primitives::EVMError::Database(e),
+                                    }))
+                                }
                             };
-                            tx_response.gas_price = match tx {
-                                TxEnvelope::Legacy(tx) => U256::from(tx.tx().gas_price),
-                                TxEnvelope::Eip2930(tx) => U256::from(tx.tx().gas_price),
-                                TxEnvelope::Eip1559(tx) => U256::from(
-                                    tx.tx()
-                                        .effective_gas_price(Some(block_env.basefee.to::<u64>())),
-                                ),
-                                TxEnvelope::Eip4844(_) => U256::ZERO,
-                                _ => panic!("Unsupported transaction type"),
+                            let eth_sent_to_coinbase = match post_simulation_coinbase_balance
+                                .checked_sub(pre_bundle_coinbase_balance)
+                            {
+                                Some(diff) => diff,
+                                None => {
+                                    return Err(committed_trevm
+                                        .errored(BundleError::CoinbaseBalanceUnderflow))
+                                }
                             };
-                            tx_response.gas_fees = match tx {
+                            let gas_fee_paid = match tx {
                                 TxEnvelope::Legacy(tx) => {
                                     U256::from(tx.tx().gas_price)
                                         * U256::from(execution_result.gas_used())
@@ -102,14 +116,52 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                                         * U256::from(execution_result.gas_used())
                                 }
                                 TxEnvelope::Eip1559(tx) => {
-                                    (block_env.basefee
-                                        + U256::from(tx.tx().max_priority_fee_per_gas))
+                                    (basefee + U256::from(tx.tx().max_priority_fee_per_gas))
                                         * U256::from(execution_result.gas_used())
                                 }
                                 TxEnvelope::Eip4844(_) => U256::ZERO,
-                                _ => panic!("Unsupported transaction type"),
+                                _ => {
+                                    return Err(committed_trevm
+                                        .errored(BundleError::UnsupportedTransactionType))
+                                }
                             };
+                            let tx_gas_price = match tx {
+                                TxEnvelope::Legacy(tx) => U256::from(tx.tx().gas_price),
+                                TxEnvelope::Eip2930(tx) => U256::from(tx.tx().gas_price),
+                                TxEnvelope::Eip1559(tx) => U256::from(
+                                    tx.tx().effective_gas_price(Some(basefee.to::<u64>())),
+                                ),
+                                TxEnvelope::Eip4844(_) => U256::ZERO,
+                                _ => {
+                                    return Err(committed_trevm
+                                        .errored(BundleError::UnsupportedTransactionType))
+                                }
+                            };
+                            let coinbase_diff = pre_bundle_coinbase_balance + eth_sent_to_coinbase;
 
+                            // Accumulate the total results
+                            self.response.eth_sent_to_coinbase += eth_sent_to_coinbase;
+                            self.response.coinbase_diff += coinbase_diff;
+                            self.response.gas_fees += gas_fee_paid;
+                            self.response.total_gas_used += execution_result.gas_used();
+                            self.response.bundle_gas_price += tx_gas_price;
+
+                            // Push the result of the bundle's transaction to the response
+                            self.response.results.push(EthCallBundleTransactionResult {
+                                tx_hash: *tx.tx_hash(),
+                                coinbase_diff,
+                                eth_sent_to_coinbase,
+                                from_address,
+                                to_address: match tx.to() {
+                                    TxKind::Call(to) => Some(to),
+                                    _ => Some(Address::ZERO),
+                                },
+                                value: execution_result.output().cloned(),
+                                revert: None,
+                                gas_used: execution_result.gas_used(),
+                                gas_price: tx_gas_price,
+                                gas_fees: gas_fee_paid,
+                            });
                             trevm = committed_trevm;
                         }
                     },
@@ -146,6 +198,12 @@ pub enum BundleError<Db: revm::Database> {
     /// The bundle was reverted (or halted).
     #[error("bundle reverted")]
     BundleReverted,
+    /// An unsupported transaction type was encountered.
+    #[error("unsupported transaction type")]
+    UnsupportedTransactionType,
+    /// The coinbase balance underflowed
+    #[error("coinbase balance underflowed")]
+    CoinbaseBalanceUnderflow,
     /// An error occurred while decoding a transaction contained in the bundle.
     #[error("transaction decoding error")]
     TransactionDecodingError(#[from] alloy_eips::eip2718::Eip2718Error),
@@ -173,6 +231,8 @@ impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
             Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
             Self::BundleReverted => write!(f, "BundleReverted"),
             Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
+            Self::UnsupportedTransactionType => write!(f, "UnsupportedTransactionType"),
+            Self::CoinbaseBalanceUnderflow => write!(f, "CoinbaseBalanceUnderflow"),
             Self::TransactionSenderRecoveryError(e) => {
                 write!(f, "TransactionSenderRecoveryError({:?})", e)
             }
