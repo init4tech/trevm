@@ -1,7 +1,7 @@
 use crate::{Block, BundleDriver, DriveBundleResult};
-use alloy_consensus::{Transaction, TxEnvelope};
+use alloy_consensus::{Transaction, TxEip4844Variant, TxEnvelope};
 use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
-use alloy_primitives::{bytes::Buf, Address, TxKind, U256};
+use alloy_primitives::{bytes::Buf, keccak256, Address, TxKind, U256};
 use alloy_rpc_types_mev::{
     EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult, EthSendBundle,
 };
@@ -63,7 +63,6 @@ impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
     }
 }
 
-
 /// A bundle simulator which can be used to drive a bundle with a [BundleDriver] and accumulate the results of the bundle.
 #[derive(Debug)]
 pub struct BundleSimulator<B, R> {
@@ -93,11 +92,17 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
         }
 
         // Set the state block number this simulation was based on
-        self.response.state_block_number = self.bundle.state_block_number.as_number().unwrap_or(trevm.inner().block().number.to::<u64>());
+        self.response.state_block_number = self
+            .bundle
+            .state_block_number
+            .as_number()
+            .unwrap_or(trevm.inner().block().number.to::<u64>());
 
         let bundle_filler = BundleBlockFiller::from(&self.bundle);
 
         let run_result = trevm.try_with_block(&bundle_filler, |trevm| {
+            // We need to keep track of the state of the EVM as we run the transactions, so we can accumulate the results.
+            // Therefore we keep this mutable trevm instance, and set it to the new one after we're done simulating.
             let mut trevm = trevm;
 
             let txs = self
@@ -111,7 +116,8 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                 Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
             };
 
-            let pre_bundle_coinbase_balance =
+            // Cache the pre simulation coinbase balance, so we can use it to calculate the coinbase diff after every tx simulated.
+            let initial_coinbase_balance =
                 match trevm.try_read_balance(trevm.inner().block().coinbase) {
                     Ok(balance) => balance,
                     Err(e) => {
@@ -120,6 +126,12 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                         }))
                     }
                 };
+            let mut pre_sim_coinbase_balance = initial_coinbase_balance;
+            let post_sim_coinbase_balance = pre_sim_coinbase_balance;
+            let mut total_gas_fees = U256::ZERO;
+            let mut total_gas_used = 0;
+
+            let mut hash_bytes = Vec::with_capacity(32 * txs.len());
 
             for tx in txs.iter() {
                 let run_result = trevm.run_tx(tx);
@@ -130,25 +142,28 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                         return Err(e.map_err(|e| BundleError::EVMError { inner: e }));
                     }
                     // Accept + accumulate state
-                    Ok(res) => match res.result() {
-                        ExecutionResult::Revert { .. } | ExecutionResult::Halt { .. } => {
-                            return Err(res.errored(BundleError::BundleReverted));
-                        }
-                        ExecutionResult::Success { .. } => {
-                            let (execution_result, mut committed_trevm) = res.accept();
-                            let coinbase = committed_trevm.inner().block().coinbase;
-                            let basefee = committed_trevm.inner().block().basefee;
+                    Ok(res) => {
+                        let (execution_result, mut committed_trevm) = res.accept();
 
-                            let from_address = tx
-                                .recover_signer()
-                                .map_err(|e| BundleError::TransactionSenderRecoveryError(e));
-                            let from_address = match from_address {
-                                Ok(addr) => addr,
-                                Err(e) => return Err(committed_trevm.errored(e)),
-                            };
-                            let post_simulation_coinbase_balance = match committed_trevm
-                                .try_read_balance(coinbase)
-                            {
+                        let coinbase = committed_trevm.inner().block().coinbase;
+                        let basefee = committed_trevm.inner().block().basefee;
+                        let gas_used = execution_result.gas_used();
+
+                        // Fetch the address and coinbase balance after the transaction, to start calculating and results
+                        let from_address = tx
+                            .recover_signer()
+                            .map_err(|e| BundleError::TransactionSenderRecoveryError(e));
+                        let from_address = match from_address {
+                            Ok(addr) => addr,
+                            Err(e) => return Err(committed_trevm.errored(e)),
+                        };
+
+                        // Extend the hash bytes with the transaction hash to calculate the bundle hash later
+                        hash_bytes.extend_from_slice(tx.tx_hash().as_slice());
+
+                        // Get the post simulation coinbase balance
+                        let post_sim_coinbase_balance =
+                            match committed_trevm.try_read_balance(coinbase) {
                                 Ok(balance) => balance,
                                 Err(e) => {
                                     return Err(committed_trevm.errored(BundleError::EVMError {
@@ -156,76 +171,108 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                                     }))
                                 }
                             };
-                            let eth_sent_to_coinbase = match post_simulation_coinbase_balance
-                                .checked_sub(pre_bundle_coinbase_balance)
-                            {
-                                Some(diff) => diff,
-                                None => {
-                                    return Err(committed_trevm
-                                        .errored(BundleError::CoinbaseBalanceUnderflow))
-                                }
-                            };
-                            let gas_fee_paid = match tx {
-                                TxEnvelope::Legacy(tx) => {
-                                    U256::from(tx.tx().gas_price)
-                                        * U256::from(execution_result.gas_used())
-                                }
-                                TxEnvelope::Eip2930(tx) => {
-                                    U256::from(tx.tx().gas_price)
-                                        * U256::from(execution_result.gas_used())
-                                }
-                                TxEnvelope::Eip1559(tx) => {
-                                    (basefee + U256::from(tx.tx().max_priority_fee_per_gas))
-                                        * U256::from(execution_result.gas_used())
-                                }
-                                TxEnvelope::Eip4844(_) => U256::ZERO,
-                                _ => {
-                                    return Err(committed_trevm
-                                        .errored(BundleError::UnsupportedTransactionType))
-                                }
-                            };
-                            let tx_gas_price = match tx {
-                                TxEnvelope::Legacy(tx) => U256::from(tx.tx().gas_price),
-                                TxEnvelope::Eip2930(tx) => U256::from(tx.tx().gas_price),
-                                TxEnvelope::Eip1559(tx) => U256::from(
-                                    tx.tx().effective_gas_price(Some(basefee.to::<u64>())),
-                                ),
-                                TxEnvelope::Eip4844(_) => U256::ZERO,
-                                _ => {
-                                    return Err(committed_trevm
-                                        .errored(BundleError::UnsupportedTransactionType))
-                                }
-                            };
-                            let coinbase_diff = pre_bundle_coinbase_balance + eth_sent_to_coinbase;
 
-                            // Accumulate the total results
-                            self.response.eth_sent_to_coinbase += eth_sent_to_coinbase;
-                            self.response.coinbase_diff += coinbase_diff;
-                            self.response.gas_fees += gas_fee_paid;
-                            self.response.total_gas_used += execution_result.gas_used();
-                            self.response.bundle_gas_price += tx_gas_price;
+                        // Calculate the gas fees paid
+                        let gas_fees = match tx {
+                            TxEnvelope::Legacy(tx) => {
+                                U256::from(tx.tx().gas_price) * U256::from(gas_used)
+                            }
+                            TxEnvelope::Eip2930(tx) => {
+                                U256::from(tx.tx().gas_price) * U256::from(gas_used)
+                            }
+                            TxEnvelope::Eip1559(tx) => {
+                                U256::from(tx.tx().effective_gas_price(Some(basefee.to::<u64>())))
+                                    * U256::from(gas_used)
+                            }
+                            TxEnvelope::Eip4844(tx) => match tx.tx() {
+                                TxEip4844Variant::TxEip4844(tx) => {
+                                    U256::from(tx.effective_gas_price(Some(basefee.to::<u64>())))
+                                        * U256::from(gas_used)
+                                }
+                                TxEip4844Variant::TxEip4844WithSidecar(tx) => {
+                                    U256::from(tx.tx.effective_gas_price(Some(basefee.to::<u64>())))
+                                        * U256::from(gas_used)
+                                }
+                            },
+                            _ => {
+                                return Err(committed_trevm
+                                    .errored(BundleError::UnsupportedTransactionType))
+                            }
+                        };
 
-                            // Push the result of the bundle's transaction to the response
-                            self.response.results.push(EthCallBundleTransactionResult {
-                                tx_hash: *tx.tx_hash(),
-                                coinbase_diff,
-                                eth_sent_to_coinbase,
-                                from_address,
-                                to_address: match tx.to() {
-                                    TxKind::Call(to) => Some(to),
-                                    _ => Some(Address::ZERO),
-                                },
-                                value: execution_result.output().cloned(),
-                                revert: None,
-                                gas_used: execution_result.gas_used(),
-                                gas_price: tx_gas_price,
-                                gas_fees: gas_fee_paid,
-                            });
-                            trevm = committed_trevm;
-                        }
-                    },
+                        // Calculate the gas price
+                        let gas_price = match tx {
+                            TxEnvelope::Legacy(tx) => U256::from(tx.tx().gas_price),
+                            TxEnvelope::Eip2930(tx) => U256::from(tx.tx().gas_price),
+                            TxEnvelope::Eip1559(tx) => {
+                                U256::from(tx.tx().effective_gas_price(Some(basefee.to::<u64>())))
+                            }
+                            TxEnvelope::Eip4844(tx) => match tx.tx() {
+                                TxEip4844Variant::TxEip4844(tx) => {
+                                    U256::from(tx.effective_gas_price(Some(basefee.to::<u64>())))
+                                }
+                                TxEip4844Variant::TxEip4844WithSidecar(tx) => {
+                                    U256::from(tx.tx.effective_gas_price(Some(basefee.to::<u64>())))
+                                }
+                            },
+                            _ => {
+                                return Err(committed_trevm
+                                    .errored(BundleError::UnsupportedTransactionType))
+                            }
+                        };
+
+                        let coinbase_diff =
+                            post_sim_coinbase_balance.saturating_sub(pre_sim_coinbase_balance);
+                        let eth_sent_to_coinbase = coinbase_diff.saturating_sub(gas_fees);
+
+                        total_gas_used += execution_result.gas_used();
+                        total_gas_fees += gas_fees;
+
+                        // update the coinbase balance
+                        pre_sim_coinbase_balance = post_sim_coinbase_balance;
+
+                        // set the return data for the response
+                        let (value, revert) = if execution_result.is_success() {
+                            let value = execution_result.into_output().unwrap_or_default();
+                            (Some(value), None)
+                        } else {
+                            let revert = execution_result.into_output().unwrap_or_default();
+                            (None, Some(revert))
+                        };
+
+                        // Push the result of the bundle's transaction to the response
+                        self.response.results.push(EthCallBundleTransactionResult {
+                            tx_hash: *tx.tx_hash(),
+                            coinbase_diff,
+                            eth_sent_to_coinbase,
+                            from_address,
+                            to_address: match tx.to() {
+                                TxKind::Call(to) => Some(to),
+                                _ => Some(Address::ZERO),
+                            },
+                            value,
+                            revert,
+                            gas_used,
+                            gas_price,
+                            gas_fees,
+                        });
+                        trevm = committed_trevm;
+                    }
                 }
             }
+            // Accumulate the total results
+            self.response.total_gas_used = total_gas_used;
+            self.response.coinbase_diff =
+                post_sim_coinbase_balance.saturating_sub(initial_coinbase_balance);
+            self.response.eth_sent_to_coinbase =
+                self.response.coinbase_diff.saturating_sub(total_gas_fees);
+            self.response.bundle_gas_price = self
+                .response
+                .coinbase_diff
+                .checked_div(U256::from(total_gas_used))
+                .unwrap_or_default();
+            self.response.gas_fees = total_gas_fees;
+            self.response.bundle_hash = keccak256(hash_bytes);
 
             // return the final state
             Ok(trevm)
