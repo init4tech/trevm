@@ -20,6 +20,9 @@ pub enum BundleError<Db: revm::Database> {
     /// The bundle was reverted (or halted).
     #[error("bundle reverted")]
     BundleReverted,
+    /// The bundle has no transactions
+    #[error("bundle has no transactions")]
+    BundleEmpty,
     /// An unsupported transaction type was encountered.
     #[error("unsupported transaction type")]
     UnsupportedTransactionType,
@@ -51,6 +54,7 @@ impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
         match self {
             Self::TimestampOutOfRange => write!(f, "TimestampOutOfRange"),
             Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
+            Self::BundleEmpty => write!(f, "BundleEmpty"),
             Self::BundleReverted => write!(f, "BundleReverted"),
             Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
             Self::UnsupportedTransactionType => write!(f, "UnsupportedTransactionType"),
@@ -86,8 +90,20 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
         &mut self,
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
-        // 1. Check if the block we're in is valid for this bundle. Both must match
+        // Check if the block we're in is valid for this bundle. Both must match
         if trevm.inner().block().number.to::<u64>() != self.bundle.block_number {
+            return Err(trevm.errored(BundleError::BlockNumberMismatch));
+        }
+
+        // Check if the bundle has any transactions
+        if self.bundle.txs.is_empty() {
+            return Err(trevm.errored(BundleError::BundleEmpty));
+        }
+
+        // Check if the state block number is valid (not 0, and not a tag)
+        if !self.bundle.state_block_number.is_number()
+            || self.bundle.state_block_number.as_number().unwrap_or(0) == 0
+        {
             return Err(trevm.errored(BundleError::BlockNumberMismatch));
         }
 
