@@ -8,6 +8,62 @@ use alloy_rpc_types_mev::{
 use revm::primitives::{EVMError, ExecutionResult};
 use thiserror::Error;
 
+/// Possible errors that can occur while driving a bundle.
+#[derive(Error)]
+pub enum BundleError<Db: revm::Database> {
+    /// The block number of the bundle does not match the block number of the revm block configuration.
+    #[error("revm block number must match the bundle block number")]
+    BlockNumberMismatch,
+    /// The timestamp of the bundle is out of range.
+    #[error("timestamp out of range")]
+    TimestampOutOfRange,
+    /// The bundle was reverted (or halted).
+    #[error("bundle reverted")]
+    BundleReverted,
+    /// An unsupported transaction type was encountered.
+    #[error("unsupported transaction type")]
+    UnsupportedTransactionType,
+    /// The coinbase balance underflowed
+    #[error("coinbase balance underflowed")]
+    CoinbaseBalanceUnderflow,
+    /// An error occurred while decoding a transaction contained in the bundle.
+    #[error("transaction decoding error")]
+    TransactionDecodingError(#[from] alloy_eips::eip2718::Eip2718Error),
+    /// An error ocurred while recovering the sender of a transaction
+    #[error("transaction sender recovery error")]
+    TransactionSenderRecoveryError(#[from] alloy_primitives::SignatureError),
+    /// An error occurred while running the EVM.
+    #[error("internal EVM Error")]
+    EVMError {
+        /// The error that occurred while running the EVM.
+        inner: EVMError<Db::Error>,
+    },
+}
+
+impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
+    fn from(inner: EVMError<Db::Error>) -> Self {
+        Self::EVMError { inner }
+    }
+}
+
+impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TimestampOutOfRange => write!(f, "TimestampOutOfRange"),
+            Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
+            Self::BundleReverted => write!(f, "BundleReverted"),
+            Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
+            Self::UnsupportedTransactionType => write!(f, "UnsupportedTransactionType"),
+            Self::CoinbaseBalanceUnderflow => write!(f, "CoinbaseBalanceUnderflow"),
+            Self::TransactionSenderRecoveryError(e) => {
+                write!(f, "TransactionSenderRecoveryError({:?})", e)
+            }
+            Self::EVMError { .. } => write!(f, "EVMError"),
+        }
+    }
+}
+
+
 /// A bundle simulator which can be used to drive a bundle with a [BundleDriver] and accumulate the results of the bundle.
 #[derive(Debug)]
 pub struct BundleSimulator<B, R> {
@@ -35,6 +91,9 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
         if trevm.inner().block().number.to::<u64>() != self.bundle.block_number {
             return Err(trevm.errored(BundleError::BlockNumberMismatch));
         }
+
+        // Set the state block number this simulation was based on
+        self.response.state_block_number = self.bundle.state_block_number.as_number().unwrap_or(trevm.inner().block().number.to::<u64>());
 
         let bundle_filler = BundleBlockFiller::from(&self.bundle);
 
@@ -183,61 +242,6 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
         _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
         Ok(())
-    }
-}
-
-/// Possible errors that can occur while driving a bundle.
-#[derive(Error)]
-pub enum BundleError<Db: revm::Database> {
-    /// The block number of the bundle does not match the block number of the revm block configuration.
-    #[error("revm block number must match the bundle block number")]
-    BlockNumberMismatch,
-    /// The timestamp of the bundle is out of range.
-    #[error("timestamp out of range")]
-    TimestampOutOfRange,
-    /// The bundle was reverted (or halted).
-    #[error("bundle reverted")]
-    BundleReverted,
-    /// An unsupported transaction type was encountered.
-    #[error("unsupported transaction type")]
-    UnsupportedTransactionType,
-    /// The coinbase balance underflowed
-    #[error("coinbase balance underflowed")]
-    CoinbaseBalanceUnderflow,
-    /// An error occurred while decoding a transaction contained in the bundle.
-    #[error("transaction decoding error")]
-    TransactionDecodingError(#[from] alloy_eips::eip2718::Eip2718Error),
-    /// An error ocurred while recovering the sender of a transaction
-    #[error("transaction sender recovery error")]
-    TransactionSenderRecoveryError(#[from] alloy_primitives::SignatureError),
-    /// An error occurred while running the EVM.
-    #[error("internal EVM Error")]
-    EVMError {
-        /// The error that occurred while running the EVM.
-        inner: EVMError<Db::Error>,
-    },
-}
-
-impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
-    fn from(inner: EVMError<Db::Error>) -> Self {
-        Self::EVMError { inner }
-    }
-}
-
-impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TimestampOutOfRange => write!(f, "TimestampOutOfRange"),
-            Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
-            Self::BundleReverted => write!(f, "BundleReverted"),
-            Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
-            Self::UnsupportedTransactionType => write!(f, "UnsupportedTransactionType"),
-            Self::CoinbaseBalanceUnderflow => write!(f, "CoinbaseBalanceUnderflow"),
-            Self::TransactionSenderRecoveryError(e) => {
-                write!(f, "TransactionSenderRecoveryError({:?})", e)
-            }
-            Self::EVMError { .. } => write!(f, "EVMError"),
-        }
     }
 }
 
