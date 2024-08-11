@@ -5,7 +5,7 @@ use alloy_primitives::{bytes::Buf, keccak256, Address, TxKind, U256};
 use alloy_rpc_types_mev::{
     EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult, EthSendBundle,
 };
-use revm::primitives::{EVMError, ExecutionResult};
+use revm::primitives::{EVMError, ExecutionResult, MAX_BLOB_GAS_PER_BLOCK};
 use thiserror::Error;
 
 /// Possible errors that can occur while driving a bundle.
@@ -23,12 +23,12 @@ pub enum BundleError<Db: revm::Database> {
     /// The bundle has no transactions
     #[error("bundle has no transactions")]
     BundleEmpty,
+    /// Too many blob transactions
+    #[error("max blob gas limit exceeded")]
+    Eip4844BlobGasExceeded,
     /// An unsupported transaction type was encountered.
     #[error("unsupported transaction type")]
     UnsupportedTransactionType,
-    /// The coinbase balance underflowed
-    #[error("coinbase balance underflowed")]
-    CoinbaseBalanceUnderflow,
     /// An error occurred while decoding a transaction contained in the bundle.
     #[error("transaction decoding error")]
     TransactionDecodingError(#[from] alloy_eips::eip2718::Eip2718Error),
@@ -58,7 +58,7 @@ impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
             Self::BundleReverted => write!(f, "BundleReverted"),
             Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
             Self::UnsupportedTransactionType => write!(f, "UnsupportedTransactionType"),
-            Self::CoinbaseBalanceUnderflow => write!(f, "CoinbaseBalanceUnderflow"),
+            Self::Eip4844BlobGasExceeded => write!(f, "Eip4844BlobGasExceeded"),
             Self::TransactionSenderRecoveryError(e) => {
                 write!(f, "TransactionSenderRecoveryError({:?})", e)
             }
@@ -131,6 +131,17 @@ impl<Ext> BundleDriver<Ext> for BundleSimulator<EthCallBundle, EthCallBundleResp
                 Ok(txs) => txs,
                 Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
             };
+
+            // Check that the bundle does not exceed the maximum gas limit for blob transactions
+            if txs
+                .iter()
+                .filter_map(|tx| tx.as_eip4844())
+                .map(|tx| tx.tx().tx().blob_gas())
+                .sum::<u64>()
+                > MAX_BLOB_GAS_PER_BLOCK
+            {
+                return Err(trevm.errored(BundleError::Eip4844BlobGasExceeded));
+            }
 
             // Cache the pre simulation coinbase balance, so we can use it to calculate the coinbase diff after every tx simulated.
             let initial_coinbase_balance =
