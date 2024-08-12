@@ -820,7 +820,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
         F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasBlock,
     {
-        let previous = std::mem::take(self.inner.block_mut());
+        let previous = self.inner.block_mut().clone();
         b.fill_block_env(self.inner.block_mut());
         let mut this = f(self);
         *this.inner.block_mut() = previous;
@@ -838,7 +838,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
         B: Block,
         NewState: HasBlock,
     {
-        let previous = std::mem::take(self.inner.block_mut());
+        let previous = self.inner.block_mut().clone();
         b.fill_block_env(self.inner.block_mut());
         match f(self) {
             Ok(mut evm) => {
