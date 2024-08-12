@@ -3,7 +3,7 @@ use crate::{
 };
 use alloy_consensus::{Transaction, TxEip4844Variant, TxEnvelope};
 use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
-use alloy_primitives::{bytes::Buf, keccak256, Address, TxKind, U256};
+use alloy_primitives::{bytes::Buf, keccak256, Address, Bytes, TxKind, U256};
 use alloy_rpc_types_mev::{
     EthBundleHash, EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult,
     EthSendBundle,
@@ -84,6 +84,30 @@ impl<B, R> BundleProcessor<B, R> {
     /// Create a new bundle simulator with the given bundle and response.
     pub const fn new(bundle: B, response: R) -> Self {
         Self { bundle, response }
+    }
+}
+
+impl<B, R> BundleProcessor<B, R> {
+    /// Decode and validate the transactions in the bundle, performing EIP4844 gas checks.
+    pub fn decode_and_validate_txs<Db: revm::Database>(
+        txs: &[Bytes],
+    ) -> Result<Vec<TxEnvelope>, BundleError<Db>> {
+        let txs = txs
+            .iter()
+            .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if txs
+            .iter()
+            .filter_map(|tx| tx.as_eip4844())
+            .map(|tx| tx.tx().tx().blob_gas())
+            .sum::<u64>()
+            > MAX_BLOB_GAS_PER_BLOCK
+        {
+            Err(BundleError::Eip4844BlobGasExceeded)
+        } else {
+            Ok(txs)
+        }
     }
 }
 
@@ -214,25 +238,8 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
             // Therefore we keep this mutable trevm instance, and set it to the new one after we're done simulating.
             let mut trevm = trevm;
 
-            let txs = unwrap_or_trevm_err!(
-                self.bundle
-                    .txs
-                    .iter()
-                    .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
-                    .collect::<Result<Vec<_>, _>>(),
-                trevm
-            );
-
-            // Check that the bundle does not exceed the maximum gas limit for blob transactions
-            trevm_ensure!(
-                txs.iter()
-                    .filter_map(|tx| tx.as_eip4844())
-                    .map(|tx| tx.tx().tx().blob_gas())
-                    .sum::<u64>()
-                    <= MAX_BLOB_GAS_PER_BLOCK,
-                trevm,
-                BundleError::Eip4844BlobGasExceeded
-            );
+            // Decode and validate the transactions in the bundle
+            let txs = unwrap_or_trevm_err!(Self::decode_and_validate_txs(&self.bundle.txs), trevm);
 
             // Cache the pre simulation coinbase balance, so we can use it to calculate the coinbase diff after every tx simulated.
             let initial_coinbase_balance =
@@ -372,25 +379,8 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthSendBundle, EthBundleHash> {
             // Check if the bundle has any transactions
             trevm_ensure!(!self.bundle.txs.is_empty(), trevm, BundleError::BundleEmpty);
 
-            let txs = unwrap_or_trevm_err!(
-                self.bundle
-                    .txs
-                    .iter()
-                    .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
-                    .collect::<Result<Vec<_>, _>>(),
-                trevm
-            );
-
-            // Check that the bundle does not exceed the maximum gas limit for blob transactions
-            if txs
-                .iter()
-                .filter_map(|tx| tx.as_eip4844())
-                .map(|tx| tx.tx().tx().blob_gas())
-                .sum::<u64>()
-                > MAX_BLOB_GAS_PER_BLOCK
-            {
-                return Err(trevm.errored(BundleError::Eip4844BlobGasExceeded));
-            }
+            // Decode and validate the transactions in the bundle
+            let txs = unwrap_or_trevm_err!(Self::decode_and_validate_txs(&self.bundle.txs), trevm);
 
             // Store the current evm state in this mutable variable, so we can continually use the freshest state for each simulation
             let mut t = trevm;
