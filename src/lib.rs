@@ -380,6 +380,8 @@ pub use fill::{Block, Cfg, NoopBlock, NoopCfg, Tx};
 mod lifecycle;
 pub use lifecycle::{ethereum_receipt, BlockOutput, PostTx, PostflightResult};
 
+mod macros;
+
 mod states;
 pub(crate) use states::sealed::*;
 pub use states::{
