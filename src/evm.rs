@@ -537,17 +537,24 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
         mut self,
         cfg: &C,
         f: F,
-    ) -> Result<Trevm<'a, Ext, Db, NewState>, E>
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>
     where
         C: Cfg,
-        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, E>,
+        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>,
         NewState: HasCfg,
     {
         let previous = self.inner.cfg_mut().clone();
         cfg.fill_cfg_env(self.inner.cfg_mut());
-        let mut this = f(self)?;
-        *this.inner.cfg_mut() = previous;
-        Ok(this)
+        match f(self) {
+            Ok(mut evm) => {
+                *evm.inner.cfg_mut() = previous;
+                Ok(evm)
+            }
+            Err(mut evm) => {
+                *evm.inner.cfg_mut() = previous;
+                Err(evm)
+            }
+        }
     }
 
     /// Set the KZG settings used for point evaluation precompiles. By default
