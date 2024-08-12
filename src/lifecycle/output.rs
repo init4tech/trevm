@@ -1,8 +1,7 @@
-use std::sync::OnceLock;
-
 use alloy_consensus::{ReceiptEnvelope, TxReceipt};
 use alloy_eips::eip6110::DepositRequest;
 use alloy_primitives::{Address, Bloom, Log};
+use std::sync::OnceLock;
 
 /// Information externalized during block execution.
 ///
@@ -30,15 +29,21 @@ impl<T: TxReceipt> BlockOutput<T> {
     /// Create a new block output with memory allocated to hold `capacity`
     /// transaction outcomes.
     pub fn with_capacity(capacity: usize) -> Self {
-        Self { receipts: Vec::with_capacity(capacity), senders: Vec::with_capacity(capacity). bloom: Default::default() }
+        Self {
+            receipts: Vec::with_capacity(capacity),
+            senders: Vec::with_capacity(capacity),
+            bloom: Default::default(),
+        }
     }
 
     fn seal(&self) {
-        self.bloom.get_or_init(|| {let mut bloom = Bloom::default();
-        for log in self.logs() {
-            bloom.accrue_log(log);
-        }
-        bloom});
+        self.bloom.get_or_init(|| {
+            let mut bloom = Bloom::default();
+            for log in self.logs() {
+                bloom.accrue_log(log);
+            }
+            bloom
+        });
     }
 
     fn unseal(&mut self) {
