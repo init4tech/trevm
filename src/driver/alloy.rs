@@ -1,4 +1,6 @@
-use crate::{Block, BundleDriver, DriveBundleResult};
+use crate::{
+    trevm_bail, trevm_ensure, unwrap_or_trevm_err, Block, BundleDriver, DriveBundleResult,
+};
 use alloy_consensus::{Transaction, TxEip4844Variant, TxEnvelope};
 use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
 use alloy_primitives::{bytes::Buf, keccak256, Address, TxKind, U256};
@@ -93,21 +95,22 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
         // Check if the block we're in is valid for this bundle. Both must match
-        if trevm.inner().block().number.to::<u64>() != self.bundle.block_number {
-            return Err(trevm.errored(BundleError::BlockNumberMismatch));
-        }
+        trevm_ensure!(
+            trevm.inner().block().number.to::<u64>() == self.bundle.block_number,
+            trevm,
+            BundleError::BlockNumberMismatch
+        );
 
         // Check if the bundle has any transactions
-        if self.bundle.txs.is_empty() {
-            return Err(trevm.errored(BundleError::BundleEmpty));
-        }
+        trevm_ensure!(!self.bundle.txs.is_empty(), trevm, BundleError::BundleEmpty);
 
         // Check if the state block number is valid (not 0, and not a tag)
-        if !self.bundle.state_block_number.is_number()
-            || self.bundle.state_block_number.as_number().unwrap_or(0) == 0
-        {
-            return Err(trevm.errored(BundleError::BlockNumberMismatch));
-        }
+        trevm_ensure!(
+            self.bundle.state_block_number.is_number()
+                && self.bundle.state_block_number.as_number().unwrap_or(0) != 0,
+            trevm,
+            BundleError::BlockNumberMismatch
+        );
 
         // Set the state block number this simulation was based on
         self.response.state_block_number = self
@@ -123,27 +126,25 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
             // Therefore we keep this mutable trevm instance, and set it to the new one after we're done simulating.
             let mut trevm = trevm;
 
-            let txs = self
-                .bundle
-                .txs
-                .iter()
-                .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
-                .collect::<Result<Vec<_>, _>>();
-            let txs = match txs {
-                Ok(txs) => txs,
-                Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
-            };
+            let txs = unwrap_or_trevm_err!(
+                self.bundle
+                    .txs
+                    .iter()
+                    .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
+                    .collect::<Result<Vec<_>, _>>(),
+                trevm
+            );
 
             // Check that the bundle does not exceed the maximum gas limit for blob transactions
-            if txs
-                .iter()
-                .filter_map(|tx| tx.as_eip4844())
-                .map(|tx| tx.tx().tx().blob_gas())
-                .sum::<u64>()
-                > MAX_BLOB_GAS_PER_BLOCK
-            {
-                return Err(trevm.errored(BundleError::Eip4844BlobGasExceeded));
-            }
+            trevm_ensure!(
+                txs.iter()
+                    .filter_map(|tx| tx.as_eip4844())
+                    .map(|tx| tx.tx().tx().blob_gas())
+                    .sum::<u64>()
+                    <= MAX_BLOB_GAS_PER_BLOCK,
+                trevm,
+                BundleError::Eip4844BlobGasExceeded
+            );
 
             // Cache the pre simulation coinbase balance, so we can use it to calculate the coinbase diff after every tx simulated.
             let initial_coinbase_balance =
@@ -179,27 +180,24 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
                         let gas_used = execution_result.gas_used();
 
                         // Fetch the address and coinbase balance after the transaction, to start calculating and results
-                        let from_address = tx
-                            .recover_signer()
-                            .map_err(|e| BundleError::TransactionSenderRecoveryError(e));
-                        let from_address = match from_address {
-                            Ok(addr) => addr,
-                            Err(e) => return Err(committed_trevm.errored(e)),
-                        };
+                        let from_address = unwrap_or_trevm_err!(
+                            tx.recover_signer()
+                                .map_err(|e| BundleError::TransactionSenderRecoveryError(e)),
+                            committed_trevm
+                        );
 
                         // Extend the hash bytes with the transaction hash to calculate the bundle hash later
                         hash_bytes.extend_from_slice(tx.tx_hash().as_slice());
 
                         // Get the post simulation coinbase balance
-                        let post_sim_coinbase_balance =
-                            match committed_trevm.try_read_balance(coinbase) {
-                                Ok(balance) => balance,
-                                Err(e) => {
-                                    return Err(committed_trevm.errored(BundleError::EVMError {
-                                        inner: revm::primitives::EVMError::Database(e),
-                                    }))
+                        let post_sim_coinbase_balance = unwrap_or_trevm_err!(
+                            committed_trevm.try_read_balance(coinbase).map_err(|e| {
+                                BundleError::EVMError {
+                                    inner: revm::primitives::EVMError::Database(e),
                                 }
-                            };
+                            }),
+                            committed_trevm
+                        );
 
                         // Calculate the gas fees paid
                         let gas_fees = match tx {
@@ -224,8 +222,10 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
                                 }
                             },
                             _ => {
-                                return Err(committed_trevm
-                                    .errored(BundleError::UnsupportedTransactionType))
+                                trevm_bail!(
+                                    committed_trevm,
+                                    BundleError::UnsupportedTransactionType
+                                )
                             }
                         };
 
@@ -245,8 +245,10 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
                                 }
                             },
                             _ => {
-                                return Err(committed_trevm
-                                    .errored(BundleError::UnsupportedTransactionType))
+                                trevm_bail!(
+                                    committed_trevm,
+                                    BundleError::UnsupportedTransactionType
+                                )
                             }
                         };
 
@@ -330,39 +332,41 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthSendBundle, EthBundleHash> {
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
         {
             // Check if the block we're in is valid for this bundle. Both must match
-            if trevm.inner().block().number.to::<u64>() != self.bundle.block_number {
-                return Err(trevm.errored(BundleError::BlockNumberMismatch));
-            }
+            trevm_ensure!(
+                trevm.inner().block().number.to::<u64>() == self.bundle.block_number,
+                trevm,
+                BundleError::BlockNumberMismatch
+            );
 
             // Check for start timestamp range validity
             if let Some(min_timestamp) = self.bundle.min_timestamp {
-                if trevm.inner().block().timestamp.to::<u64>() < min_timestamp {
-                    return Err(trevm.errored(BundleError::TimestampOutOfRange));
-                }
+                trevm_ensure!(
+                    trevm.inner().block().timestamp.to::<u64>() >= min_timestamp,
+                    trevm,
+                    BundleError::TimestampOutOfRange
+                );
             }
 
             // Check for end timestamp range validity
             if let Some(max_timestamp) = self.bundle.max_timestamp {
-                if trevm.inner().block().timestamp.to::<u64>() > max_timestamp {
-                    return Err(trevm.errored(BundleError::TimestampOutOfRange));
-                }
+                trevm_ensure!(
+                    trevm.inner().block().timestamp.to::<u64>() <= max_timestamp,
+                    trevm,
+                    BundleError::TimestampOutOfRange
+                );
             }
 
             // Check if the bundle has any transactions
-            if self.bundle.txs.is_empty() {
-                return Err(trevm.errored(BundleError::BundleEmpty));
-            }
+            trevm_ensure!(!self.bundle.txs.is_empty(), trevm, BundleError::BundleEmpty);
 
-            let txs = self
-                .bundle
-                .txs
-                .iter()
-                .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
-                .collect::<Result<Vec<_>, _>>();
-            let txs = match txs {
-                Ok(txs) => txs,
-                Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
-            };
+            let txs = unwrap_or_trevm_err!(
+                self.bundle
+                    .txs
+                    .iter()
+                    .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
+                    .collect::<Result<Vec<_>, _>>(),
+                trevm
+            );
 
             // Check that the bundle does not exceed the maximum gas limit for blob transactions
             if txs
@@ -399,7 +403,7 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthSendBundle, EthBundleHash> {
                         if self.bundle.reverting_tx_hashes.contains(tx.tx_hash()) {
                             run_result.accept_state()
                         } else {
-                            return Err(run_result.errored(BundleError::BundleReverted));
+                            trevm_bail!(run_result, BundleError::BundleReverted);
                         }
                     }
                 };
@@ -486,48 +490,47 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
         &mut self,
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
-        // 1. Check if the block we're in is valid for this bundle. Both must match
-        if trevm.inner().block().number.to::<u64>() != self.block_number {
-            return Err(trevm.errored(BundleError::BlockNumberMismatch));
-        }
+        // Check if the block we're in is valid for this bundle. Both must match
+        trevm_ensure!(
+            trevm.inner().block().number.to::<u64>() == self.block_number,
+            trevm,
+            BundleError::BlockNumberMismatch
+        );
 
         // Check if the bundle has any transactions
-        if self.txs.is_empty() {
-            return Err(trevm.errored(BundleError::BundleEmpty));
-        }
+        trevm_ensure!(!self.txs.is_empty(), trevm, BundleError::BundleEmpty);
 
         // Check if the state block number is valid (not 0, and not a tag)
-        if !self.state_block_number.is_number()
-            || self.state_block_number.as_number().unwrap_or(0) == 0
-        {
-            return Err(trevm.errored(BundleError::BlockNumberMismatch));
-        }
+        trevm_ensure!(
+            self.state_block_number.is_number()
+                && self.state_block_number.as_number().unwrap_or(0) != 0,
+            trevm,
+            BundleError::BlockNumberMismatch
+        );
 
         let bundle_filler = BundleBlockFiller::from(self.clone());
 
         let run_result = trevm.try_with_block(&bundle_filler, |trevm| {
             let mut trevm = trevm;
 
-            let txs = self
-                .txs
-                .iter()
-                .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
-                .collect::<Result<Vec<_>, _>>();
-            let txs = match txs {
-                Ok(txs) => txs,
-                Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
-            };
+            let txs = unwrap_or_trevm_err!(
+                self.txs
+                    .iter()
+                    .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
+                    .collect::<Result<Vec<_>, _>>(),
+                trevm
+            );
 
             // Check that the bundle does not exceed the maximum gas limit for blob transactions
-            if txs
-                .iter()
-                .filter_map(|tx| tx.as_eip4844())
-                .map(|tx| tx.tx().tx().blob_gas())
-                .sum::<u64>()
-                > MAX_BLOB_GAS_PER_BLOCK
-            {
-                return Err(trevm.errored(BundleError::Eip4844BlobGasExceeded));
-            }
+            trevm_ensure!(
+                txs.iter()
+                    .filter_map(|tx| tx.as_eip4844())
+                    .map(|tx| tx.tx().tx().blob_gas())
+                    .sum::<u64>()
+                    <= MAX_BLOB_GAS_PER_BLOCK,
+                trevm,
+                BundleError::Eip4844BlobGasExceeded
+            );
 
             for tx in txs.iter() {
                 let run_result = trevm.run_tx(tx);
@@ -573,49 +576,52 @@ impl<Ext> BundleDriver<Ext> for EthSendBundle {
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
         // Check if the block we're in is valid for this bundle. Both must match
-        if trevm.inner().block().number.to::<u64>() != self.block_number {
-            return Err(trevm.errored(BundleError::BlockNumberMismatch));
-        }
+        trevm_ensure!(
+            trevm.inner().block().number.to::<u64>() == self.block_number,
+            trevm,
+            BundleError::BlockNumberMismatch
+        );
 
         // Check for start timestamp range validity
+
         if let Some(min_timestamp) = self.min_timestamp {
-            if trevm.inner().block().timestamp.to::<u64>() < min_timestamp {
-                return Err(trevm.errored(BundleError::TimestampOutOfRange));
-            }
+            trevm_ensure!(
+                trevm.inner().block().timestamp.to::<u64>() >= min_timestamp,
+                trevm,
+                BundleError::TimestampOutOfRange
+            );
         }
 
         // Check for end timestamp range validity
         if let Some(max_timestamp) = self.max_timestamp {
-            if trevm.inner().block().timestamp.to::<u64>() > max_timestamp {
-                return Err(trevm.errored(BundleError::TimestampOutOfRange));
-            }
+            trevm_ensure!(
+                trevm.inner().block().timestamp.to::<u64>() <= max_timestamp,
+                trevm,
+                BundleError::TimestampOutOfRange
+            );
         }
 
         // Check if the bundle has any transactions
-        if self.txs.is_empty() {
-            return Err(trevm.errored(BundleError::BundleEmpty));
-        }
+        trevm_ensure!(!self.txs.is_empty(), trevm, BundleError::BundleEmpty);
 
-        let txs = self
-            .txs
-            .iter()
-            .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
-            .collect::<Result<Vec<_>, _>>();
-        let txs = match txs {
-            Ok(txs) => txs,
-            Err(e) => return Err(trevm.errored(BundleError::TransactionDecodingError(e))),
-        };
+        let txs = unwrap_or_trevm_err!(
+            self.txs
+                .iter()
+                .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
+                .collect::<Result<Vec<_>, _>>(),
+            trevm
+        );
 
         // Check that the bundle does not exceed the maximum gas limit for blob transactions
-        if txs
-            .iter()
-            .filter_map(|tx| tx.as_eip4844())
-            .map(|tx| tx.tx().tx().blob_gas())
-            .sum::<u64>()
-            > MAX_BLOB_GAS_PER_BLOCK
-        {
-            return Err(trevm.errored(BundleError::Eip4844BlobGasExceeded));
-        }
+        trevm_ensure!(
+            txs.iter()
+                .filter_map(|tx| tx.as_eip4844())
+                .map(|tx| tx.tx().tx().blob_gas())
+                .sum::<u64>()
+                <= MAX_BLOB_GAS_PER_BLOCK,
+            trevm,
+            BundleError::Eip4844BlobGasExceeded
+        );
 
         // Store the current evm state in this mutable variable, so we can continually use the freshest state for each simulation
         let mut t = trevm;
@@ -638,7 +644,7 @@ impl<Ext> BundleDriver<Ext> for EthSendBundle {
                     if self.reverting_tx_hashes.contains(tx.tx_hash()) {
                         run_result.accept_state()
                     } else {
-                        return Err(run_result.errored(BundleError::BundleReverted));
+                        trevm_bail!(run_result, BundleError::BundleReverted)
                     }
                 }
             };
