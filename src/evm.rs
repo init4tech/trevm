@@ -523,11 +523,31 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
         F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasCfg,
     {
-        let previous = std::mem::take(self.inner.cfg_mut());
+        let previous = self.inner.cfg_mut().clone();
         cfg.fill_cfg_env(self.inner.cfg_mut());
         let mut this = f(self);
         *this.inner.cfg_mut() = previous;
         this
+    }
+
+    /// Run a fallible function with the provided configuration, then restore the
+    /// previous configuration. This will not affect the block and tx, if those
+    /// have been filled.
+    pub fn try_with_cfg<C, F, NewState, E>(
+        mut self,
+        cfg: &C,
+        f: F,
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, E>
+    where
+        C: Cfg,
+        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, E>,
+        NewState: HasCfg,
+    {
+        let previous = self.inner.cfg_mut().clone();
+        cfg.fill_cfg_env(self.inner.cfg_mut());
+        let mut this = f(self)?;
+        *this.inner.cfg_mut() = previous;
+        Ok(this)
     }
 
     /// Set the KZG settings used for point evaluation precompiles. By default
@@ -926,11 +946,37 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
         F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasTx,
     {
-        let previous = std::mem::take(self.inner.tx_mut());
+        let previous = self.inner.tx_mut().clone();
         t.fill_tx_env(self.inner.tx_mut());
         let mut this = f(self);
         *this.inner.tx_mut() = previous;
         this
+    }
+
+    /// Run a fallible function with the provided transaction, then restore the
+    /// previous transaction.
+    pub fn try_with_tx<T, F, NewState, E>(
+        mut self,
+        t: &T,
+        f: F,
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>
+    where
+        T: Tx,
+        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>,
+        NewState: HasTx,
+    {
+        let previous = self.inner.tx_mut().clone();
+        t.fill_tx_env(self.inner.tx_mut());
+        match f(self) {
+            Ok(mut evm) => {
+                *evm.inner.tx_mut() = previous;
+                Ok(evm)
+            }
+            Err(mut evm) => {
+                *evm.inner.tx_mut() = previous;
+                Err(evm)
+            }
+        }
     }
 }
 
