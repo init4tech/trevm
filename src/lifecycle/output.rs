@@ -1,6 +1,7 @@
 use alloy_consensus::{ReceiptEnvelope, TxReceipt};
 use alloy_eips::eip6110::DepositRequest;
-use alloy_primitives::{Address, Log};
+use alloy_primitives::{Address, Bloom, Log};
+use std::sync::OnceLock;
 
 /// Information externalized during block execution.
 ///
@@ -13,6 +14,9 @@ pub struct BlockOutput<T: TxReceipt = ReceiptEnvelope> {
 
     /// The senders of the transactions in the block, in order.
     senders: Vec<Address>,
+
+    /// The logs bloom of the block.
+    bloom: OnceLock<Bloom>,
 }
 
 impl Default for BlockOutput {
@@ -25,7 +29,25 @@ impl<T: TxReceipt> BlockOutput<T> {
     /// Create a new block output with memory allocated to hold `capacity`
     /// transaction outcomes.
     pub fn with_capacity(capacity: usize) -> Self {
-        Self { receipts: Vec::with_capacity(capacity), senders: Vec::with_capacity(capacity) }
+        Self {
+            receipts: Vec::with_capacity(capacity),
+            senders: Vec::with_capacity(capacity),
+            bloom: Default::default(),
+        }
+    }
+
+    fn seal(&self) {
+        self.bloom.get_or_init(|| {
+            let mut bloom = Bloom::default();
+            for log in self.logs() {
+                bloom.accrue_log(log);
+            }
+            bloom
+        });
+    }
+
+    fn unseal(&mut self) {
+        self.bloom.take();
     }
 
     /// Reserve memory for `capacity` transaction outcomes.
@@ -44,6 +66,12 @@ impl<T: TxReceipt> BlockOutput<T> {
         self.receipts.iter().flat_map(|r| r.logs())
     }
 
+    /// Get the logs bloom of the block.
+    pub fn logs_bloom(&self) -> Bloom {
+        self.seal();
+        self.bloom.get().cloned().unwrap()
+    }
+
     /// Get a reference the senders of the transactions in the block.
     pub fn senders(&self) -> &[Address] {
         &self.senders
@@ -60,6 +88,7 @@ impl<T: TxReceipt> BlockOutput<T> {
     ///
     /// [EIP-6110]: https://eips.ethereum.org/EIPS/eip-6110
     pub fn push_result(&mut self, receipt: T, sender: Address) {
+        self.unseal();
         self.push_receipt(receipt);
         self.push_sender(sender);
     }
