@@ -242,15 +242,12 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
             let txs = unwrap_or_trevm_err!(Self::decode_and_validate_txs(&self.bundle.txs), trevm);
 
             // Cache the pre simulation coinbase balance, so we can use it to calculate the coinbase diff after every tx simulated.
-            let initial_coinbase_balance =
-                match trevm.try_read_balance(trevm.inner().block().coinbase) {
-                    Ok(balance) => balance,
-                    Err(e) => {
-                        return Err(trevm.errored(BundleError::EVMError {
-                            inner: revm::primitives::EVMError::Database(e),
-                        }))
-                    }
-                };
+            let initial_coinbase_balance = unwrap_or_trevm_err!(
+                trevm.try_read_balance(trevm.inner().block().coinbase).map_err(|e| {
+                    BundleError::EVMError { inner: revm::primitives::EVMError::Database(e) }
+                }),
+                trevm
+            );
             let mut pre_sim_coinbase_balance = initial_coinbase_balance;
             let post_sim_coinbase_balance = pre_sim_coinbase_balance;
             let mut total_gas_fees = U256::ZERO;
