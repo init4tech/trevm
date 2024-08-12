@@ -1,7 +1,8 @@
 use crate::{
-    driver::DriveBlockResult, Block, BlockDriver, Cfg, ChainDriver, DriveChainResult, ErroredState,
-    EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
-    HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
+    driver::DriveBlockResult, Block, BlockDriver, BundleDriver, Cfg, ChainDriver,
+    DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock,
+    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
+    TransactedState, Tx,
 };
 use alloy_primitives::{Address, Bytes, U256};
 use revm::{
@@ -516,17 +517,44 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
     /// Run a function with the provided configuration, then restore the
     /// previous configuration. This will not affect the block and tx, if those
     /// have been filled.
-    pub fn with_cfg<F, C, NewState>(mut self, f: F, cfg: &C) -> Trevm<'a, Ext, Db, NewState>
+    pub fn with_cfg<C, F, NewState>(mut self, cfg: &C, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
-        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         C: Cfg,
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasCfg,
     {
-        let previous = std::mem::take(self.inner.cfg_mut());
+        let previous = self.inner.cfg_mut().clone();
         cfg.fill_cfg_env(self.inner.cfg_mut());
         let mut this = f(self);
         *this.inner.cfg_mut() = previous;
         this
+    }
+
+    /// Run a fallible function with the provided configuration, then restore the
+    /// previous configuration. This will not affect the block and tx, if those
+    /// have been filled.
+    pub fn try_with_cfg<C, F, NewState, E>(
+        mut self,
+        cfg: &C,
+        f: F,
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>
+    where
+        C: Cfg,
+        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>,
+        NewState: HasCfg,
+    {
+        let previous = self.inner.cfg_mut().clone();
+        cfg.fill_cfg_env(self.inner.cfg_mut());
+        match f(self) {
+            Ok(mut evm) => {
+                *evm.inner.cfg_mut() = previous;
+                Ok(evm)
+            }
+            Err(mut evm) => {
+                *evm.inner.cfg_mut() = previous;
+                Err(evm)
+            }
+        }
     }
 
     /// Set the KZG settings used for point evaluation precompiles. By default
@@ -813,17 +841,42 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
 
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState> {
     /// Run a function with the provided block, then restore the previous block.
-    pub fn with_block<F, B, NewState>(mut self, f: F, b: &B) -> Trevm<'a, Ext, Db, NewState>
+    pub fn with_block<B, F, NewState>(mut self, b: &B, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
-        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         B: Block,
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasBlock,
     {
-        let previous = std::mem::take(self.inner.block_mut());
+        let previous = self.inner.block_mut().clone();
         b.fill_block_env(self.inner.block_mut());
         let mut this = f(self);
         *this.inner.block_mut() = previous;
         this
+    }
+
+    /// Run a fallible function with the provided block, then restore the previous block.
+    pub fn try_with_block<B, F, NewState, E>(
+        mut self,
+        b: &B,
+        f: F,
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>
+    where
+        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>,
+        B: Block,
+        NewState: HasBlock,
+    {
+        let previous = self.inner.block_mut().clone();
+        b.fill_block_env(self.inner.block_mut());
+        match f(self) {
+            Ok(mut evm) => {
+                *evm.inner.block_mut() = previous;
+                Ok(evm)
+            }
+            Err(mut evm) => {
+                *evm.inner.block_mut() = previous;
+                Err(evm)
+            }
+        }
     }
 }
 
@@ -859,6 +912,20 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
         unsafe { std::mem::transmute(self) }
     }
 
+    /// Drive a bundle to completion, apply some post-bundle logic, and return the
+    /// EVM ready for the next bundle or tx.
+    pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<'a, Ext, Db, D>
+    where
+        D: BundleDriver<Ext>,
+    {
+        let trevm = driver.run_bundle(self)?;
+
+        match driver.post_bundle(&trevm) {
+            Ok(_) => Ok(trevm),
+            Err(e) => Err(trevm.errored(e)),
+        }
+    }
+
     /// Fill the transaction environment.
     pub fn fill_tx<T: Tx>(mut self, filler: &T) -> EvmReady<'a, Ext, Db> {
         filler.fill_tx(&mut self.inner);
@@ -880,17 +947,43 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
     /// Run a function with the provided transaction, then restore the previous
     /// transaction.
-    pub fn with_tx<F, T, NewState>(mut self, f: F, t: &T) -> Trevm<'a, Ext, Db, NewState>
+    pub fn with_tx<T, F, NewState>(mut self, t: &T, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
-        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         T: Tx,
+        F: FnOnce(Self) -> Trevm<'a, Ext, Db, NewState>,
         NewState: HasTx,
     {
-        let previous = std::mem::take(self.inner.tx_mut());
+        let previous = self.inner.tx_mut().clone();
         t.fill_tx_env(self.inner.tx_mut());
         let mut this = f(self);
         *this.inner.tx_mut() = previous;
         this
+    }
+
+    /// Run a fallible function with the provided transaction, then restore the
+    /// previous transaction.
+    pub fn try_with_tx<T, F, NewState, E>(
+        mut self,
+        t: &T,
+        f: F,
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>
+    where
+        T: Tx,
+        F: FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db, E>>,
+        NewState: HasTx,
+    {
+        let previous = self.inner.tx_mut().clone();
+        t.fill_tx_env(self.inner.tx_mut());
+        match f(self) {
+            Ok(mut evm) => {
+                *evm.inner.tx_mut() = previous;
+                Ok(evm)
+            }
+            Err(mut evm) => {
+                *evm.inner.tx_mut() = previous;
+                Err(evm)
+            }
+        }
     }
 }
 

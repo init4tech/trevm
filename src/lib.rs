@@ -363,7 +363,10 @@
 #![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
 
 mod driver;
-pub use driver::{BlockDriver, ChainDriver, DriveBlockResult, DriveChainResult, RunTxResult};
+pub use driver::{
+    BlockDriver, BundleDriver, BundleError, BundleProcessor, ChainDriver, DriveBlockResult,
+    DriveBundleResult, DriveChainResult, RunTxResult,
+};
 
 mod evm;
 pub use evm::Trevm;
@@ -377,11 +380,13 @@ pub use fill::{Block, Cfg, NoopBlock, NoopCfg, Tx};
 mod lifecycle;
 pub use lifecycle::{ethereum_receipt, BlockOutput, PostTx, PostflightResult};
 
+mod macros;
+
 mod states;
 pub(crate) use states::sealed::*;
 pub use states::{
-    EvmBlockDriverErrored, EvmChainDriverErrored, EvmErrored, EvmNeedsBlock, EvmNeedsCfg,
-    EvmNeedsTx, EvmReady, EvmTransacted,
+    EvmBlockDriverErrored, EvmBundleDriverErrored, EvmChainDriverErrored, EvmErrored,
+    EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
 };
 
 pub mod system;

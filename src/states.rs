@@ -1,4 +1,4 @@
-use crate::{BlockDriver, ChainDriver, Trevm};
+use crate::{driver::BundleDriver, BlockDriver, ChainDriver, Trevm};
 use revm::{primitives::EVMError, Database};
 use sealed::*;
 
@@ -63,6 +63,12 @@ pub type EvmBlockDriverErrored<'a, Ext, Db, T> =
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
 pub type EvmChainDriverErrored<'a, Ext, Db, T> =
     EvmErrored<'a, Ext, Db, <T as ChainDriver<Ext>>::Error<Db>>;
+
+/// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
+///
+/// This is an [`EvmErrored`] parameterized with the driver's error type.
+pub type EvmBundleDriverErrored<'a, Ext, Db, T> =
+    EvmErrored<'a, Ext, Db, <T as BundleDriver<Ext>>::Error<Db>>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]
 pub(crate) mod sealed {
@@ -142,6 +148,7 @@ pub(crate) mod sealed {
 /// - [`EvmErrored`]
 /// - [`EvmBlockDriverErrored`]
 /// - [`EvmChainDriverErrored`]
+/// - [`EvmBundleDriverErrored`]
 ///
 /// ## Basic usage:
 ///
@@ -260,6 +267,12 @@ macro_rules! trevm_aliases {
             ///
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
             pub type EvmChainDriverErrored<'a, T> = $crate::EvmChainDriverErrored<'a, $ext, $db, T>;
+
+            /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
+            ///
+            /// This is an [`EvmErrored`] parameterized with the driver's error type.
+            pub type EvmBundleDriverErrored<'a, T> =
+                $crate::EvmBundleDriverErrored<'a, $ext, $db, T>;
         }
     };
 
@@ -332,6 +345,12 @@ macro_rules! trevm_aliases {
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
             pub type EvmChainDriverErrored<'a, T> =
                 $crate::EvmChainDriverErrored<'static, $ext, $db, T>;
+
+            /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
+            ///
+            /// This is an [`EvmErrored`] parameterized with the driver's error type.
+            pub type EvmBundleDriverErrored<'a, T> =
+                $crate::EvmBundleDriverErrored<'static, $ext, $db, T>;
         }
     };
 }
