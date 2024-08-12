@@ -1,5 +1,5 @@
 mod alloy;
-pub use alloy::{BundleError, BundleSimulator};
+pub use alloy::{BundleError, BundleProcessor};
 
 mod block;
 pub use block::{BlockDriver, DriveBlockResult, RunTxResult};
