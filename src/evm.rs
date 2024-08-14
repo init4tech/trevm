@@ -882,7 +882,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
 
 // --- Needs Block with State<Db>
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, State<Db>> {
+impl<'a, Ext, Db: Database> EvmNeedsBlock<'a, Ext, State<Db>> {
     /// Finish execution and return the outputs.
     ///
     /// ## Panics
@@ -890,10 +890,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, State<Db>> {
     /// If the State has not been built with StateBuilder::with_bundle_update.
     ///
     /// See [`State::merge_transitions`] and [`State::take_bundle`].
-    pub fn finish(self) -> BundleState
-    where
-        Db: Database,
-    {
+    pub fn finish(self) -> BundleState {
         let Self { inner: mut evm, .. } = self;
 
         evm.db_mut().merge_transitions(BundleRetention::Reverts);
