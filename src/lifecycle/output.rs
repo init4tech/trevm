@@ -109,4 +109,10 @@ impl<T: TxReceipt> BlockOutput<T> {
             self.receipts().iter().flat_map(TxReceipt::logs),
         )
     }
+
+    /// Deconstruct the block output into its parts.
+    pub fn into_parts(self) -> (Vec<T>, Vec<Address>, Bloom) {
+        let bloom = self.logs_bloom();
+        (self.receipts, self.senders, bloom)
+    }
 }
