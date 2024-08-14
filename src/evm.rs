@@ -892,7 +892,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, State<Db>> {
     /// See [`State::merge_transitions`] and [`State::take_bundle`].
     pub fn finish(self) -> BundleState
     where
-        Db: Database + DatabaseCommit,
+        Db: Database,
     {
         let Self { inner: mut evm, .. } = self;
 
