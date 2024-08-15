@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.6.0"
+version = "0.6.1"
 rust-version = "1.79.0"
 edition = "2021"
 authors = ["init4"]
@@ -65,7 +65,7 @@ default = [
     "revm/secp256k1"
 ]
 
-test-utils = ["revm/test-utils"]
+test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
 
 
 secp256k1 = ["revm/secp256k1"]
