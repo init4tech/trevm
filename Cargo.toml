@@ -32,7 +32,7 @@ alloy-eips = "0.2.0"
 alloy-primitives = "0.7.6"
 alloy-rpc-types-eth = "0.2.0"
 alloy-rpc-types-mev = "0.2.0"
-alloy-sol-types = "0.7.7"
+alloy-sol-types = "0.8.0"
 revm = { version = "13.0.0", default-features = false, features = ["std"] }
 zenith-types = "0.5"
 
