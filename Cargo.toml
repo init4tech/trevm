@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.7.0"
+version = "0.8.0"
 rust-version = "1.79.0"
 edition = "2021"
 authors = ["init4"]
@@ -34,7 +34,7 @@ alloy-rpc-types-eth = "0.2.0"
 alloy-rpc-types-mev = "0.2.0"
 alloy-sol-types = "0.7.7"
 revm = { version = "13.0.0", default-features = false, features = ["std"] }
-zenith-types = "0.5"
+zenith-types = "0.6"
 
 thiserror = "1.0"
 
