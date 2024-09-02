@@ -31,7 +31,7 @@ alloy-consensus = { version = "0.2", features = ["k256"] }
 alloy-eips = "0.2.0"
 alloy-primitives = "0.7.6"
 alloy-rpc-types-eth = "0.2.0"
-alloy-rpc-types-mev = "0.2.0"
+alloy-rpc-types-mev = "0.3.1"
 alloy-sol-types = "0.7.7"
 revm = { version = "13.0.0", default-features = false, features = ["std"] }
 zenith-types = "0.6"
