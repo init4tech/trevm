@@ -109,12 +109,33 @@ impl<B, R> BundleProcessor<B, R> {
             Ok(txs)
         }
     }
+
+    /// Take the response from the bundle driver. This consumes the driver.
+    pub fn into_response(self) -> R {
+        self.response
+    }
+
+    /// Get a reference to the bundle.
+    pub const fn bundle(&self) -> &B {
+        &self.bundle
+    }
+
+    /// Get a reference to the response.
+    pub const fn response(&self) -> &R {
+        &self.response
+    }
 }
 
 impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
     /// Create a new bundle simulator with the given bundle.
     pub fn new_call(bundle: EthCallBundle) -> Self {
         Self::new(bundle, EthCallBundleResponse::default())
+    }
+
+    /// Clear the driver, resetting the response. This resets the driver,
+    /// allowing for resimulation of the same bundle.
+    pub fn clear(&mut self) {
+        std::mem::take(&mut self.response);
     }
 
     /// Process a bundle transaction and accumulate the results into a [EthCallBundleTransactionResult].
