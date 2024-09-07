@@ -77,13 +77,31 @@ pub struct BundleProcessor<B, R> {
     /// The bundle to process.
     pub bundle: B,
     /// The response for the processed bundle.
-    pub response: R,
+    response: R,
 }
 
-impl<B, R> BundleProcessor<B, R> {
+impl<B, R> BundleProcessor<B, R>
+where
+    R: Default,
+{
     /// Create a new bundle simulator with the given bundle and response.
-    pub const fn new(bundle: B, response: R) -> Self {
-        Self { bundle, response }
+    pub fn new(bundle: B) -> Self {
+        Self { bundle, response: R::default() }
+    }
+
+    /// Clear the driver, resetting the response. This resets the driver,
+    /// allowing for resimulation of the same bundle.
+    pub fn clear(&mut self) -> R {
+        std::mem::take(&mut self.response)
+    }
+}
+
+impl<B, R> From<B> for BundleProcessor<B, R>
+where
+    R: Default,
+{
+    fn from(bundle: B) -> Self {
+        Self::new(bundle)
     }
 }
 
@@ -109,12 +127,27 @@ impl<B, R> BundleProcessor<B, R> {
             Ok(txs)
         }
     }
+
+    /// Take the response from the bundle driver. This consumes the driver.
+    pub fn into_response(self) -> R {
+        self.response
+    }
+
+    /// Get a reference to the bundle.
+    pub const fn bundle(&self) -> &B {
+        &self.bundle
+    }
+
+    /// Get a reference to the response.
+    pub const fn response(&self) -> &R {
+        &self.response
+    }
 }
 
 impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
     /// Create a new bundle simulator with the given bundle.
     pub fn new_call(bundle: EthCallBundle) -> Self {
-        Self::new(bundle, EthCallBundleResponse::default())
+        Self::new(bundle)
     }
 
     /// Process a bundle transaction and accumulate the results into a [EthCallBundleTransactionResult].
