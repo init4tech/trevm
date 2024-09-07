@@ -47,7 +47,7 @@ alloy-provider = "0.2"
 alloy-transport = "0.2"
 
 alloy-signer = { version = "0.3", default-features = false }
-alloy-signer-local = { version = "0.2", default-features = false }
+alloy-signer-local = { version = "0.3", default-features = false }
 
 alloy-rlp = { version = "0.3", default-features = false }
 
