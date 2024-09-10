@@ -261,7 +261,7 @@ impl Block for alloy_rpc_types_eth::Header {
             prevrandao,
             blob_excess_gas_and_price,
         } = block_env;
-        *number = U256::from(self.number.unwrap_or_default());
+        *number = U256::from(self.number);
         *coinbase = self.miner;
         *timestamp = U256::from(self.timestamp);
         *gas_limit = U256::from(self.gas_limit);
