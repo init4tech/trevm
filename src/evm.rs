@@ -6,12 +6,12 @@ use crate::{
 };
 use alloy_primitives::{Address, Bytes, U256};
 use revm::{
-    db::{states::bundle_state::BundleRetention, BundleState},
+    db::{states::bundle_state::BundleRetention, BundleState, State},
     primitives::{
         AccountInfo, Bytecode, EVMError, EvmState, ExecutionResult, InvalidTransaction,
         ResultAndState, SpecId,
     },
-    Database, DatabaseCommit, DatabaseRef, Evm, State,
+    Database, DatabaseCommit, DatabaseRef, Evm,
 };
 use std::{convert::Infallible, fmt};
 
@@ -892,7 +892,6 @@ impl<'a, Ext, Db: Database> EvmNeedsBlock<'a, Ext, State<Db>> {
     /// See [`State::merge_transitions`] and [`State::take_bundle`].
     pub fn finish(self) -> BundleState {
         let Self { inner: mut evm, .. } = self;
-
         evm.db_mut().merge_transitions(BundleRetention::Reverts);
         let bundle = evm.db_mut().take_bundle();
 
