@@ -42,7 +42,7 @@ const ACCT_DIFF_MIN_BYTES: usize = 4 + INFO_OUTCOME_MIN_BYTES;
 #[derive(thiserror::Error, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum JournalDecodeError {
     /// The buffer does not contain enough data to decode the type.
-    #[error("Buffer overrun while decoding {ty_name}. Expected {expected} bytes, but only {remaining} bytes remain.")]
+    #[error("buffer overrun while decoding {ty_name}. Expected {expected} bytes, but only {remaining} bytes remain")]
     Overrun {
         /// The name of the type being decoded.
         ty_name: &'static str,
@@ -53,7 +53,7 @@ pub enum JournalDecodeError {
     },
 
     /// Invalid tag while decoding a type.
-    #[error("Invalid tag while decoding {ty_name}. Expected a tag in range 0..={max_expected}, got {tag}.")]
+    #[error("invalid tag while decoding {ty_name}. Expected a tag in range 0..={max_expected}, got {tag}")]
     InvalidTag {
         /// The name of the type being decoded.
         ty_name: &'static str,
@@ -64,15 +64,15 @@ pub enum JournalDecodeError {
     },
 
     /// Storage slot is unchanged, journal should not contain unchanged slots.
-    #[error("Storage slot is unchanged. Unchanged items should never be in the journal.")]
+    #[error("storage slot is unchanged. Unchanged items should never be in the journal")]
     UnchangedStorage,
 
     /// Error decoding an EOF bytecode.
-    #[error("Error decoding EOF bytecode: {0}")]
+    #[error("error decoding EOF bytecode: {0}")]
     EofDecode(#[from] EofDecodeError),
 
     /// Error decoding an EIP-7702 bytecode.
-    #[error("Error decoding EIP-7702 bytecode: {0}")]
+    #[error("error decoding EIP-7702 bytecode: {0}")]
     Eip7702Decode(#[from] Eip7702DecodeError),
 }
 
