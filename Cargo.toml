@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.10.0"
+version = "0.10.1"
 rust-version = "1.79.0"
 edition = "2021"
 authors = ["init4"]
@@ -40,6 +40,7 @@ revm = { version = "14.0.0", default-features = false, features = ["std"] }
 zenith-types = "0.7"
 
 thiserror = "1.0"
+alloy-rlp = "0.3"
 
 [dev-dependencies]
 revm = { version = "14.0.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
