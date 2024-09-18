@@ -8,9 +8,13 @@ use std::{
     collections::{BTreeMap, HashMap},
 };
 
-/// Outcome of an account info after block execution. Post-6780, accounts
-/// cannot be destroyed, only created or modified. In either case, the new and
-/// old states are contained in this object.
+/// Outcome of an account info after block execution.
+///
+/// Post-6780, accounts cannot be destroyed, only created or modified. In
+/// either case, the new and old states are contained in this object.
+///
+/// In general, this should not be instantiated directly. Instead, use the
+/// [`BundleStateIndex`] to index a [`BundleState`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InfoOutcome<'a> {
     /// Account was created after block execution.
@@ -69,14 +73,18 @@ impl<'a> From<&'a BundleAccount> for InfoOutcome<'a> {
     }
 }
 
-/// Contains the diff of an account after block execution. This includes the
-/// account info and the storage diff. This type ensures that the storage
-/// updates are sorted by slot.
+/// Contains the diff of an account after block execution.
+///
+/// This includes the account info and the storage diff. This type ensures that
+/// the storage updates are sorted by slot.
 ///
 /// Reverting this means:
 /// - Write the original value for the account info (deleting the account if it
 ///   was created)
 /// - Write the original value for each storage slot
+///
+/// In general, this should not be instantiated directly. Instead, use the
+/// [`BundleStateIndex`] to index a [`BundleState`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcctDiff<'a> {
     /// Outcome of an account info after block execution.
@@ -132,6 +140,19 @@ impl From<AcctDiff<'_>> for BundleAccount {
 /// Reverting this type means reverting
 /// - Reverting each account state
 /// - Deleting each new contract
+///
+/// ```
+/// # use revm::db::BundleState;
+/// # use trevm::journal::{BundleStateIndex, JournalEncode, JournalDecode, JournalDecodeError};
+/// # fn make_index(bundle_state: &BundleState) -> Result<(), JournalDecodeError> {
+///   let index = BundleStateIndex::from(bundle_state);
+///   let serialized_index = index.encoded();
+///   let decoded = BundleStateIndex::decode(&mut serialized_index.as_slice())?;
+///   assert_eq!(index, decoded);
+/// # Ok(())
+/// # }
+/// ```
+///
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BundleStateIndex<'a> {
     /// The state index contains the account and storage diffs for a single
