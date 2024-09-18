@@ -1,4 +1,4 @@
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, Sign, B256, I256, U256};
 use revm::{
     db::{states::StorageSlot, AccountStatus, BundleAccount, BundleState},
     primitives::{AccountInfo, Bytecode},
@@ -106,6 +106,16 @@ impl AcctDiff<'_> {
     pub fn updated(&self) -> Cow<'_, AccountInfo> {
         self.outcome.updated()
     }
+
+    /// Get the change in balance for the account.
+    pub fn balance_change(&self) -> I256 {
+        let old = self.original().map(|info| info.balance).unwrap_or_default();
+        let new = self.updated().balance;
+
+        let abs = std::cmp::max(new, old) - std::cmp::min(new, old);
+        let sign = if new > old { Sign::Positive } else { Sign::Negative };
+        I256::checked_from_sign_and_abs(sign, abs).expect("balance diff overflow")
+    }
 }
 
 impl<'a> From<&'a BundleAccount> for AcctDiff<'a> {
@@ -141,37 +151,38 @@ impl From<AcctDiff<'_>> for BundleAccount {
 /// - Reverting each account state
 /// - Deleting each new contract
 ///
+/// # Example
+///
 /// ```
 /// # use revm::db::BundleState;
 /// # use trevm::journal::{BundleStateIndex, JournalEncode, JournalDecode, JournalDecodeError};
 /// # fn make_index(bundle_state: &BundleState) -> Result<(), JournalDecodeError> {
-///   let index = BundleStateIndex::from(bundle_state);
-///   let serialized_index = index.encoded();
-///   let decoded = BundleStateIndex::decode(&mut serialized_index.as_slice())?;
-///   assert_eq!(index, decoded);
+/// let index = BundleStateIndex::from(bundle_state);
+/// let serialized_index = index.encoded();
+/// let decoded = BundleStateIndex::decode(&mut serialized_index.as_slice())?;
+/// assert_eq!(index, decoded);
 /// # Ok(())
 /// # }
 /// ```
-///
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BundleStateIndex<'a> {
     /// The state index contains the account and storage diffs for a single
     /// block.
-    pub state_index: BTreeMap<Address, AcctDiff<'a>>,
+    pub state: BTreeMap<Address, AcctDiff<'a>>,
     /// The new contracts created in this block.
     pub new_contracts: BTreeMap<B256, Cow<'a, Bytecode>>,
 }
 
 impl<'a> From<&'a BundleState> for BundleStateIndex<'a> {
     fn from(value: &'a BundleState) -> Self {
-        let state_index = value
+        let state = value
             .state
             .iter()
             .map(|(address, account)| (*address, AcctDiff::from(account)))
             .collect();
 
         let new_contracts = value.contracts.iter().map(|(k, v)| (*k, Cow::Borrowed(v))).collect();
-        BundleStateIndex { state_index, new_contracts }
+        BundleStateIndex { state, new_contracts }
     }
 }
 
@@ -181,7 +192,7 @@ impl From<BundleStateIndex<'_>> for BundleState {
     fn from(value: BundleStateIndex<'_>) -> Self {
         let mut state_size = 0;
         let state: HashMap<_, _> = value
-            .state_index
+            .state
             .into_iter()
             .map(|(address, info)| {
                 let original = info.original().map(Cow::into_owned);

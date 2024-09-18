@@ -317,7 +317,7 @@ impl JournalEncode for BundleStateIndex<'_> {
         // u32 for len
         4
         // 20 for key, then size of value
-        + self.state_index.values().fold(0, |acc, v|
+        + self.state.values().fold(0, |acc, v|
             acc + 20 + v.serialized_size())
         // u32 for len of contracts
         + 4
@@ -328,8 +328,8 @@ impl JournalEncode for BundleStateIndex<'_> {
     }
 
     fn encode(&self, buf: &mut dyn BufMut) {
-        buf.put_u32(self.state_index.len() as u32);
-        for (address, diff) in &self.state_index {
+        buf.put_u32(self.state.len() as u32);
+        for (address, diff) in &self.state {
             address.encode(buf);
             diff.encode(buf);
         }
@@ -547,12 +547,12 @@ impl JournalDecode for Bytecode {
 
 impl JournalDecode for BundleStateIndex<'static> {
     fn decode(buf: &mut &[u8]) -> Result<Self> {
-        let state_index_len: u32 = JournalDecode::decode(buf)?;
-        let mut state_index = BTreeMap::new();
-        for _ in 0..state_index_len {
+        let state_len: u32 = JournalDecode::decode(buf)?;
+        let mut state = BTreeMap::new();
+        for _ in 0..state_len {
             let address = JournalDecode::decode(buf)?;
             let diff = JournalDecode::decode(buf)?;
-            state_index.insert(address, diff);
+            state.insert(address, diff);
         }
 
         let new_contracts_len: u32 = JournalDecode::decode(buf)?;
@@ -563,7 +563,7 @@ impl JournalDecode for BundleStateIndex<'static> {
             new_contracts.insert(address, Cow::Owned(code));
         }
 
-        Ok(BundleStateIndex { state_index, new_contracts })
+        Ok(BundleStateIndex { state, new_contracts })
     }
 }
 
@@ -672,7 +672,7 @@ mod test {
         roundtrip(&eof_bytes);
 
         let bsi = BundleStateIndex {
-            state_index: vec![
+            state: vec![
                 (Address::repeat_byte(0xa), created_acc),
                 (Address::repeat_byte(0xb), changed_acc),
             ]

@@ -20,6 +20,32 @@
 //! prioritizes legibility and simplicity over compactness. We assume that it
 //! will be compressed before being stored or sent.
 //!
+//! # Usage Example
+//!
+//! ```
+//! # use revm::db::BundleState;
+//! # use trevm::journal::{BundleStateIndex, JournalEncode, JournalDecode, JournalDecodeError};
+//! # fn make_index(bundle_state: &BundleState) -> Result<(), JournalDecodeError> {
+//! // Make an index over a bundle state.
+//! let index = BundleStateIndex::from(bundle_state);
+//!
+//! // We can serialize it and deserialize it :)
+//! let serialized_index = index.encoded();
+//! let decoded = BundleStateIndex::decode(&mut serialized_index.as_slice())?;
+//! assert_eq!(index, decoded);
+//!
+//! // It contains information about accounts
+//! for (addr, diff) in index.state {
+//!     println!("Balance of {addr} changed by {}", diff.balance_change());
+//! }
+//!
+//! // And about bytecode
+//! let contract_count = index.new_contracts.len();
+//! println!("{contract_count} new contracts deployed!");
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! [`StateBuilder::with_bundle_update`]: revm::db::StateBuilder::with_bundle_update
 //! [`State<Db>`]: revm::db::State
 //! [`BundleState`]: revm::db::BundleState
