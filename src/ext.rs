@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use alloy_primitives::{Address, B256, U256};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode, EvmStorageSlot},
+    primitives::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot},
     Database, DatabaseCommit,
 };
 
@@ -48,28 +48,29 @@ pub trait EvmExtUnchecked<Db: Database> {
     {
         let mut state = HashMap::default();
         let mut old = HashMap::default();
-        for account in changes.into_iter() {
-            let mut acct = self.account(account)?;
-            old.insert(account, acct.info.clone());
+        for addr in changes.into_iter() {
+            let mut acct = self.account(addr)?;
+            old.insert(addr, acct.info.clone());
             f(&mut acct.info);
             acct.mark_touch();
-            state.insert(account, acct);
+            state.insert(addr, acct);
         }
         self.db_mut_ext().commit(state);
         Ok(old)
     }
 
     /// Modify an account with a closure and commit the modified account.
-    fn modify_account<F>(&mut self, address: Address, f: F) -> Result<AccountInfo, Db::Error>
+    fn modify_account<F>(&mut self, addr: Address, f: F) -> Result<AccountInfo, Db::Error>
     where
         F: FnOnce(&mut AccountInfo),
         Db: DatabaseCommit,
     {
-        let mut acct = self.account(address)?;
+        let mut acct = self.account(addr)?;
         let old = acct.info.clone();
         f(&mut acct.info);
         acct.mark_touch();
-        let changes = [(address, acct)].into_iter().collect();
+
+        let changes: EvmState = [(addr, acct)].into_iter().collect();
         self.db_mut_ext().commit(changes);
         Ok(old)
     }

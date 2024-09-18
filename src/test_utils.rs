@@ -1,7 +1,7 @@
 use crate::{EvmNeedsCfg, Trevm, TrevmBuilder};
 use alloy_primitives::{Address, U256};
 use revm::{
-    db::{CacheDB, EmptyDB, InMemoryDB},
+    db::{CacheDB, EmptyDB, InMemoryDB, State},
     inspector_handle_register,
     inspectors::TracerEip3155,
     primitives::{AccountInfo, Bytecode},
@@ -104,6 +104,11 @@ where
 /// Make a new [`Trevm`] with an in-memory database.
 pub fn test_trevm() -> EvmNeedsCfg<'static, (), CacheDB<EmptyDB>> {
     EvmBuilder::default().with_db(CacheDB::new(EmptyDB::default())).build_trevm()
+}
+
+/// Make a new [`Trevm`] with an in-memory database wrapped in a [`State`].
+pub fn test_state_trevm() -> EvmNeedsCfg<'static, (), State<EmptyDB>> {
+    EvmBuilder::default().with_db(State::builder().with_bundle_update().build()).build_trevm()
 }
 
 /// Make a new [`Trevm`] with an in-memory database and a tracer inspector.

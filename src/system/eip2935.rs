@@ -46,9 +46,6 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
             .block_hash(prev_block)
             .map_err(EVMError::Database)?;
 
-        dbg!(slot);
-        dbg!(parent_block_hash);
-
         self.try_set_storage_unchecked(HISTORY_STORAGE_ADDRESS, slot, parent_block_hash.into())
             .map_err(EVMError::Database)?;
 
