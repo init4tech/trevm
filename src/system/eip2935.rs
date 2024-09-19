@@ -5,7 +5,7 @@ use revm::{
     Database, DatabaseCommit,
 };
 
-pub use alloy_eips::eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE};
+pub use alloy::eips::eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE};
 
 use super::checked_insert_code;
 

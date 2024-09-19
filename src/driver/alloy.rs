@@ -1,13 +1,15 @@
 use crate::{
     trevm_bail, trevm_ensure, unwrap_or_trevm_err, Block, BundleDriver, DriveBundleResult,
 };
-use alloy_consensus::{Transaction, TxEip4844Variant, TxEnvelope};
-use alloy_eips::{eip2718::Decodable2718, BlockNumberOrTag};
-use alloy_primitives::{bytes::Buf, keccak256, Address, Bytes, TxKind, U256};
-use alloy_rpc_types_mev::{
-    EthBundleHash, EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult,
-    EthSendBundle,
+use alloy::{
+    consensus::{Transaction, TxEip4844Variant, TxEnvelope},
+    eips::{eip2718::Decodable2718, BlockNumberOrTag},
+    rpc::types::mev::{
+        EthBundleHash, EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult,
+        EthSendBundle,
+    },
 };
+use alloy_primitives::{bytes::Buf, keccak256, Address, Bytes, TxKind, U256};
 use revm::primitives::{EVMError, ExecutionResult, MAX_BLOB_GAS_PER_BLOCK};
 use thiserror::Error;
 
@@ -34,7 +36,7 @@ pub enum BundleError<Db: revm::Database> {
     UnsupportedTransactionType,
     /// An error occurred while decoding a transaction contained in the bundle.
     #[error("transaction decoding error")]
-    TransactionDecodingError(#[from] alloy_eips::eip2718::Eip2718Error),
+    TransactionDecodingError(#[from] alloy::eips::eip2718::Eip2718Error),
     /// An error ocurred while recovering the sender of a transaction
     #[error("transaction sender recovery error")]
     TransactionSenderRecoveryError(#[from] alloy_primitives::SignatureError),

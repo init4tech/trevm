@@ -1,5 +1,7 @@
-use alloy_consensus::{ReceiptEnvelope, TxReceipt};
-use alloy_eips::eip6110::DepositRequest;
+use alloy::{
+    consensus::{ReceiptEnvelope, TxReceipt},
+    eips::eip6110::DepositRequest,
+};
 use alloy_primitives::{Address, Bloom, Log};
 use std::sync::OnceLock;
 

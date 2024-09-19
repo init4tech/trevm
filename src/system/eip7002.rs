@@ -1,6 +1,6 @@
 use super::{checked_insert_code, execute_system_tx};
 use crate::{system::SystemTx, EvmNeedsTx};
-use alloy_eips::eip7002::{WithdrawalRequest, WITHDRAWAL_REQUEST_PREDEPLOY_CODE};
+use alloy::eips::eip7002::{WithdrawalRequest, WITHDRAWAL_REQUEST_PREDEPLOY_CODE};
 use alloy_primitives::{Address, Bytes};
 use revm::{
     primitives::{EVMError, SpecId},
@@ -10,7 +10,7 @@ use revm::{
 /// The address for the [EIP-7002] withdrawal requests contract.
 ///
 /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-pub use alloy_eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS;
+pub use alloy::eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS;
 
 /// The size of a withdrawal request in bytes.
 pub const WITHDRAWAL_REQUEST_BYTES: usize = 20 + 48 + 8;
@@ -94,7 +94,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy_consensus::constants::ETH_TO_WEI;
+    use alloy::consensus::constants::ETH_TO_WEI;
     use alloy_primitives::{fixed_bytes, FixedBytes, TxKind, U256};
 
     use crate::{NoopBlock, NoopCfg, Tx};
