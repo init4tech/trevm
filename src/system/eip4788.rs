@@ -9,7 +9,7 @@ use revm::{
 /// The number of beacon roots to store in the beacon roots contract.
 pub const HISTORY_BUFFER_LENGTH: u64 = 8191;
 
-pub use alloy_eips::eip4788::{BEACON_ROOTS_ADDRESS, BEACON_ROOTS_CODE};
+pub use alloy::eips::eip4788::{BEACON_ROOTS_ADDRESS, BEACON_ROOTS_CODE};
 
 impl SystemTx {
     /// Instantiate a system call for the pre-block beacon roots as specified in

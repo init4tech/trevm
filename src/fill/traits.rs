@@ -77,7 +77,7 @@ pub trait Cfg {
 
 #[cfg(test)]
 mod test {
-    use alloy_consensus::constants::GWEI_TO_WEI;
+    use alloy::consensus::constants::GWEI_TO_WEI;
     use alloy_primitives::{B256, U256};
     use revm::primitives::{BlobExcessGasAndPrice, BlockEnv, CfgEnv};
 

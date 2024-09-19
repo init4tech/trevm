@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.10.1"
+version = "0.11.0"
 rust-version = "1.79.0"
 edition = "2021"
 authors = ["init4"]
@@ -30,14 +30,11 @@ redundant-clone = "warn"
 alloy-primitives = "0.8"
 alloy-sol-types = "0.8"
 
-alloy-consensus = { version = "0.3", features = ["k256"] }
-alloy-eips = "0.3"
-alloy-rpc-types-eth = "0.3"
-alloy-rpc-types-mev = "0.3"
+alloy = { version = "=0.3.6", features = ["rpc-types-mev"] }
 
 revm = { version = "14.0.0", default-features = false, features = ["std"] }
 
-zenith-types = "0.7"
+zenith-types = "0.8"
 
 thiserror = "1.0"
 alloy-rlp = "0.3"
@@ -45,13 +42,6 @@ alloy-rlp = "0.3"
 [dev-dependencies]
 revm = { version = "14.0.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
-
-# alloydb
-alloy-provider = "0.3"
-alloy-transport = "0.3"
-
-alloy-signer = { version = "0.3", default-features = false }
-alloy-signer-local = { version = "0.3", default-features = false }
 
 alloy-rlp = { version = "0.3", default-features = false }
 

@@ -1,16 +1,15 @@
 //! This example demonstrates how to query storage slots of a contract, using AlloyDB.
 
-use alloy_eips::BlockId;
-use alloy_primitives::Address;
-use alloy_provider::ProviderBuilder;
-use alloy_sol_types::sol;
-use alloy_sol_types::SolCall;
-use revm::{
-    db::{AlloyDB, CacheDB},
-    primitives::{address, TxKind, U256},
-    Evm,
+use alloy::{eips::BlockId, providers::ProviderBuilder};
+use alloy_primitives::{address, Address, TxKind, U256};
+use alloy_sol_types::{sol, SolCall};
+use trevm::{
+    revm::{
+        db::{AlloyDB, CacheDB},
+        Evm,
+    },
+    NoopBlock, NoopCfg, TrevmBuilder, Tx,
 };
-use trevm::{NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 sol! {
     #[allow(missing_docs)]

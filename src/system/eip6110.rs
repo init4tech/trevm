@@ -1,10 +1,9 @@
-use alloy_consensus::ReceiptEnvelope;
-use alloy_eips::eip6110::DepositRequest;
+use alloy::{consensus::ReceiptEnvelope, eips::eip6110::DepositRequest};
 use alloy_primitives::Log;
 use alloy_sol_types::{sol, SolEvent};
 
 /// The address for the Ethereum 2.0 deposit contract on the mainnet.
-pub use alloy_eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS;
+pub use alloy::eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS;
 
 sol! {
     #[allow(missing_docs)]
@@ -119,8 +118,10 @@ pub fn check_receipt_for_deposits(
 
 #[cfg(test)]
 mod test {
-    use alloy_consensus::{Receipt, ReceiptEnvelope};
-    use alloy_eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS;
+    use alloy::{
+        consensus::{Receipt, ReceiptEnvelope},
+        eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS,
+    };
     use alloy_primitives::{Log, LogData};
     use alloy_sol_types::SolEvent;
 

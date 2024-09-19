@@ -1,10 +1,10 @@
-use alloy_consensus::Signed;
+use alloy::consensus::Signed;
 use alloy_primitives::U256;
 use revm::primitives::{BlobExcessGasAndPrice, BlockEnv, TxEnv};
 
 use crate::{Block, Tx};
 
-impl Tx for Signed<alloy_consensus::TxLegacy> {
+impl Tx for Signed<alloy::consensus::TxLegacy> {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         let TxEnv {
             caller,
@@ -37,7 +37,7 @@ impl Tx for Signed<alloy_consensus::TxLegacy> {
     }
 }
 
-impl Tx for Signed<alloy_consensus::TxEip2930> {
+impl Tx for Signed<alloy::consensus::TxEip2930> {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         let TxEnv {
             caller,
@@ -70,7 +70,7 @@ impl Tx for Signed<alloy_consensus::TxEip2930> {
     }
 }
 
-impl Tx for Signed<alloy_consensus::TxEip1559> {
+impl Tx for Signed<alloy::consensus::TxEip1559> {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         let TxEnv {
             caller,
@@ -103,7 +103,7 @@ impl Tx for Signed<alloy_consensus::TxEip1559> {
     }
 }
 
-impl Tx for Signed<alloy_consensus::TxEip4844> {
+impl Tx for Signed<alloy::consensus::TxEip4844> {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         let TxEnv {
             caller,
@@ -136,7 +136,7 @@ impl Tx for Signed<alloy_consensus::TxEip4844> {
     }
 }
 
-impl Tx for Signed<alloy_consensus::TxEip4844WithSidecar> {
+impl Tx for Signed<alloy::consensus::TxEip4844WithSidecar> {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         let TxEnv {
             caller,
@@ -169,7 +169,7 @@ impl Tx for Signed<alloy_consensus::TxEip4844WithSidecar> {
     }
 }
 
-impl Tx for Signed<alloy_consensus::TxEip4844Variant> {
+impl Tx for Signed<alloy::consensus::TxEip4844Variant> {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         let TxEnv {
             caller,
@@ -187,8 +187,8 @@ impl Tx for Signed<alloy_consensus::TxEip4844Variant> {
             authorization_list,
         } = tx_env;
         let tx = match self.tx() {
-            alloy_consensus::TxEip4844Variant::TxEip4844(tx) => tx,
-            alloy_consensus::TxEip4844Variant::TxEip4844WithSidecar(tx) => &tx.tx,
+            alloy::consensus::TxEip4844Variant::TxEip4844(tx) => tx,
+            alloy::consensus::TxEip4844Variant::TxEip4844WithSidecar(tx) => &tx.tx,
         };
         *caller = self.recover_signer().unwrap();
         *gas_limit = tx.gas_limit as u64;
@@ -206,7 +206,7 @@ impl Tx for Signed<alloy_consensus::TxEip4844Variant> {
     }
 }
 
-impl Tx for alloy_consensus::TxEnvelope {
+impl Tx for alloy::consensus::TxEnvelope {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
         match self {
             Self::Legacy(t) => t.fill_tx_env(tx_env),
@@ -218,7 +218,7 @@ impl Tx for alloy_consensus::TxEnvelope {
     }
 }
 
-impl Block for alloy_consensus::Header {
+impl Block for alloy::consensus::Header {
     fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
         let BlockEnv {
             number,
@@ -249,7 +249,7 @@ impl Block for alloy_consensus::Header {
     }
 }
 
-impl Block for alloy_rpc_types_eth::Header {
+impl Block for alloy::rpc::types::eth::Header {
     fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
         let BlockEnv {
             number,
@@ -273,7 +273,7 @@ impl Block for alloy_rpc_types_eth::Header {
     }
 }
 
-impl<T> Block for alloy_rpc_types_eth::Block<T> {
+impl<T> Block for alloy::rpc::types::eth::Block<T> {
     fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
         self.header.fill_block_env(block_env);
     }
@@ -286,7 +286,7 @@ impl<T> Block for alloy_rpc_types_eth::Block<T> {
 #[cfg(test)]
 mod tests {
     use crate::{NoopBlock, NoopCfg, TrevmBuilder};
-    use alloy_consensus::{Header, TxEnvelope, EMPTY_ROOT_HASH};
+    use alloy::consensus::{Header, TxEnvelope, EMPTY_ROOT_HASH};
 
     use alloy_rlp::Decodable;
 
