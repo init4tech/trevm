@@ -375,7 +375,7 @@ mod ext;
 pub use ext::EvmExtUnchecked;
 
 mod fill;
-pub use fill::{Block, Cfg, NoopBlock, NoopCfg, Tx};
+pub use fill::{Block, Cfg, DisableGasChecks, DisableNonceCheck, NoopBlock, NoopCfg, Tx};
 
 pub mod journal;
 
