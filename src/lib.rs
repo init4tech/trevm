@@ -350,8 +350,8 @@
 //! [`eip6110`]: crate::system::eip6110
 //! [`eip7002`]: crate::system::eip7002
 //! [`eip7251`]: crate::system::eip7251
-//! [`WithdrawalRequest`]: alloy_eips::eip7002::WithdrawalRequest
-//! [`ConsolidationRequest`]: alloy_eips::eip7251::ConsolidationRequest
+//! [`WithdrawalRequest`]: alloy::eips::eip7002::WithdrawalRequest
+//! [`ConsolidationRequest`]: alloy::eips::eip7251::ConsolidationRequest
 
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg",
