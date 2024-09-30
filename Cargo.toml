@@ -30,7 +30,7 @@ redundant-clone = "warn"
 alloy-primitives = "0.8"
 alloy-sol-types = "0.8"
 
-alloy = { version = "=0.3.6", features = ["rpc-types-mev"] }
+alloy = { version = "=0.4.0", features = ["rpc-types-mev"] }
 
 revm = { version = "14.0.0", default-features = false, features = ["std"] }
 
