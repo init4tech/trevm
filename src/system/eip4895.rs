@@ -1,8 +1,7 @@
 use crate::{EvmExtUnchecked, EvmNeedsTx};
 use alloy::eips::eip4895::Withdrawal;
-use alloy_primitives::U256;
+use alloy_primitives::{map::HashMap, U256};
 use revm::{primitives::EVMError, Database, DatabaseCommit};
-use std::collections::HashMap;
 
 impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     /// Apply the withdrawals to the EVM state.
@@ -15,7 +14,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     {
         // We need to apply the withdrawals by incrementing the balances of the
         // respective accounts, then committing the changes to the database.
-        let mut changes = HashMap::new();
+        let mut changes = HashMap::default();
 
         let increments = withdrawals
             .into_iter()

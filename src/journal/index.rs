@@ -191,7 +191,7 @@ impl From<BundleStateIndex<'_>> for BundleState {
     // revm/src/db/states/bundle_state.rs
     fn from(value: BundleStateIndex<'_>) -> Self {
         let mut state_size = 0;
-        let state: HashMap<_, _> = value
+        let state: HashMap<_, _, _> = value
             .state
             .into_iter()
             .map(|(address, info)| {
