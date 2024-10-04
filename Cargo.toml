@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.11.0"
+version = "0.12.0"
 rust-version = "1.79.0"
 edition = "2021"
 authors = ["init4"]
@@ -27,20 +27,25 @@ option-if-let-else = "warn"
 redundant-clone = "warn"
 
 [dependencies]
-alloy-primitives = "0.8"
-alloy-sol-types = "0.8"
+alloy-primitives = "=0.8.5"
+alloy-sol-types = "=0.8.5"
 
-alloy = { version = "=0.3.6", features = ["rpc-types-mev"] }
+alloy = { version = "=0.4.2", features = ["rpc-types-mev"] }
 
-revm = { version = "14.0.0", default-features = false, features = ["std"] }
+revm = { version = "14.0.3", default-features = false, features = ["std"] }
 
-zenith-types = "0.8"
+zenith-types = "0.9"
 
 thiserror = "1.0"
 alloy-rlp = "0.3"
 
 [dev-dependencies]
-revm = { version = "14.0.0", features = ["test-utils", "serde-json", "std", "alloydb"] }
+revm = { version = "14.0.3", features = [
+    "test-utils",
+    "serde-json",
+    "std",
+    "alloydb",
+] }
 tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
 
 alloy-rlp = { version = "0.3", default-features = false }
@@ -56,7 +61,7 @@ default = [
     "revm/c-kzg",
     "revm/blst",
     "revm/portable",
-    "revm/secp256k1"
+    "revm/secp256k1",
 ]
 
 test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
@@ -93,4 +98,3 @@ full_env_cfg = [
     "optional_no_base_fee",
     "optional_beneficiary_reward",
 ]
-

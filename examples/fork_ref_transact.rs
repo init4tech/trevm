@@ -1,4 +1,5 @@
-//! This example demonstrates how to query storage slots of a contract, using AlloyDB.
+//! This example demonstrates how to query storage slots of a contract, using
+//! [`AlloyDB`].
 
 use alloy::{eips::BlockId, providers::ProviderBuilder};
 use alloy_primitives::{address, Address, TxKind, U256};
