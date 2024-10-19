@@ -22,7 +22,7 @@ impl Tx for Signed<alloy::consensus::TxLegacy> {
             authorization_list,
         } = tx_env;
         *caller = self.recover_signer().unwrap();
-        *gas_limit = self.tx().gas_limit as u64;
+        *gas_limit = self.tx().gas_limit;
         *gas_price = U256::from(self.tx().gas_price);
         *transact_to = self.tx().to;
         *value = self.tx().value;
@@ -55,7 +55,7 @@ impl Tx for Signed<alloy::consensus::TxEip2930> {
             authorization_list,
         } = tx_env;
         *caller = self.recover_signer().unwrap();
-        *gas_limit = self.tx().gas_limit as u64;
+        *gas_limit = self.tx().gas_limit;
         *gas_price = U256::from(self.tx().gas_price);
         *transact_to = self.tx().to;
         *value = self.tx().value;
@@ -88,7 +88,7 @@ impl Tx for Signed<alloy::consensus::TxEip1559> {
             authorization_list,
         } = tx_env;
         *caller = self.recover_signer().unwrap();
-        *gas_limit = self.tx().gas_limit as u64;
+        *gas_limit = self.tx().gas_limit;
         *gas_price = U256::from(self.tx().max_fee_per_gas);
         *transact_to = self.tx().to;
         *value = self.tx().value;
@@ -121,7 +121,7 @@ impl Tx for Signed<alloy::consensus::TxEip4844> {
             authorization_list,
         } = tx_env;
         *caller = self.recover_signer().unwrap();
-        *gas_limit = self.tx().gas_limit as u64;
+        *gas_limit = self.tx().gas_limit;
         *gas_price = U256::from(self.tx().max_fee_per_gas);
         *transact_to = self.tx().to.into();
         *value = self.tx().value;
@@ -154,7 +154,7 @@ impl Tx for Signed<alloy::consensus::TxEip4844WithSidecar> {
             authorization_list,
         } = tx_env;
         *caller = self.recover_signer().unwrap();
-        *gas_limit = self.tx().tx.gas_limit as u64;
+        *gas_limit = self.tx().tx.gas_limit;
         *gas_price = U256::from(self.tx().tx.max_fee_per_gas);
         *transact_to = self.tx().tx.to.into();
         *value = self.tx().tx.value;
@@ -191,7 +191,7 @@ impl Tx for Signed<alloy::consensus::TxEip4844Variant> {
             alloy::consensus::TxEip4844Variant::TxEip4844WithSidecar(tx) => &tx.tx,
         };
         *caller = self.recover_signer().unwrap();
-        *gas_limit = tx.gas_limit as u64;
+        *gas_limit = tx.gas_limit;
         *gas_price = U256::from(tx.max_fee_per_gas);
         *transact_to = tx.to.into();
         *value = tx.value;
@@ -240,7 +240,7 @@ impl Block for alloy::consensus::Header {
         *prevrandao = if self.difficulty.is_zero() { Some(self.mix_hash) } else { None };
 
         if let Some(excess_blob_gas) = self.excess_blob_gas {
-            block_env.set_blob_excess_gas_and_price(excess_blob_gas as u64);
+            block_env.set_blob_excess_gas_and_price(excess_blob_gas);
         }
     }
 
@@ -268,8 +268,7 @@ impl Block for alloy::rpc::types::eth::Header {
         *basefee = U256::from(self.base_fee_per_gas.unwrap_or_default());
         *difficulty = U256::from(self.difficulty);
         *prevrandao = self.mix_hash;
-        *blob_excess_gas_and_price =
-            self.blob_gas_used.map(|ebg| BlobExcessGasAndPrice::new(ebg as u64));
+        *blob_excess_gas_and_price = self.blob_gas_used.map(BlobExcessGasAndPrice::new);
     }
 }
 
