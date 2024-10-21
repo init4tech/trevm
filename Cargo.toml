@@ -34,7 +34,7 @@ alloy = { version = "=0.4.2", features = ["rpc-types-mev"] }
 
 revm = { version = "14.0.3", default-features = false, features = ["std"] }
 
-zenith-types = "0.9"
+zenith-types = "0.10"
 
 thiserror = "1.0"
 alloy-rlp = "0.3"
