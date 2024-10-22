@@ -44,11 +44,48 @@ const ACCOUNT_INFO_BYTES: usize = 8 + 32 + 32;
 const INFO_OUTCOME_MIN_BYTES: usize = 1 + ACCOUNT_INFO_BYTES;
 const ACCT_DIFF_MIN_BYTES: usize = 4 + INFO_OUTCOME_MIN_BYTES;
 
+// /// Error decoding journal types.
+// #[derive(thiserror::Error, Debug, Copy, Clone, PartialEq, Eq)]
+// pub enum JournalDecodeError {
+//     /// The buffer does not contain enough data to decode the type.
+//     #[error("buffer overrun while decoding {ty_name}. Expected {expected} bytes, but only {remaining} bytes remain")]
+//     Overrun {
+//         /// The name of the type being decoded.
+//         ty_name: &'static str,
+//         /// The number of bytes required to decode the type.
+//         expected: usize,
+//         /// The number of bytes remaining in the buffer.
+//         remaining: usize,
+//     },
+
+//     /// Invalid tag while decoding a type.
+//     #[error("invalid tag while decoding {ty_name}. Expected a tag in range 0..={max_expected}, got {tag}")]
+//     InvalidTag {
+//         /// The name of the type being decoded.
+//         ty_name: &'static str,
+//         /// The tag that was decoded.
+//         tag: u8,
+//         /// The maximum expected tag value.
+//         max_expected: u8,
+//     },
+
+//     /// Storage slot is unchanged, journal should not contain unchanged slots.
+//     #[error("storage slot is unchanged. Unchanged items should never be in the journal")]
+//     UnchangedStorage,
+
+//     /// Error decoding an EOF bytecode.
+//     #[error("error decoding EOF bytecode: {0}")]
+//     EofDecode(#[from] EofDecodeError),
+
+//     /// Error decoding an EIP-7702 bytecode.
+//     #[error("error decoding EIP-7702 bytecode: {0}")]
+//     Eip7702Decode(#[from] Eip7702DecodeError),
+// }
+
 /// Error decoding journal types.
-#[derive(thiserror::Error, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum JournalDecodeError {
     /// The buffer does not contain enough data to decode the type.
-    #[error("buffer overrun while decoding {ty_name}. Expected {expected} bytes, but only {remaining} bytes remain")]
     Overrun {
         /// The name of the type being decoded.
         ty_name: &'static str,
@@ -59,7 +96,6 @@ pub enum JournalDecodeError {
     },
 
     /// Invalid tag while decoding a type.
-    #[error("invalid tag while decoding {ty_name}. Expected a tag in range 0..={max_expected}, got {tag}")]
     InvalidTag {
         /// The name of the type being decoded.
         ty_name: &'static str,
@@ -70,16 +106,50 @@ pub enum JournalDecodeError {
     },
 
     /// Storage slot is unchanged, journal should not contain unchanged slots.
-    #[error("storage slot is unchanged. Unchanged items should never be in the journal")]
     UnchangedStorage,
 
     /// Error decoding an EOF bytecode.
-    #[error("error decoding EOF bytecode: {0}")]
-    EofDecode(#[from] EofDecodeError),
+    EofDecode(EofDecodeError),
 
     /// Error decoding an EIP-7702 bytecode.
-    #[error("error decoding EIP-7702 bytecode: {0}")]
-    Eip7702Decode(#[from] Eip7702DecodeError),
+    Eip7702Decode(Eip7702DecodeError),
+}
+
+impl core::fmt::Display for JournalDecodeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Overrun { ty_name, expected, remaining } => {
+                write!(f, "buffer overrun while decoding {ty_name}. Expected {expected} bytes, but only {remaining} bytes remain")
+            }
+            Self::InvalidTag { ty_name, tag, max_expected } => {
+                write!(f, "invalid tag while decoding {ty_name}. Expected a tag in range 0..={max_expected}, got {tag}")
+            }
+            Self::UnchangedStorage => {
+                write!(
+                    f,
+                    "storage slot is unchanged. Unchanged items should never be in the journal"
+                )
+            }
+            Self::EofDecode(e) => {
+                write!(f, "error decoding EOF bytecode: {e}")
+            }
+            Self::Eip7702Decode(e) => {
+                write!(f, "error decoding EIP-7702 bytecode: {e}")
+            }
+        }
+    }
+}
+
+impl From<EofDecodeError> for JournalDecodeError {
+    fn from(err: EofDecodeError) -> Self {
+        Self::EofDecode(err)
+    }
+}
+
+impl From<Eip7702DecodeError> for JournalDecodeError {
+    fn from(err: Eip7702DecodeError) -> Self {
+        Self::Eip7702Decode(err)
+    }
 }
 
 macro_rules! check_len {

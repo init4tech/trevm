@@ -12,46 +12,80 @@ use alloy::{
 };
 use alloy_primitives::{bytes::Buf, keccak256, Address, Bytes, TxKind, U256};
 use revm::primitives::{EVMError, ExecutionResult, MAX_BLOB_GAS_PER_BLOCK};
-use thiserror::Error;
 
 /// Possible errors that can occur while driving a bundle.
-#[derive(Error)]
 pub enum BundleError<Db: revm::Database> {
     /// The block number of the bundle does not match the block number of the revm block configuration.
-    #[error("revm block number must match the bundle block number")]
     BlockNumberMismatch,
     /// The timestamp of the bundle is out of range.
-    #[error("timestamp out of range")]
     TimestampOutOfRange,
     /// The bundle was reverted (or halted).
-    #[error("bundle reverted")]
     BundleReverted,
     /// The bundle has no transactions
-    #[error("bundle has no transactions")]
     BundleEmpty,
     /// Too many blob transactions
-    #[error("max blob gas limit exceeded")]
     Eip4844BlobGasExceeded,
     /// An unsupported transaction type was encountered.
-    #[error("unsupported transaction type")]
     UnsupportedTransactionType,
     /// An error occurred while decoding a transaction contained in the bundle.
-    #[error("transaction decoding error")]
-    TransactionDecodingError(#[from] alloy::eips::eip2718::Eip2718Error),
-    /// An error ocurred while recovering the sender of a transaction
-    #[error("transaction sender recovery error")]
-    TransactionSenderRecoveryError(#[from] alloy_primitives::SignatureError),
+    TransactionDecodingError(alloy::eips::eip2718::Eip2718Error),
+    /// An error occurred while recovering the sender of a transaction.
+    TransactionSenderRecoveryError(alloy_primitives::SignatureError),
     /// An error occurred while running the EVM.
-    #[error("internal EVM Error")]
     EVMError {
         /// The error that occurred while running the EVM.
         inner: EVMError<Db::Error>,
     },
 }
 
+// Manually implementing the Display trait for formatting the errors
+impl<Db: revm::Database> core::fmt::Display for BundleError<Db> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::BlockNumberMismatch => {
+                write!(f, "revm block number must match the bundle block number")
+            }
+            Self::TimestampOutOfRange => write!(f, "timestamp out of range"),
+            Self::BundleReverted => write!(f, "bundle reverted"),
+            Self::BundleEmpty => write!(f, "bundle has no transactions"),
+            Self::Eip4844BlobGasExceeded => write!(f, "max blob gas limit exceeded"),
+            Self::UnsupportedTransactionType => write!(f, "unsupported transaction type"),
+            Self::TransactionDecodingError(_) => write!(f, "transaction decoding error"),
+            Self::TransactionSenderRecoveryError(_) => {
+                write!(f, "transaction sender recovery error")
+            }
+            Self::EVMError { inner: _ } => write!(f, "internal EVM Error"),
+        }
+    }
+}
+
+// Manually implement From for TransactionDecodingError (formerly #[from])
+impl<Db: revm::Database> From<alloy::eips::eip2718::Eip2718Error> for BundleError<Db> {
+    fn from(err: alloy::eips::eip2718::Eip2718Error) -> Self {
+        Self::TransactionDecodingError(err)
+    }
+}
+
+// Manually implement From for TransactionSenderRecoveryError (formerly #[from])
+impl<Db: revm::Database> From<alloy_primitives::SignatureError> for BundleError<Db> {
+    fn from(err: alloy_primitives::SignatureError) -> Self {
+        Self::TransactionSenderRecoveryError(err)
+    }
+}
+
 impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
     fn from(inner: EVMError<Db::Error>) -> Self {
         Self::EVMError { inner }
+    }
+}
+
+impl<Db: revm::Database> core::error::Error for BundleError<Db> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TransactionDecodingError(err) => Some(err),
+            Self::TransactionSenderRecoveryError(err) => Some(err),
+            _ => None,
+        }
     }
 }
 
