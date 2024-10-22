@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use alloy::consensus::ReceiptEnvelope;
 use alloy_primitives::{Bytes, Log};
 use alloy_rlp::BufMut;

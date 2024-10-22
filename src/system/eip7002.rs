@@ -1,6 +1,5 @@
 use super::{checked_insert_code, execute_system_tx};
 use crate::{system::SystemTx, EvmNeedsTx};
-use alloc::{vec, vec::Vec};
 use alloy::eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_CODE;
 use alloy_primitives::{Address, Bytes};
 use revm::{
