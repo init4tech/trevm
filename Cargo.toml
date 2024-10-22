@@ -27,17 +27,22 @@ option-if-let-else = "warn"
 redundant-clone = "warn"
 
 [dependencies]
+alloy-rlp = "0.3"
+
 alloy-primitives = "=0.8.8"
 alloy-sol-types = "=0.8.8"
 
-alloy = { version = "=0.5.2", features = ["rpc-types-mev"] }
+alloy = { version = "=0.5.2", default-features = false, features = ["consensus", "rpc-types-mev"] }
 
 revm = { version = "16.0.0", default-features = false, features = ["std"] }
 
 zenith-types = "0.10"
 
 thiserror = "1.0"
-alloy-rlp = "0.3"
+
+# TODO: remove this later
+# https://github.com/serde-rs/serde/issues/2844
+serde = { version = "=1.0.210"}
 
 [dev-dependencies]
 revm = { version = "16.0.0", features = [
@@ -54,6 +59,8 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # misc
 eyre = "0.6"
+
+
 
 [features]
 default = [

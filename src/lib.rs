@@ -393,6 +393,10 @@ pub mod system;
 
 pub use revm;
 
+// TODO: remove this later
+// https://github.com/serde-rs/serde/issues/2844
+use serde as _;
+
 /// Utilities for testing Trevm or testing with Trevm.
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
