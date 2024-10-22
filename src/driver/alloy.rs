@@ -38,7 +38,6 @@ pub enum BundleError<Db: revm::Database> {
     },
 }
 
-// Manually implementing the Display trait for formatting the errors
 impl<Db: revm::Database> core::fmt::Display for BundleError<Db> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -59,14 +58,12 @@ impl<Db: revm::Database> core::fmt::Display for BundleError<Db> {
     }
 }
 
-// Manually implement From for TransactionDecodingError (formerly #[from])
 impl<Db: revm::Database> From<alloy::eips::eip2718::Eip2718Error> for BundleError<Db> {
     fn from(err: alloy::eips::eip2718::Eip2718Error) -> Self {
         Self::TransactionDecodingError(err)
     }
 }
 
-// Manually implement From for TransactionSenderRecoveryError (formerly #[from])
 impl<Db: revm::Database> From<alloy_primitives::SignatureError> for BundleError<Db> {
     fn from(err: alloy_primitives::SignatureError) -> Self {
         Self::TransactionSenderRecoveryError(err)
