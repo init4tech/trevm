@@ -102,6 +102,28 @@ impl core::fmt::Display for JournalDecodeError {
     }
 }
 
+impl core::error::Error for JournalDecodeError {
+    fn cause(&self) -> Option<&dyn core::error::Error> {
+        match self {
+            Self::EofDecode(e) => Some(e),
+            Self::Eip7702Decode(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    fn description(&self) -> &str {
+        "error decoding journal type"
+    }
+
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::EofDecode(e) => Some(e),
+            Self::Eip7702Decode(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 impl From<EofDecodeError> for JournalDecodeError {
     fn from(err: EofDecodeError) -> Self {
         Self::EofDecode(err)
