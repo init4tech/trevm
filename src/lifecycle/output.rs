@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use alloy::{
     consensus::{ReceiptEnvelope, TxReceipt},
     eips::eip6110::DepositRequest,

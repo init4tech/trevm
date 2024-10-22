@@ -4,7 +4,7 @@ use crate::{
     EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
     TransactedState, Tx,
 };
-use alloc::fmt;
+use alloc::{boxed::Box, fmt};
 use alloy_primitives::{Address, Bytes, U256};
 use core::convert::Infallible;
 use revm::{

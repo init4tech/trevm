@@ -1,5 +1,11 @@
 use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
-use alloc::{borrow::Cow, collections::BTreeMap, fmt::Debug, sync::Arc};
+use alloc::{
+    borrow::{Cow, ToOwned},
+    collections::BTreeMap,
+    fmt::Debug,
+    sync::Arc,
+    vec::Vec,
+};
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::{Buf, BufMut};
 use revm::{
