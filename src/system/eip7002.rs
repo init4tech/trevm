@@ -1,6 +1,6 @@
 use super::{checked_insert_code, execute_system_tx};
 use crate::{system::SystemTx, EvmNeedsTx};
-use alloy::eips::eip7002::{WithdrawalRequest, WITHDRAWAL_REQUEST_PREDEPLOY_CODE};
+use alloy::eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_CODE;
 use alloy_primitives::{Address, Bytes};
 use revm::{
     primitives::{EVMError, SpecId},
@@ -48,12 +48,12 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     /// request contract to accumulate withdrawal requests.
     ///
     /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    pub fn apply_eip7002(&mut self) -> Result<Vec<WithdrawalRequest>, EVMError<Db::Error>>
+    pub fn apply_eip7002(&mut self) -> Result<Bytes, EVMError<Db::Error>>
     where
         Db: Database + DatabaseCommit,
     {
         if self.spec_id() < SpecId::PRAGUE {
-            return Ok(vec![]);
+            return Ok(Bytes::new());
         }
 
         checked_insert_code(
@@ -75,19 +75,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
             panic!("execution halted during withdrawal request system contract execution")
         };
 
-        let mut requests = vec![];
-
-        requests.extend(output.chunks_exact(WITHDRAWAL_REQUEST_BYTES).map(|chunk| {
-            let mut req: WithdrawalRequest = Default::default();
-
-            req.source_address.copy_from_slice(&chunk[0..20]);
-            req.validator_pubkey.copy_from_slice(&chunk[20..68]);
-            req.amount = u64::from_be_bytes(chunk[68..76].try_into().unwrap());
-
-            req
-        }));
-
-        Ok(requests)
+        Ok(output.clone())
     }
 }
 
@@ -131,11 +119,10 @@ mod test {
 
         let requests = trevm.apply_eip7002().unwrap();
 
-        assert_eq!(requests.len(), 1);
+        assert_eq!(requests.len(), WITHDRAWAL_REQUEST_BYTES);
 
-        let withdrawal_request = requests[0];
-
-        assert_eq!(withdrawal_request.validator_pubkey, VALIDATOR_PUBKEY);
-        assert_eq!(withdrawal_request.source_address, WITHDRAWAL_ADDR);
+        assert_eq!(&requests[0..20], WITHDRAWAL_ADDR.as_slice());
+        assert_eq!(&requests[20..68], VALIDATOR_PUBKEY.as_slice());
+        assert_eq!(&requests[68..], WITHDRAWAL_AMOUNT.as_slice());
     }
 }
