@@ -1,9 +1,6 @@
 use alloc::vec::Vec;
-use alloy::{
-    consensus::{ReceiptEnvelope, TxReceipt},
-    eips::eip6110::DepositRequest,
-};
-use alloy_primitives::{Address, Bloom, Log};
+use alloy::consensus::{ReceiptEnvelope, TxReceipt};
+use alloy_primitives::{Address, Bloom, Bytes, Log};
 use core::cell::OnceCell;
 
 /// Information externalized during block execution.
@@ -107,7 +104,7 @@ impl<T: TxReceipt> BlockOutput<T> {
     }
 
     /// Find deposits in the logs of the transactions in the block.
-    pub fn find_deposit_logs(&self) -> impl Iterator<Item = DepositRequest> + '_ {
+    pub fn find_deposit_requests(&self) -> impl Iterator<Item = Bytes> + use<'_, T> {
         crate::system::eip6110::check_logs_for_deposits(
             self.receipts().iter().flat_map(TxReceipt::logs),
         )

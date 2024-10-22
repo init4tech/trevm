@@ -1,7 +1,7 @@
 use super::{checked_insert_code, execute_system_tx};
 use crate::{system::SystemTx, EvmNeedsTx};
 use alloc::{vec, vec::Vec};
-use alloy::eips::eip7251::{ConsolidationRequest, CONSOLIDATION_REQUEST_PREDEPLOY_CODE};
+use alloy::eips::eip7251::CONSOLIDATION_REQUEST_PREDEPLOY_CODE;
 use alloy_primitives::{Address, Bytes};
 use revm::{
     primitives::{EVMError, SpecId},
@@ -49,12 +49,12 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     /// consolidation requests.
     ///
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    pub fn apply_eip7251(&mut self) -> Result<Vec<ConsolidationRequest>, EVMError<Db::Error>>
+    pub fn apply_eip7251(&mut self) -> Result<Bytes, EVMError<Db::Error>>
     where
         Db: Database + DatabaseCommit,
     {
         if self.spec_id() < SpecId::PRAGUE {
-            return Ok(vec![]);
+            return Ok(Bytes::new());
         }
 
         checked_insert_code(
@@ -76,19 +76,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
             panic!("execution halted during consolidation request system contract execution")
         };
 
-        let mut requests = vec![];
-
-        requests.extend(output.chunks_exact(CONSOLIDATION_REQUEST_BYTES).map(|chunk| {
-            let mut req: ConsolidationRequest = Default::default();
-
-            req.source_address.copy_from_slice(&chunk[0..20]);
-            req.source_pubkey.copy_from_slice(&chunk[20..68]);
-            req.target_pubkey.copy_from_slice(&chunk[68..116]);
-
-            req
-        }));
-
-        Ok(requests)
+        Ok(output.clone())
     }
 }
 
@@ -132,12 +120,8 @@ mod test {
 
         let requests = trevm.apply_eip7251().unwrap();
 
-        assert_eq!(requests.len(), 1);
-
-        let consolidation_request = requests[0];
-
-        assert_eq!(consolidation_request.source_address, WITHDRAWAL_ADDR);
-        assert_eq!(consolidation_request.source_pubkey, VALIDATOR_PUBKEY);
-        assert_eq!(consolidation_request.target_pubkey, TARGET_VALIDATOR_PUBKEY);
+        assert_eq!(&requests[..20], WITHDRAWAL_ADDR.as_slice());
+        assert_eq!(&requests[20..68], VALIDATOR_PUBKEY.as_slice());
+        assert_eq!(&requests[68..], TARGET_VALIDATOR_PUBKEY.as_slice());
     }
 }

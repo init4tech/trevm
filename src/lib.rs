@@ -97,10 +97,10 @@
 //!   requests by crediting accounts.
 //! - [`eip6110`] - Prague's [EIP-6110], which extracts deposit
 //!   requests from the withdrawal contract events.
-//! - [`eip7002`] - Prague's [EIP-7002], which extracts [`WithdrawalRequest`]s
+//! - [`eip7002`] - Prague's [EIP-7002], which extracts withdrawal requestss
 //!   from the system withdrwal contract state.
 //! - [`eip7251`] - Prague's [EIP-7251], which extracts
-//!   [`ConsolidationRequest`]s from the system consolidation contract state.
+//!   consolidation requestss from the system consolidation contract state.
 //!
 //! The [`BlockDriver`] and [`ChainDriver`] trait methods take a mutable
 //! reference to allow the driver to accumulate information about the
@@ -350,8 +350,6 @@
 //! [`eip6110`]: crate::system::eip6110
 //! [`eip7002`]: crate::system::eip7002
 //! [`eip7251`]: crate::system::eip7251
-//! [`WithdrawalRequest`]: alloy::eips::eip7002::WithdrawalRequest
-//! [`ConsolidationRequest`]: alloy::eips::eip7251::ConsolidationRequest
 
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/alloy-rs/core/main/assets/alloy.jpg",
@@ -397,6 +395,10 @@ pub use states::{
 pub mod system;
 
 pub use revm;
+
+// TODO: remove this later
+// https://github.com/serde-rs/serde/issues/2844
+use serde as _;
 
 /// Utilities for testing Trevm or testing with Trevm.
 #[cfg(any(test, feature = "test-utils"))]

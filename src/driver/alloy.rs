@@ -251,7 +251,7 @@ impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
                 coinbase_diff,
                 eth_sent_to_coinbase,
                 from_address: tx.recover_signer()?,
-                to_address: match tx.to() {
+                to_address: match tx.kind() {
                     TxKind::Call(to) => Some(to),
                     _ => Some(Address::ZERO),
                 },
