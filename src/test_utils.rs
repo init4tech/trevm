@@ -3,10 +3,12 @@ use alloy_primitives::{Address, U256};
 use revm::{
     db::{CacheDB, EmptyDB, InMemoryDB, State},
     inspector_handle_register,
-    inspectors::TracerEip3155,
     primitives::{AccountInfo, Bytecode},
     EvmBuilder, GetInspector,
 };
+
+#[cfg(feature = "std")]
+use revm::inspectors::TracerEip3155;
 
 pub use revm::test_utils as revm_test_utils;
 

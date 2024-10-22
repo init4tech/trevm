@@ -147,6 +147,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
     use alloy::consensus::{Receipt, ReceiptEnvelope};
     use alloy_primitives::bytes;
 

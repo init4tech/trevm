@@ -651,6 +651,7 @@ impl JournalDecode for Zenith::BlockHeader {
 #[cfg(test)]
 mod test {
     use super::*;
+    use alloc::vec;
 
     fn roundtrip<T: JournalDecode + JournalEncode + PartialEq>(expected: &T) {
         let enc = JournalEncode::encoded(expected);
