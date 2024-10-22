@@ -14,7 +14,7 @@ pub trait ChainDriver<Ext> {
     type BlockDriver: BlockDriver<Ext>;
 
     /// An error type for this driver.
-    type Error<Db: Database>: std::error::Error
+    type Error<Db: Database>: core::error::Error
         + From<EVMError<Db::Error>>
         + From<<Self::BlockDriver as BlockDriver<Ext>>::Error<Db>>;
 

@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use alloy_primitives::{Address, B256, U256};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot},
+    primitives::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot, HashMap},
     Database, DatabaseCommit,
 };
 

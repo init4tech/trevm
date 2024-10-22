@@ -54,8 +54,8 @@ impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
     }
 }
 
-impl<Db: revm::Database> std::fmt::Debug for BundleError<Db> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<Db: revm::Database> core::fmt::Debug for BundleError<Db> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::TimestampOutOfRange => write!(f, "TimestampOutOfRange"),
             Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
@@ -94,7 +94,7 @@ where
     /// Clear the driver, resetting the response. This resets the driver,
     /// allowing for resimulation of the same bundle.
     pub fn clear(&mut self) -> R {
-        std::mem::take(&mut self.response)
+        core::mem::take(&mut self.response)
     }
 }
 

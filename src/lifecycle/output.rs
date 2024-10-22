@@ -3,7 +3,7 @@ use alloy::{
     eips::eip6110::DepositRequest,
 };
 use alloy_primitives::{Address, Bloom, Log};
-use std::sync::OnceLock;
+use core::cell::OnceCell;
 
 /// Information externalized during block execution.
 ///
@@ -18,7 +18,7 @@ pub struct BlockOutput<T: TxReceipt = ReceiptEnvelope> {
     senders: Vec<Address>,
 
     /// The logs bloom of the block.
-    bloom: OnceLock<Bloom>,
+    bloom: OnceCell<Bloom>,
 }
 
 impl Default for BlockOutput {

@@ -57,12 +57,15 @@ eyre = "0.6"
 
 [features]
 default = [
+    "std",
     "revm/std",
     "revm/c-kzg",
     "revm/blst",
     "revm/portable",
     "revm/secp256k1",
 ]
+
+std = ["revm/std", "alloy/std", "alloy-rlp/std", "alloy-primitives/std", "alloy-sol-types/std"]
 
 test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
 

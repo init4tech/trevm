@@ -361,6 +361,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![deny(unused_must_use, rust_2018_idioms)]
 #![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 
 mod driver;
 pub use driver::{

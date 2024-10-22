@@ -1,4 +1,5 @@
 use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
+use alloc::{borrow::Cow, collections::BTreeMap, fmt::Debug, sync::Arc};
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::{Buf, BufMut};
 use revm::{
@@ -7,10 +8,9 @@ use revm::{
         eof::EofDecodeError, AccountInfo, Bytecode, Eip7702Bytecode, Eip7702DecodeError, Eof,
     },
 };
-use std::{borrow::Cow, collections::BTreeMap, fmt::Debug, sync::Arc};
 use zenith_types::Zenith;
 
-type Result<T, E = JournalDecodeError> = std::result::Result<T, E>;
+type Result<T, E = JournalDecodeError> = core::result::Result<T, E>;
 
 // Account Diff encoding
 const TAG_ACCT_CREATED: u8 = 0;
@@ -594,7 +594,7 @@ mod test {
 
     fn roundtrip<T: JournalDecode + JournalEncode + PartialEq>(expected: &T) {
         let enc = JournalEncode::encoded(expected);
-        assert_eq!(enc.len(), expected.serialized_size(), "{}", std::any::type_name::<T>());
+        assert_eq!(enc.len(), expected.serialized_size(), "{}", core::any::type_name::<T>());
         let dec = T::decode(&mut enc.as_slice()).expect("decoding failed");
         assert_eq!(&dec, expected);
     }

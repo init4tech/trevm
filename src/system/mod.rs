@@ -105,8 +105,8 @@ where
     Db: Database + DatabaseCommit,
 {
     let limit = U256::from(evm.tx().gas_limit);
-    let old_gas_limit = std::mem::replace(&mut evm.block_mut().gas_limit, limit);
-    let old_base_fee = std::mem::replace(&mut evm.block_mut().basefee, U256::ZERO);
+    let old_gas_limit = core::mem::replace(&mut evm.block_mut().gas_limit, limit);
+    let old_base_fee = core::mem::replace(&mut evm.block_mut().basefee, U256::ZERO);
 
     syscall.fill_tx(evm);
     let mut result = evm.transact()?;
