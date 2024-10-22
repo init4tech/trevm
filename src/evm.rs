@@ -4,7 +4,9 @@ use crate::{
     EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
     TransactedState, Tx,
 };
+use alloc::{boxed::Box, fmt};
 use alloy_primitives::{Address, Bytes, U256};
+use core::convert::Infallible;
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState, State},
     primitives::{
@@ -13,7 +15,6 @@ use revm::{
     },
     Database, DatabaseCommit, DatabaseRef, Evm,
 };
-use std::{convert::Infallible, fmt};
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
@@ -459,7 +460,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsCfg<'a, Ext, Db> {
     pub fn fill_cfg<T: Cfg>(mut self, filler: &T) -> EvmNeedsBlock<'a, Ext, Db> {
         filler.fill_cfg(&mut self.inner);
         // SAFETY: Same size and repr. Only phantomdata type changes
-        unsafe { std::mem::transmute(self) }
+        unsafe { core::mem::transmute(self) }
     }
 }
 
@@ -567,7 +568,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
         settings: revm::primitives::EnvKzgSettings,
     ) -> revm::primitives::EnvKzgSettings {
         let cfg = self.inner.cfg_mut();
-        std::mem::replace(&mut cfg.kzg_settings, settings)
+        core::mem::replace(&mut cfg.kzg_settings, settings)
     }
 
     /// Set a limit beyond which a callframe's memory cannot be resized.
@@ -582,7 +583,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
     #[cfg(feature = "memory_limit")]
     pub fn set_memory_limit(&mut self, new_limit: u64) -> u64 {
         let cfg = self.inner.cfg_mut();
-        std::mem::replace(&mut cfg.memory_limit, new_limit)
+        core::mem::replace(&mut cfg.memory_limit, new_limit)
     }
 
     /// Disable balance checks. If the sender does not have enough balance to
@@ -833,7 +834,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
     pub fn fill_block<B: Block>(mut self, filler: &B) -> EvmNeedsTx<'a, Ext, Db> {
         filler.fill_block(self.inner_mut_unchecked());
         // SAFETY: Same size and repr. Only phantomdata type changes
-        unsafe { std::mem::transmute(self) }
+        unsafe { core::mem::transmute(self) }
     }
 }
 
@@ -905,7 +906,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     /// Close the current block, returning the EVM ready for the next block.
     pub fn close_block(self) -> EvmNeedsBlock<'a, Ext, Db> {
         // SAFETY: Same size and repr. Only phantomdata type changes
-        unsafe { std::mem::transmute(self) }
+        unsafe { core::mem::transmute(self) }
     }
 
     /// Drive a bundle to completion, apply some post-bundle logic, and return the
@@ -926,7 +927,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     pub fn fill_tx<T: Tx>(mut self, filler: &T) -> EvmReady<'a, Ext, Db> {
         filler.fill_tx(&mut self.inner);
         // SAFETY: Same size and repr. Only phantomdata type changes
-        unsafe { std::mem::transmute(self) }
+        unsafe { core::mem::transmute(self) }
     }
 
     /// Execute a transaction. Shortcut for `fill_tx(tx).run_tx()`.
@@ -992,7 +993,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // logic in a block driver
 
         // SAFETY: Same size and repr. Only phantomdata type changes
-        unsafe { std::mem::transmute(self) }
+        unsafe { core::mem::transmute(self) }
     }
 
     /// Execute the loaded transaction. This is a wrapper around

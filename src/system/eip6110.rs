@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use alloy::consensus::ReceiptEnvelope;
 use alloy_primitives::{Bytes, Log};
 use alloy_rlp::BufMut;
@@ -146,6 +147,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
     use alloy::consensus::{Receipt, ReceiptEnvelope};
     use alloy_primitives::bytes;
 

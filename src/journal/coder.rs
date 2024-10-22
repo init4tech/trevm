@@ -1,4 +1,11 @@
 use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
+use alloc::{
+    borrow::{Cow, ToOwned},
+    collections::BTreeMap,
+    fmt::Debug,
+    sync::Arc,
+    vec::Vec,
+};
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::{Buf, BufMut};
 use revm::{
@@ -7,10 +14,9 @@ use revm::{
         eof::EofDecodeError, AccountInfo, Bytecode, Eip7702Bytecode, Eip7702DecodeError, Eof,
     },
 };
-use std::{borrow::Cow, collections::BTreeMap, fmt::Debug, sync::Arc};
 use zenith_types::Zenith;
 
-type Result<T, E = JournalDecodeError> = std::result::Result<T, E>;
+type Result<T, E = JournalDecodeError> = core::result::Result<T, E>;
 
 // Account Diff encoding
 const TAG_ACCT_CREATED: u8 = 0;
@@ -39,10 +45,9 @@ const INFO_OUTCOME_MIN_BYTES: usize = 1 + ACCOUNT_INFO_BYTES;
 const ACCT_DIFF_MIN_BYTES: usize = 4 + INFO_OUTCOME_MIN_BYTES;
 
 /// Error decoding journal types.
-#[derive(thiserror::Error, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum JournalDecodeError {
     /// The buffer does not contain enough data to decode the type.
-    #[error("buffer overrun while decoding {ty_name}. Expected {expected} bytes, but only {remaining} bytes remain")]
     Overrun {
         /// The name of the type being decoded.
         ty_name: &'static str,
@@ -53,7 +58,6 @@ pub enum JournalDecodeError {
     },
 
     /// Invalid tag while decoding a type.
-    #[error("invalid tag while decoding {ty_name}. Expected a tag in range 0..={max_expected}, got {tag}")]
     InvalidTag {
         /// The name of the type being decoded.
         ty_name: &'static str,
@@ -64,16 +68,72 @@ pub enum JournalDecodeError {
     },
 
     /// Storage slot is unchanged, journal should not contain unchanged slots.
-    #[error("storage slot is unchanged. Unchanged items should never be in the journal")]
     UnchangedStorage,
 
     /// Error decoding an EOF bytecode.
-    #[error("error decoding EOF bytecode: {0}")]
-    EofDecode(#[from] EofDecodeError),
+    EofDecode(EofDecodeError),
 
     /// Error decoding an EIP-7702 bytecode.
-    #[error("error decoding EIP-7702 bytecode: {0}")]
-    Eip7702Decode(#[from] Eip7702DecodeError),
+    Eip7702Decode(Eip7702DecodeError),
+}
+
+impl core::fmt::Display for JournalDecodeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Overrun { ty_name, expected, remaining } => {
+                write!(f, "buffer overrun while decoding {ty_name}. Expected {expected} bytes, but only {remaining} bytes remain")
+            }
+            Self::InvalidTag { ty_name, tag, max_expected } => {
+                write!(f, "invalid tag while decoding {ty_name}. Expected a tag in range 0..={max_expected}, got {tag}")
+            }
+            Self::UnchangedStorage => {
+                write!(
+                    f,
+                    "storage slot is unchanged. Unchanged items should never be in the journal"
+                )
+            }
+            Self::EofDecode(e) => {
+                write!(f, "error decoding EOF bytecode: {e}")
+            }
+            Self::Eip7702Decode(e) => {
+                write!(f, "error decoding EIP-7702 bytecode: {e}")
+            }
+        }
+    }
+}
+
+impl core::error::Error for JournalDecodeError {
+    fn cause(&self) -> Option<&dyn core::error::Error> {
+        match self {
+            Self::EofDecode(e) => Some(e),
+            Self::Eip7702Decode(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    fn description(&self) -> &str {
+        "error decoding journal type"
+    }
+
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::EofDecode(e) => Some(e),
+            Self::Eip7702Decode(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<EofDecodeError> for JournalDecodeError {
+    fn from(err: EofDecodeError) -> Self {
+        Self::EofDecode(err)
+    }
+}
+
+impl From<Eip7702DecodeError> for JournalDecodeError {
+    fn from(err: Eip7702DecodeError) -> Self {
+        Self::Eip7702Decode(err)
+    }
 }
 
 macro_rules! check_len {
@@ -591,10 +651,11 @@ impl JournalDecode for Zenith::BlockHeader {
 #[cfg(test)]
 mod test {
     use super::*;
+    use alloc::vec;
 
     fn roundtrip<T: JournalDecode + JournalEncode + PartialEq>(expected: &T) {
         let enc = JournalEncode::encoded(expected);
-        assert_eq!(enc.len(), expected.serialized_size(), "{}", std::any::type_name::<T>());
+        assert_eq!(enc.len(), expected.serialized_size(), "{}", core::any::type_name::<T>());
         let dec = T::decode(&mut enc.as_slice()).expect("decoding failed");
         assert_eq!(&dec, expected);
     }

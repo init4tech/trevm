@@ -17,7 +17,7 @@ pub trait BlockDriver<Ext> {
     type Block: Block;
 
     /// An error type for this driver.
-    type Error<Db: Database>: std::error::Error + From<EVMError<Db::Error>>;
+    type Error<Db: Database>: core::error::Error + From<EVMError<Db::Error>>;
 
     /// Get a reference to the block filler for this driver.
     fn block(&self) -> &Self::Block;

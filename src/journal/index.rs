@@ -1,11 +1,8 @@
+use alloc::{borrow::Cow, collections::BTreeMap};
 use alloy_primitives::{Address, Sign, B256, I256, U256};
 use revm::{
     db::{states::StorageSlot, AccountStatus, BundleAccount, BundleState},
-    primitives::{AccountInfo, Bytecode},
-};
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
+    primitives::{AccountInfo, Bytecode, HashMap},
 };
 
 /// Outcome of an account info after block execution.
@@ -112,7 +109,7 @@ impl AcctDiff<'_> {
         let old = self.original().map(|info| info.balance).unwrap_or_default();
         let new = self.updated().balance;
 
-        let abs = std::cmp::max(new, old) - std::cmp::min(new, old);
+        let abs = core::cmp::max(new, old) - core::cmp::min(new, old);
         let sign = if new > old { Sign::Positive } else { Sign::Negative };
         I256::checked_from_sign_and_abs(sign, abs).expect("balance diff overflow")
     }
