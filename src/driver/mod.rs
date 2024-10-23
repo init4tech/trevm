@@ -1,4 +1,5 @@
 mod alloy;
+#[cfg(feature = "std")]
 pub use alloy::{BundleError, BundleProcessor};
 
 mod block;

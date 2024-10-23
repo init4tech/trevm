@@ -365,9 +365,11 @@ extern crate alloc;
 
 mod driver;
 pub use driver::{
-    BlockDriver, BundleDriver, BundleError, BundleProcessor, ChainDriver, DriveBlockResult,
+    BlockDriver, BundleDriver, ChainDriver, DriveBlockResult,
     DriveBundleResult, DriveChainResult, RunTxResult,
 };
+#[cfg(feature = "std")]
+pub use driver::{BundleError, BundleProcessor};
 
 mod evm;
 pub use evm::Trevm;

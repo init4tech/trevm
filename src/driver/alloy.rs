@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 use crate::{
     trevm_bail, trevm_ensure, unwrap_or_trevm_err, Block, BundleDriver, DriveBundleResult,
 };
@@ -76,8 +78,8 @@ impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
     }
 }
 
-impl<Db: revm::Database> core::error::Error for BundleError<Db> {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+impl<Db: revm::Database> std::error::Error for BundleError<Db> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::TransactionDecodingError(err) => Some(err),
             Self::TransactionSenderRecoveryError(err) => Some(err),
