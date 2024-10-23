@@ -39,20 +39,19 @@ revm = { version = "16.0.0", default-features = false, features = ["std"] }
 zenith-types = "0.10"
 
 [dev-dependencies]
+alloy-rlp = { version = "0.3", default-features = false }
 revm = { version = "16.0.0", features = [
     "test-utils",
     "serde-json",
     "std",
     "alloydb",
 ] }
-tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
-
-alloy-rlp = { version = "0.3", default-features = false }
-
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # misc
 eyre = "0.6"
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
+
 
 [features]
 default = [
