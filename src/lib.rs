@@ -378,6 +378,7 @@ pub use ext::EvmExtUnchecked;
 mod fill;
 pub use fill::{Block, Cfg, DisableGasChecks, DisableNonceCheck, NoopBlock, NoopCfg, Tx};
 
+#[cfg(feature = "std")]
 pub mod journal;
 
 mod lifecycle;
