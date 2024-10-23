@@ -365,8 +365,8 @@ extern crate alloc;
 
 mod driver;
 pub use driver::{
-    BlockDriver, BundleDriver, ChainDriver, DriveBlockResult,
-    DriveBundleResult, DriveChainResult, RunTxResult,
+    BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
+    RunTxResult,
 };
 #[cfg(feature = "std")]
 pub use driver::{BundleError, BundleProcessor};
