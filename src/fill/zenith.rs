@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 use crate::Tx;
 use alloc::vec;
 use alloy_primitives::{Address, U256};

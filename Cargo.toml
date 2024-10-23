@@ -27,16 +27,16 @@ option-if-let-else = "warn"
 redundant-clone = "warn"
 
 [dependencies]
-alloy-rlp = "0.3"
+alloy-rlp = { version = "0.3", default-features = false }
 
-alloy-primitives = "=0.8.8"
-alloy-sol-types = "=0.8.8"
+alloy-primitives = { version = "=0.8.8", default-features = false }
+alloy-sol-types = { version = "=0.8.8", default-features = false }
 
-alloy = { version = "=0.5.2", default-features = false, features = ["consensus", "rpc-types-mev"] }
+alloy = { version = "=0.5.2", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256"] }
 
-revm = { version = "16.0.0", default-features = false, features = ["std"] }
+revm = { version = "16.0.0", default-features = false }
 
-zenith-types = "0.10"
+zenith-types = { version = "0.10", optional = true }
 
 [dev-dependencies]
 alloy-rlp = { version = "0.3", default-features = false }
@@ -63,7 +63,7 @@ default = [
     "revm/secp256k1",
 ]
 
-std = ["revm/std", "alloy/std", "alloy-rlp/std", "alloy-primitives/std", "alloy-sol-types/std"]
+std = ["revm/std", "alloy/std", "alloy-rlp/std", "alloy-primitives/std", "alloy-sol-types/std", "dep:zenith-types"]
 
 test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
 
