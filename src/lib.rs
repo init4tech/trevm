@@ -365,9 +365,11 @@ extern crate alloc;
 
 mod driver;
 pub use driver::{
-    BlockDriver, BundleDriver, BundleError, BundleProcessor, ChainDriver, DriveBlockResult,
-    DriveBundleResult, DriveChainResult, RunTxResult,
+    BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
+    RunTxResult,
 };
+#[cfg(feature = "std")]
+pub use driver::{BundleError, BundleProcessor};
 
 mod evm;
 pub use evm::Trevm;
@@ -378,6 +380,7 @@ pub use ext::EvmExtUnchecked;
 mod fill;
 pub use fill::{Block, Cfg, DisableGasChecks, DisableNonceCheck, NoopBlock, NoopCfg, Tx};
 
+#[cfg(feature = "std")]
 pub mod journal;
 
 mod lifecycle;
