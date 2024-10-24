@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.14.1"
+version = "0.14.2"
 rust-version = "1.82.0"
 edition = "2021"
 authors = ["init4"]
@@ -29,18 +29,18 @@ redundant-clone = "warn"
 [dependencies]
 alloy-rlp = { version = "0.3", default-features = false }
 
-alloy-primitives = { version = "=0.8.8", default-features = false }
-alloy-sol-types = { version = "=0.8.8", default-features = false }
+alloy-primitives = { version = "0.8.8", default-features = false }
+alloy-sol-types = { version = "0.8.8", default-features = false }
 
-alloy = { version = "=0.5.2", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256"] }
+alloy = { version = "=0.5.4", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256"] }
 
-revm = { version = "16.0.0", default-features = false }
+revm = { version = "17.1.0", default-features = false }
 
 zenith-types = { version = "0.10", optional = true }
 
 [dev-dependencies]
 alloy-rlp = { version = "0.3", default-features = false }
-revm = { version = "16.0.0", features = [
+revm = { version = "17.1.0", features = [
     "test-utils",
     "serde-json",
     "std",
@@ -66,7 +66,6 @@ default = [
 std = ["revm/std", "alloy/std", "alloy-rlp/std", "alloy-primitives/std", "alloy-sol-types/std", "dep:zenith-types"]
 
 test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
-
 
 secp256k1 = ["revm/secp256k1"]
 c-kzg = ["revm/c-kzg"]
