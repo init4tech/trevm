@@ -1173,6 +1173,18 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
     }
 
     /// Take the [`ResultAndState`] and return the EVM.
+    pub fn into_result_and_state(self) -> ResultAndState {
+        self.state.result
+    }
+
+    /// Take the [`ResultAndState`] and return the EVM.
+    pub fn take_result_and_state(self) -> (ResultAndState, EvmNeedsTx<'a, Ext, Db>) {
+        let Trevm { inner, state: TransactedState { result } } = self;
+        (result, Trevm { inner, state: NeedsTx::new() })
+    }
+
+    /// Take the [`ExecutionResult`], discard the [`EvmState`] and return the
+    /// EVM.
     pub fn take_result(self) -> (ExecutionResult, EvmNeedsTx<'a, Ext, Db>) {
         let Trevm { inner, state: TransactedState { result } } = self;
         (result.result, Trevm { inner, state: NeedsTx::new() })
