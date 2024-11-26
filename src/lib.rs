@@ -363,6 +363,9 @@
 
 extern crate alloc;
 
+mod connect;
+pub use connect::DbConnect;
+
 mod driver;
 pub use driver::{
     BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
@@ -405,7 +408,8 @@ pub mod test_utils;
 
 use revm::{Database, DatabaseCommit, EvmBuilder};
 
-/// Ext trait for [`EvmBuilder`] that builds a [`Trevm`].
+/// Ext trait for [`EvmBuilder`] that builds a [`Trevm`], and adds features for
+/// [`DbConnect`].
 pub trait TrevmBuilder<'a, Ext, Db: Database + DatabaseCommit> {
     /// Builds the [`Trevm`].
     fn build_trevm(self) -> EvmNeedsCfg<'a, Ext, Db>;
