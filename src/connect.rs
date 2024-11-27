@@ -1,3 +1,4 @@
+use alloc::format;
 use core::convert::Infallible;
 use revm::{
     primitives::{EVMError, ResultAndState},
