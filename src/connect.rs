@@ -95,6 +95,7 @@ pub trait EvmFactory<'a>: DbConnect<'a> {
     /// Create a new EVM instance, parameterize it with a [`Cfg`], a
     /// [`Block`], and a [`Tx`], and run the transaction, yielding either
     /// [`EvmTransacted`] or [`EvmErrored`].
+    #[allow(clippy::type_complexity)]
     fn transact<C, B, T>(
         &'a self,
         cfg: &C,
