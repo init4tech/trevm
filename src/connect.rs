@@ -13,6 +13,11 @@ use crate::{
 /// Connectors should contain configuration information like filesystem paths.
 /// They are intended to enable parallel instantiation of multiple EVMs in
 /// multiple threads sharing some database configuration
+///
+/// The lifetime on this trait allows the resulting DB to borrow from the
+/// connector. E.g. the connector may contain some `Db` and the resulting Db may
+/// contain `&Db`. This allows for (e.g.) shared caches between multiple DB
+/// threads.
 pub trait DbConnect<'a>: Sync {
     /// The database type returned when connecting.
     type Database: Database + DatabaseCommit;
