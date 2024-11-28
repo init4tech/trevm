@@ -4,7 +4,7 @@ use revm::{
 };
 
 /// Types that can fill the EVM transaction environment [`TxEnv`].
-pub trait Tx {
+pub trait Tx: Send + Sync {
     /// Fill the transaction environment.
     ///
     /// ## Note:
@@ -23,7 +23,7 @@ pub trait Tx {
     }
 }
 /// Types that can fill the EVM block environment [`BlockEnv`].
-pub trait Block {
+pub trait Block: Send + Sync {
     /// Fill the block environment.
     ///
     /// ## Note:
@@ -64,7 +64,7 @@ pub trait Block {
 /// - `disable_beneficiary_reward` - gated by `optional_beneficiary_reward`
 ///
 /// Cfg fillers should consider these feature gates when implementing the trait.
-pub trait Cfg {
+pub trait Cfg: Send + Sync {
     /// Fill the configuration environment.
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv);
 
