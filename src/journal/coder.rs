@@ -710,9 +710,9 @@ mod test {
         let created_acc = AcctDiff {
             outcome: created_outcome,
             storage_diff: vec![
-                (U256::from(3), Cow::Owned(new_slot.clone())),
-                (U256::from(4), Cow::Owned(changed_slot.clone())),
-                (U256::from(5), Cow::Owned(deleted_slot.clone())),
+                (U256::from(3), Cow::Owned(new_slot)),
+                (U256::from(4), Cow::Owned(changed_slot)),
+                (U256::from(5), Cow::Owned(deleted_slot)),
             ]
             .into_iter()
             .collect(),
