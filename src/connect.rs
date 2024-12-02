@@ -17,7 +17,7 @@ use crate::{
 ///
 /// The lifetime on this trait allows the resulting DB to borrow from the
 /// connector. E.g. the connector may contain some `Db` and the resulting Db may
-/// contain `&Db`. This allows for (e.g.) shared caches between multiple DB
+/// contain `&Db`. This allows for (e.g.) shared caches between DBs on multiple
 /// threads.
 pub trait DbConnect<'a>: Sync {
     /// The database type returned when connecting.
@@ -44,6 +44,16 @@ where
 }
 
 /// Trait for types that can create EVM instances.
+///
+/// Factories should contain configuration information like chain `EXT` types,
+/// and database connections. They are intended to enable parallel instantiation
+/// of multiple EVMs in multiple threads sharing some configuration or backing
+/// store.
+///
+/// The lifetime on this trait allows the resulting EVM to borrow from the
+/// connector. E.g. the connector may contain some `Db` and the resulting EVM
+/// may contain `&Db`. This allows for (e.g.) shared caches between EVMs on
+/// multiple threads.
 pub trait EvmFactory<'a>: DbConnect<'a> {
     /// The `Ext` type used in the resulting EVM.
     type Ext: Sync;
