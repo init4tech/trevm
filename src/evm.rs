@@ -880,7 +880,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
 
 // --- Needs Block with State<Db>
 
-impl< Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
+impl<Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
     /// Finish execution and return the outputs.
     ///
     /// ## Panics
@@ -1084,13 +1084,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmErrored<'a, Ext, Db, EVMError<Db
 
 // --- TRANSACTED
 
-impl<'a, Ext, Db: Database + DatabaseCommit> AsRef<ResultAndState> for EvmTransacted<'a, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> AsRef<ResultAndState> for EvmTransacted<'_, Ext, Db> {
     fn as_ref(&self) -> &ResultAndState {
         &self.state.result
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> AsRef<ExecutionResult> for EvmTransacted<'a, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> AsRef<ExecutionResult> for EvmTransacted<'_, Ext, Db> {
     fn as_ref(&self) -> &ExecutionResult {
         &self.state.result.result
     }
