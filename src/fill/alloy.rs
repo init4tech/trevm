@@ -272,7 +272,7 @@ impl Block for alloy::rpc::types::eth::Header {
     }
 }
 
-impl<T> Block for alloy::rpc::types::eth::Block<T> {
+impl<T: Send + Sync> Block for alloy::rpc::types::eth::Block<T> {
     fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
         self.header.fill_block_env(block_env);
     }
