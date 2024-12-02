@@ -9,6 +9,8 @@ use revm::{
 };
 
 /// A concurrent version of [`revm::db::CacheState`].
+///
+/// Most of the code for this has been reproduced from revm.
 #[derive(Debug)]
 pub struct ConcurrentCacheState {
     /// Block state account with account state.
