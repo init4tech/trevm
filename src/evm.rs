@@ -1,8 +1,8 @@
 use crate::{
-    driver::DriveBlockResult, Block, BlockDriver, BundleDriver, Cfg, ChainDriver,
-    DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock,
-    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
-    TransactedState, Tx,
+    db::ConcurrentState, driver::DriveBlockResult, Block, BlockDriver, BundleDriver, Cfg,
+    ChainDriver, DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked,
+    EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx,
+    NeedsCfg, NeedsTx, TransactedState, Tx,
 };
 use alloc::{boxed::Box, fmt};
 use alloy_primitives::{Address, Bytes, U256};
@@ -440,9 +440,17 @@ impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
     }
 }
 
-// --- ALL STATES, WITH STATE<DB>
+// --- ALL STATES, WITH State<Db> or ConcurrentState<Db>
 
 impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, State<Db>, TrevmState> {
+    /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
+    /// hardfork.
+    pub fn set_state_clear_flag(&mut self, flag: bool) {
+        self.inner.db_mut().set_state_clear_flag(flag)
+    }
+}
+
+impl<Ext, Db: DatabaseRef, TrevmState> Trevm<'_, Ext, ConcurrentState<Db>, TrevmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
@@ -878,9 +886,26 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
     }
 }
 
-// --- Needs Block with State<Db>
+// --- Needs Block with State<Db> or ConcurrentState<Db>
 
 impl<Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
+    /// Finish execution and return the outputs.
+    ///
+    /// ## Panics
+    ///
+    /// If the State has not been built with StateBuilder::with_bundle_update.
+    ///
+    /// See [`State::merge_transitions`] and [`State::take_bundle`].
+    pub fn finish(self) -> BundleState {
+        let Self { inner: mut evm, .. } = self;
+        evm.db_mut().merge_transitions(BundleRetention::Reverts);
+        let bundle = evm.db_mut().take_bundle();
+
+        bundle
+    }
+}
+
+impl<'a, Ext, Db: DatabaseRef> EvmNeedsBlock<'a, Ext, ConcurrentState<Db>> {
     /// Finish execution and return the outputs.
     ///
     /// ## Panics
