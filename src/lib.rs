@@ -364,7 +364,7 @@
 extern crate alloc;
 
 mod connect;
-pub use connect::DbConnect;
+pub use connect::{DbConnect, EvmFactory};
 
 mod driver;
 pub use driver::{
