@@ -139,9 +139,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit + DatabaseRef, TrevmState>
-    Trevm<'a, Ext, Db, TrevmState>
-{
+impl<Ext, Db: Database + DatabaseCommit + DatabaseRef, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Get the current account info for a specific address.
     pub fn try_read_account_ref(
         &self,
@@ -189,8 +187,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit + DatabaseRef, TrevmState>
     }
 }
 
-impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
-    Trevm<'a, Ext, Db, TrevmState>
+impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
+    Trevm<'_, Ext, Db, TrevmState>
 {
     /// Get the current account info for a specific address.
     ///
@@ -230,11 +228,10 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
 }
 
 impl<
-        'a,
         Ext,
         Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible> + DatabaseCommit,
         TrevmState,
-    > Trevm<'a, Ext, Db, TrevmState>
+    > Trevm<'_, Ext, Db, TrevmState>
 {
     /// Get the current account info for a specific address.
     ///
@@ -269,7 +266,7 @@ impl<
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
+impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Commit a set of state changes to the database. This is a low-level API,
     /// and is not intended for general use. Prefer executing a transaction.
     pub fn commit_unchecked(&mut self, state: EvmState) {
@@ -371,8 +368,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     }
 }
 
-impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
-    Trevm<'a, Ext, Db, TrevmState>
+impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
+    Trevm<'_, Ext, Db, TrevmState>
 {
     /// Modify an account with a closure and commit the modified account. This
     /// is a low-level API, and is not intended for general use.
@@ -445,7 +442,7 @@ impl<'a, Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
 
 // --- ALL STATES, WITH STATE<DB>
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, State<Db>, TrevmState> {
+impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, State<Db>, TrevmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
