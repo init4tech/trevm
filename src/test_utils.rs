@@ -12,7 +12,7 @@ use revm::inspectors::TracerEip3155;
 
 pub use revm::test_utils as revm_test_utils;
 
-impl<'a, Ext, State> Trevm<'a, Ext, InMemoryDB, State> {
+impl<Ext, State> Trevm<'_, Ext, InMemoryDB, State> {
     /// Modify an account with the provide closure. Returns the original
     /// account info
     pub fn test_modify_account<F>(&mut self, address: Address, f: F) -> AccountInfo

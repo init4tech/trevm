@@ -16,7 +16,7 @@ pub fn eip2935_slot(block_num: u64) -> U256 {
     U256::from(block_num % BLOCKHASH_SERVE_WINDOW as u64)
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
     /// Apply the pre-block logic for [EIP-2935]. This logic was introduced in
     /// Prague and updates historical block hashes in a special system
     /// contract. Unlike other system actions, this is NOT modeled as a

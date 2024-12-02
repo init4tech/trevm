@@ -42,7 +42,7 @@ impl SystemTx {
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
     /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
     /// post-block action was introduced in Prague, and calls the withdrawal
     /// request contract to accumulate withdrawal requests.

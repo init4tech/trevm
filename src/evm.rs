@@ -880,7 +880,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
 
 // --- Needs Block with State<Db>
 
-impl<'a, Ext, Db: Database> EvmNeedsBlock<'a, Ext, State<Db>> {
+impl< Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
     /// Finish execution and return the outputs.
     ///
     /// ## Panics

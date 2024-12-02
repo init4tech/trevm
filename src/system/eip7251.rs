@@ -42,7 +42,7 @@ impl SystemTx {
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
     /// Apply a system transaction as specified in [EIP-7251]. The EIP-7251
     /// post-block action calls the consolidation request contract to process
     /// consolidation requests.

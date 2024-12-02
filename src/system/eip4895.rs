@@ -3,7 +3,7 @@ use alloy::eips::eip4895::Withdrawal;
 use alloy_primitives::{map::HashMap, U256};
 use revm::{primitives::EVMError, Database, DatabaseCommit};
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
     /// Apply the withdrawals to the EVM state.
     pub fn apply_withdrawals<'b>(
         &mut self,

@@ -55,7 +55,7 @@ pub fn eip4788_root_slot(timestamp: u64) -> U256 {
     eip4788_timestamp_slot(timestamp) + U256::from(HISTORY_BUFFER_LENGTH)
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
     /// Apply a system transaction as specified in [EIP-4788]. The EIP-4788
     /// pre-block action was introduced in Cancun, and calls the beacon root
     /// contract to update the historical beacon root.
