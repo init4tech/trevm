@@ -1,8 +1,11 @@
-mod sync_state;
-pub use sync_state::{ConcurrentState, ConcurrentStateCache};
+mod builder;
+pub use builder::ConcurrentStateBuilder;
 
 mod cache_state;
 pub use cache_state::ConcurrentCacheState;
+
+mod sync_state;
+pub use sync_state::{ConcurrentState, ConcurrentStateCache};
 
 use crate::{EvmNeedsBlock, Trevm};
 use revm::{

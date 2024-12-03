@@ -5,7 +5,7 @@ use dashmap::mapref::one::RefMut;
 use revm::{
     db::{
         states::{bundle_state::BundleRetention, plain_account::PlainStorage, CacheAccount},
-        BundleState,
+        BundleState, State,
     },
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit, DatabaseRef, TransitionAccount, TransitionState,
@@ -20,6 +20,24 @@ pub struct ConcurrentState<Db> {
     database: Db,
     /// Non-DB state cache and transition information.
     pub info: ConcurrentStateCache,
+}
+
+impl<Db> From<State<Db>> for ConcurrentState<Db>
+where
+    Db: DatabaseRef,
+{
+    fn from(value: State<Db>) -> Self {
+        Self {
+            database: value.database,
+            info: ConcurrentStateCache {
+                cache: value.cache.into(),
+                transition_state: value.transition_state,
+                bundle_state: value.bundle_state,
+                use_preloaded_bundle: value.use_preloaded_bundle,
+                block_hashes: value.block_hashes.into(),
+            },
+        }
+    }
 }
 
 /// Non-DB contents of [`ConcurrentState`]
@@ -54,7 +72,18 @@ pub struct ConcurrentStateCache {
     pub block_hashes: RwLock<BTreeMap<u64, B256>>,
 }
 
-impl<DB: DatabaseRef> ConcurrentState<DB> {
+impl<Db: DatabaseRef> ConcurrentState<Db> {
+    /// Create a new [`ConcurrentState`] with the given database and cache
+    /// state.
+    pub const fn new(database: Db, info: ConcurrentStateCache) -> Self {
+        Self { database, info }
+    }
+
+    /// Deconstruct the [`ConcurrentState`] into its parts.
+    pub fn into_parts(self) -> (Db, ConcurrentStateCache) {
+        (self.database, self.info)
+    }
+
     /// Returns the size hint for the inner bundle state.
     /// See [BundleState::size_hint] for more info.
     pub fn bundle_size_hint(&self) -> usize {
@@ -72,7 +101,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     pub fn increment_balances(
         &mut self,
         balances: impl IntoIterator<Item = (Address, u128)>,
-    ) -> Result<(), DB::Error> {
+    ) -> Result<(), Db::Error> {
         // make transition and update cache state
         let mut transitions = Vec::new();
         for (address, balance) in balances {
@@ -98,7 +127,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     pub fn drain_balances(
         &mut self,
         addresses: impl IntoIterator<Item = Address>,
-    ) -> Result<Vec<u128>, DB::Error> {
+    ) -> Result<Vec<u128>, Db::Error> {
         // make transition and update cache state
         let mut transitions = Vec::new();
         let mut balances = Vec::new();
@@ -171,7 +200,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     pub fn load_cache_account_mut(
         &self,
         address: Address,
-    ) -> Result<RefMut<'_, Address, CacheAccount>, DB::Error> {
+    ) -> Result<RefMut<'_, Address, CacheAccount>, Db::Error> {
         match self.info.cache.accounts.entry(address) {
             dashmap::Entry::Vacant(entry) => {
                 if self.info.use_preloaded_bundle {
@@ -206,7 +235,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     /// to call [`ConcurrentState::merge_transitions`] before taking the bundle.
     ///
     /// If the `State` has been built with the
-    /// [`StateBuilder::with_bundle_prestate`] option, the pre-state will be
+    /// [`revm::StateBuilder::with_bundle_prestate`] option, the pre-state will be
     /// taken along with any changes made by
     /// [`ConcurrentState::merge_transitions`].
     pub fn take_bundle(&mut self) -> BundleState {

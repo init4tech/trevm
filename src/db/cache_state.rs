@@ -5,13 +5,13 @@ use dashmap::DashMap;
 use revm::{
     db::states::{plain_account::PlainStorage, CacheAccount},
     primitives::{Account, AccountInfo, Bytecode, EvmState},
-    TransitionAccount,
+    CacheState, TransitionAccount,
 };
 
 /// A concurrent version of [`revm::db::CacheState`].
 ///
 /// Most of the code for this has been reproduced from revm.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConcurrentCacheState {
     /// Block state account with account state.
     pub accounts: DashMap<Address, CacheAccount>,
@@ -20,6 +20,16 @@ pub struct ConcurrentCacheState {
     pub contracts: DashMap<B256, Bytecode>,
     /// Has EIP-161 state clear enabled (Spurious Dragon hardfork).
     pub has_state_clear: bool,
+}
+
+impl From<CacheState> for ConcurrentCacheState {
+    fn from(other: CacheState) -> Self {
+        Self {
+            accounts: other.accounts.into_iter().collect(),
+            contracts: other.contracts.into_iter().collect(),
+            has_state_clear: other.has_state_clear,
+        }
+    }
 }
 
 impl Default for ConcurrentCacheState {
@@ -31,11 +41,7 @@ impl Default for ConcurrentCacheState {
 impl ConcurrentCacheState {
     /// New default state.
     pub fn new(has_state_clear: bool) -> Self {
-        Self {
-            accounts: DashMap::default(),
-            contracts: DashMap::default(),
-            has_state_clear: has_state_clear.into(),
-        }
+        Self { accounts: DashMap::default(), contracts: DashMap::default(), has_state_clear }
     }
 
     /// Set state clear flag. EIP-161.
