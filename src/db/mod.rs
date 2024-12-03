@@ -18,7 +18,7 @@ impl<Ext, Db: DatabaseRef, TrevmState> Trevm<'_, Ext, ConcurrentState<Db>, Trevm
     }
 }
 
-impl<'a, Ext, Db: DatabaseRef> EvmNeedsBlock<'a, Ext, ConcurrentState<Db>> {
+impl<Ext, Db: DatabaseRef> EvmNeedsBlock<'_, Ext, ConcurrentState<Db>> {
     /// Finish execution and return the outputs.
     ///
     /// ## Panics
