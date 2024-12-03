@@ -11,7 +11,7 @@ use revm::{
 };
 use std::collections::BTreeMap;
 
-use super::{ConcurrentCacheState, ConcurrentStateCache};
+use super::{ConcurrentCacheState, ConcurrentStateInfo};
 
 /// Allows building of State and initializing it with different options.
 #[derive(Clone, Debug)]
@@ -150,7 +150,7 @@ impl<DB: DatabaseRef> ConcurrentStateBuilder<DB> {
         };
         ConcurrentState::new(
             self.database,
-            ConcurrentStateCache {
+            ConcurrentStateInfo {
                 cache: self
                     .with_cache_prestate
                     .unwrap_or_else(|| ConcurrentCacheState::new(self.with_state_clear)),

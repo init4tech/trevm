@@ -19,7 +19,7 @@ use std::{collections::hash_map, sync::RwLock};
 pub struct ConcurrentState<Db> {
     database: Db,
     /// Non-DB state cache and transition information.
-    pub info: ConcurrentStateCache,
+    pub info: ConcurrentStateInfo,
 }
 
 impl<Db> From<State<Db>> for ConcurrentState<Db>
@@ -29,7 +29,7 @@ where
     fn from(value: State<Db>) -> Self {
         Self {
             database: value.database,
-            info: ConcurrentStateCache {
+            info: ConcurrentStateInfo {
                 cache: value.cache.into(),
                 transition_state: value.transition_state,
                 bundle_state: value.bundle_state,
@@ -42,7 +42,7 @@ where
 
 /// Non-DB contents of [`ConcurrentState`]
 #[derive(Debug, Default)]
-pub struct ConcurrentStateCache {
+pub struct ConcurrentStateInfo {
     /// Cached state contains both changed from evm execution and cached/loaded
     /// account/storages from database. This allows us to have only one layer
     /// of cache where we can fetch data. Additionally we can introduce some
@@ -75,12 +75,12 @@ pub struct ConcurrentStateCache {
 impl<Db: DatabaseRef> ConcurrentState<Db> {
     /// Create a new [`ConcurrentState`] with the given database and cache
     /// state.
-    pub const fn new(database: Db, info: ConcurrentStateCache) -> Self {
+    pub const fn new(database: Db, info: ConcurrentStateInfo) -> Self {
         Self { database, info }
     }
 
     /// Deconstruct the [`ConcurrentState`] into its parts.
-    pub fn into_parts(self) -> (Db, ConcurrentStateCache) {
+    pub fn into_parts(self) -> (Db, ConcurrentStateInfo) {
         (self.database, self.info)
     }
 
