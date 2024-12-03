@@ -883,9 +883,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext
 impl<Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
     /// Finish execution and return the outputs.
     ///
-    /// ## Panics
-    ///
-    /// If the State has not been built with StateBuilder::with_bundle_update.
+    /// If the State has not been built with
+    /// [revm::StateBuilder::with_bundle_update] then the returned
+    /// [`BundleState`] will be meaningless.
     ///
     /// See [`State::merge_transitions`] and [`State::take_bundle`].
     pub fn finish(self) -> BundleState {

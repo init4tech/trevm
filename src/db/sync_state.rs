@@ -12,19 +12,19 @@ use revm::{
 };
 use std::{collections::hash_map, sync::RwLock};
 
-/// State of blockchain.
+/// State of the blockchain.
 ///
 /// A version of [`revm::db::State`] that can be shared between threads.
 #[derive(Debug)]
 pub struct ConcurrentState<Db> {
     database: Db,
     /// Non-DB state cache and transition information.
-    pub info: StateInfo,
+    pub info: ConcurrentStateCache,
 }
 
 /// Non-DB contents of [`ConcurrentState`]
 #[derive(Debug, Default)]
-pub struct StateInfo {
+pub struct ConcurrentStateCache {
     /// Cached state contains both changed from evm execution and cached/loaded
     /// account/storages from database. This allows us to have only one layer
     /// of cache where we can fetch data. Additionally we can introduce some
@@ -66,7 +66,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     ///
     /// Update will create transitions for all accounts that are updated.
     ///
-    /// Like [CacheAccount::increment_balance], this assumes that incremented balances are not
+    /// Like [`CacheAccount::increment_balance`], this assumes that incremented balances are not
     /// zero, and will not overflow once incremented. If using this to implement withdrawals, zero
     /// balances must be filtered out before calling this function.
     pub fn increment_balances(
@@ -79,7 +79,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
             if balance == 0 {
                 continue;
             }
-            let mut original_account = self.load_cache_account(address)?;
+            let mut original_account = self.load_cache_account_mut(address)?;
             transitions.push((
                 address,
                 original_account.increment_balance(balance).expect("Balance is not zero"),
@@ -103,7 +103,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
         let mut transitions = Vec::new();
         let mut balances = Vec::new();
         for address in addresses {
-            let mut original_account = self.load_cache_account(address)?;
+            let mut original_account = self.load_cache_account_mut(address)?;
             let (balance, transition) = original_account.drain_balance();
             balances.push(balance);
             transitions.push((address, transition))
@@ -116,17 +116,17 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     }
 
     /// State clear EIP-161 is enabled in Spurious Dragon hardfork.
-    pub fn set_state_clear_flag(&self, has_state_clear: bool) {
+    pub fn set_state_clear_flag(&mut self, has_state_clear: bool) {
         self.info.cache.set_state_clear_flag(has_state_clear);
     }
 
     /// Insert not existing account into cache state.
-    pub fn insert_not_existing(&self, address: Address) {
+    pub fn insert_not_existing(&mut self, address: Address) {
         self.info.cache.insert_not_existing(address)
     }
 
     /// Insert account into cache state.
-    pub fn insert_account(&self, address: Address, info: AccountInfo) {
+    pub fn insert_account(&mut self, address: Address, info: AccountInfo) {
         self.info.cache.insert_account(address, info)
     }
 
@@ -153,9 +153,7 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     /// we at any time revert state of bundle to the state before transition
     /// is applied.
     pub fn merge_transitions(&mut self, retention: BundleRetention) {
-        if let Some(transition_state) =
-            self.info.transition_state.as_mut().map(TransitionState::take)
-        {
+        if let Some(transition_state) = self.info.transition_state.take() {
             self.info
                 .bundle_state
                 .apply_transitions_and_create_reverts(transition_state, retention);
@@ -165,7 +163,12 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     /// Get a mutable reference to the [`CacheAccount`] for the given address.
     /// If the account is not found in the cache, it will be loaded from the
     /// database and inserted into the cache.
-    pub fn load_cache_account(
+    ///
+    /// This function locks that account in the cache while the reference is
+    /// held. For that timeframe, it will block other tasks attempting to
+    /// access that account. As a result, this function should be used
+    /// sparingly.
+    pub fn load_cache_account_mut(
         &self,
         address: Address,
     ) -> Result<RefMut<'_, Address, CacheAccount>, DB::Error> {
@@ -195,15 +198,17 @@ impl<DB: DatabaseRef> ConcurrentState<DB> {
     }
 
     // TODO make cache aware of transitions dropping by having global transition counter.
-    /// Takes the [`BundleState`] changeset from the [`State`], replacing it
+    /// Takes the [`BundleState`] changeset from the [`ConcurrentState`],
+    /// replacing it
     /// with an empty one.
     ///
     /// This will not apply any pending [`TransitionState`]. It is recommended
-    /// to call [`State::merge_transitions`] before taking the bundle.
+    /// to call [`ConcurrentState::merge_transitions`] before taking the bundle.
     ///
     /// If the `State` has been built with the
     /// [`StateBuilder::with_bundle_prestate`] option, the pre-state will be
-    /// taken along with any changes made by [`State::merge_transitions`].
+    /// taken along with any changes made by
+    /// [`ConcurrentState::merge_transitions`].
     pub fn take_bundle(&mut self) -> BundleState {
         core::mem::take(&mut self.info.bundle_state)
     }
@@ -213,7 +218,7 @@ impl<DB: DatabaseRef> DatabaseRef for ConcurrentState<DB> {
     type Error = DB::Error;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        self.load_cache_account(address).map(|a| a.account_info())
+        self.load_cache_account_mut(address).map(|a| a.account_info())
     }
 
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<Bytecode, Self::Error> {

@@ -1,4 +1,4 @@
-use core::sync::atomic::AtomicBool;
+//! The majority of this code has been reproduced from revm.
 
 use alloy_primitives::{Address, B256};
 use dashmap::DashMap;
@@ -19,7 +19,7 @@ pub struct ConcurrentCacheState {
     // TODO add bytecode counter for number of bytecodes added/removed.
     pub contracts: DashMap<B256, Bytecode>,
     /// Has EIP-161 state clear enabled (Spurious Dragon hardfork).
-    pub has_state_clear: AtomicBool,
+    pub has_state_clear: bool,
 }
 
 impl Default for ConcurrentCacheState {
@@ -39,8 +39,8 @@ impl ConcurrentCacheState {
     }
 
     /// Set state clear flag. EIP-161.
-    pub fn set_state_clear_flag(&self, has_state_clear: bool) {
-        self.has_state_clear.store(has_state_clear, core::sync::atomic::Ordering::Relaxed);
+    pub fn set_state_clear_flag(&mut self, has_state_clear: bool) {
+        self.has_state_clear = has_state_clear;
     }
 
     /// Insert not existing account.
@@ -129,7 +129,7 @@ impl ConcurrentCacheState {
         // And when empty account is touched it needs to be removed from database.
         // EIP-161 state clear
         if is_empty {
-            if self.has_state_clear.load(core::sync::atomic::Ordering::Relaxed) {
+            if self.has_state_clear {
                 // touch empty account.
                 this_account.touch_empty_eip161()
             } else {
