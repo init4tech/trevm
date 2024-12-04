@@ -1,13 +1,10 @@
 use crate::db::ConcurrentState;
 use revm::{
     db::{
-        states::{state::DBBox, BundleState, TransitionState},
+        states::{BundleState, TransitionState},
         EmptyDB,
     },
-    primitives::{
-        db::{Database, DatabaseRef, WrapDatabaseRef},
-        B256,
-    },
+    primitives::{db::DatabaseRef, B256},
 };
 use std::collections::BTreeMap;
 
@@ -15,9 +12,9 @@ use super::{ConcurrentCacheState, ConcurrentStateInfo};
 
 /// Allows building of State and initializing it with different options.
 #[derive(Clone, Debug)]
-pub struct ConcurrentStateBuilder<DB> {
+pub struct ConcurrentStateBuilder<Db> {
     /// Database that we use to fetch data from.
-    database: DB,
+    database: Db,
     /// Enabled state clear flag that is introduced in Spurious Dragon hardfork.
     /// Default is true as spurious dragon happened long time ago.
     with_state_clear: bool,
@@ -47,15 +44,15 @@ impl ConcurrentStateBuilder<EmptyDB> {
     }
 }
 
-impl<DB: DatabaseRef + Default> Default for ConcurrentStateBuilder<DB> {
+impl<Db: DatabaseRef + Sync + Default> Default for ConcurrentStateBuilder<Db> {
     fn default() -> Self {
-        Self::new_with_database(DB::default())
+        Self::new_with_database(Db::default())
     }
 }
 
-impl<DB: DatabaseRef> ConcurrentStateBuilder<DB> {
+impl<Db: DatabaseRef + Sync> ConcurrentStateBuilder<Db> {
     /// Create a new builder with the given database.
-    pub const fn new_with_database(database: DB) -> Self {
+    pub const fn new_with_database(database: Db) -> Self {
         Self {
             database,
             with_state_clear: true,
@@ -68,7 +65,10 @@ impl<DB: DatabaseRef> ConcurrentStateBuilder<DB> {
     }
 
     /// Set the database.
-    pub fn with_database<ODB: Database>(self, database: ODB) -> ConcurrentStateBuilder<ODB> {
+    pub fn with_database<ODb: DatabaseRef + Sync>(
+        self,
+        database: ODb,
+    ) -> ConcurrentStateBuilder<ODb> {
         // cast to the different database,
         // Note that we return different type depending of the database NewDBError.
         ConcurrentStateBuilder {
@@ -82,19 +82,11 @@ impl<DB: DatabaseRef> ConcurrentStateBuilder<DB> {
         }
     }
 
-    /// Takes [DatabaseRef] and wraps it with [WrapDatabaseRef].
-    pub fn with_database_ref<ODB: DatabaseRef>(
+    /// Alias for [`Self::with_database`], for revm compat reasons.
+    pub fn with_database_ref<ODb: DatabaseRef + Sync>(
         self,
-        database: ODB,
-    ) -> ConcurrentStateBuilder<WrapDatabaseRef<ODB>> {
-        self.with_database(WrapDatabaseRef(database))
-    }
-
-    /// With boxed version of database.
-    pub fn with_database_boxed<Error>(
-        self,
-        database: DBBox<'_, Error>,
-    ) -> ConcurrentStateBuilder<DBBox<'_, Error>> {
+        database: ODb,
+    ) -> ConcurrentStateBuilder<ODb> {
         self.with_database(database)
     }
 
@@ -141,7 +133,7 @@ impl<DB: DatabaseRef> ConcurrentStateBuilder<DB> {
     }
 
     /// Build the concurrent state.
-    pub fn build(mut self) -> ConcurrentState<DB> {
+    pub fn build(mut self) -> ConcurrentState<Db> {
         let use_preloaded_bundle = if self.with_cache_prestate.is_some() {
             self.with_bundle_prestate = None;
             false

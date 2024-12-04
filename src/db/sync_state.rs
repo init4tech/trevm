@@ -72,7 +72,7 @@ pub struct ConcurrentStateInfo {
     pub block_hashes: RwLock<BTreeMap<u64, B256>>,
 }
 
-impl<Db: DatabaseRef> ConcurrentState<Db> {
+impl<Db: DatabaseRef + Sync> ConcurrentState<Db> {
     /// Create a new [`ConcurrentState`] with the given database and cache
     /// state.
     pub const fn new(database: Db, info: ConcurrentStateInfo) -> Self {
@@ -243,8 +243,8 @@ impl<Db: DatabaseRef> ConcurrentState<Db> {
     }
 }
 
-impl<DB: DatabaseRef> DatabaseRef for ConcurrentState<DB> {
-    type Error = DB::Error;
+impl<Db: DatabaseRef + Sync> DatabaseRef for ConcurrentState<Db> {
+    type Error = Db::Error;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         self.load_cache_account_mut(address).map(|a| a.account_info())
@@ -325,14 +325,14 @@ impl<DB: DatabaseRef> DatabaseRef for ConcurrentState<DB> {
     }
 }
 
-impl<DB: DatabaseRef> DatabaseCommit for ConcurrentState<DB> {
+impl<Db: DatabaseRef + Sync> DatabaseCommit for ConcurrentState<Db> {
     fn commit(&mut self, evm_state: revm::primitives::HashMap<Address, Account>) {
         let transitions = self.info.cache.apply_evm_state(evm_state);
         self.apply_transition(transitions);
     }
 }
 
-impl<Db: DatabaseRef> Database for ConcurrentState<Db> {
+impl<Db: DatabaseRef + Sync> Database for ConcurrentState<Db> {
     type Error = <Self as DatabaseRef>::Error;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {

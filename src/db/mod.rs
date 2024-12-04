@@ -1,4 +1,5 @@
 mod builder;
+
 pub use builder::ConcurrentStateBuilder;
 
 mod cache_state;
@@ -13,7 +14,7 @@ use revm::{
     DatabaseRef,
 };
 
-impl<Ext, Db: DatabaseRef, TrevmState> Trevm<'_, Ext, ConcurrentState<Db>, TrevmState> {
+impl<Ext, Db: DatabaseRef + Sync, TrevmState> Trevm<'_, Ext, ConcurrentState<Db>, TrevmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     ///
@@ -23,7 +24,7 @@ impl<Ext, Db: DatabaseRef, TrevmState> Trevm<'_, Ext, ConcurrentState<Db>, Trevm
     }
 }
 
-impl<Ext, Db: DatabaseRef> EvmNeedsBlock<'_, Ext, ConcurrentState<Db>> {
+impl<Ext, Db: DatabaseRef + Sync> EvmNeedsBlock<'_, Ext, ConcurrentState<Db>> {
     /// Finish execution and return the outputs.
     ///
     /// If the State has not been built with
