@@ -366,6 +366,10 @@ extern crate alloc;
 mod connect;
 pub use connect::{DbConnect, EvmFactory};
 
+/// Contains database implementations for concurrent EVM operation.
+#[cfg(feature = "concurrent-db")]
+pub mod db;
+
 mod driver;
 pub use driver::{
     BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
