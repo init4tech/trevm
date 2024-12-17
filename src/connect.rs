@@ -1,9 +1,9 @@
-use alloc::format;
 use core::convert::Infallible;
 use revm::{
     primitives::{EVMError, ResultAndState},
     Database, DatabaseCommit,
 };
+use std::format;
 
 use crate::{
     Block, Cfg, EvmErrored, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, Tx,

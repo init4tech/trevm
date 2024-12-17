@@ -1,9 +1,6 @@
-#![cfg(feature = "std")]
-
 use crate::{
     trevm_bail, trevm_ensure, unwrap_or_trevm_err, Block, BundleDriver, DriveBundleResult,
 };
-use alloc::vec::Vec;
 use alloy::{
     consensus::{Transaction, TxEip4844Variant, TxEnvelope},
     eips::{eip2718::Decodable2718, BlockNumberOrTag},

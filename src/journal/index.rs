@@ -1,9 +1,9 @@
-use alloc::{borrow::Cow, collections::BTreeMap};
 use alloy_primitives::{Address, Sign, B256, I256, U256};
 use revm::{
     db::{states::StorageSlot, AccountStatus, BundleAccount, BundleState},
     primitives::{AccountInfo, Bytecode, HashMap},
 };
+use std::{borrow::Cow, collections::BTreeMap};
 
 /// Outcome of an account info after block execution.
 ///
