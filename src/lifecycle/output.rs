@@ -25,7 +25,7 @@ impl Default for BlockOutput {
     }
 }
 
-impl<T: TxReceipt> BlockOutput<T> {
+impl<T: TxReceipt<Log = alloy_primitives::Log>> BlockOutput<T> {
     /// Create a new block output with memory allocated to hold `capacity`
     /// transaction outcomes.
     pub fn with_capacity(capacity: usize) -> Self {

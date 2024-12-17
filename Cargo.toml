@@ -27,12 +27,12 @@ option-if-let-else = "warn"
 redundant-clone = "warn"
 
 [dependencies]
-alloy-rlp = { version = "0.3", default-features = false }
+alloy-rlp = { version = "0.3.10", default-features = false }
 
-alloy-primitives = { version = "0.8.8", default-features = false }
-alloy-sol-types = { version = "0.8.8", default-features = false }
+alloy-primitives = { version = "0.8.11", default-features = false }
+alloy-sol-types = { version = "0.8.11", default-features = false }
 
-alloy = { version = "=0.5.4", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256"] }
+alloy = { version = "=0.7.3", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256"] }
 
 revm = { version = "18.0.0", default-features = false }
 
