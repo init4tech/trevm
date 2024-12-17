@@ -12,19 +12,3 @@ env:
 jobs:
   rust-base:
     uses: init4tech/actions/.github/workflows/rust-base.yml@main
-
-  test-no-features:
-    name: Test Suite (no default features)
-    runs-on:
-      group: init4-runners
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: true
-        run: |
-          cargo test --no-default-features

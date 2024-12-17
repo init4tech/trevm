@@ -1,5 +1,4 @@
 use crate::db::ConcurrentCacheState;
-use alloc::{collections::BTreeMap, vec::Vec};
 use alloy_primitives::{Address, B256, U256};
 use dashmap::mapref::one::RefMut;
 use revm::{
@@ -10,7 +9,10 @@ use revm::{
     primitives::{Account, AccountInfo, Bytecode},
     Database, DatabaseCommit, DatabaseRef, TransitionAccount, TransitionState,
 };
-use std::{collections::hash_map, sync::RwLock};
+use std::{
+    collections::{hash_map, BTreeMap},
+    sync::RwLock,
+};
 
 /// State of the blockchain.
 ///

@@ -359,9 +359,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![deny(unused_must_use, rust_2018_idioms)]
 #![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
-#![cfg_attr(not(feature = "std"), no_std)]
-
-extern crate alloc;
 
 mod connect;
 pub use connect::{DbConnect, EvmFactory};
@@ -375,7 +372,7 @@ pub use driver::{
     BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
     RunTxResult,
 };
-#[cfg(feature = "std")]
+
 pub use driver::{BundleError, BundleProcessor};
 
 mod evm;
@@ -387,7 +384,6 @@ pub use ext::EvmExtUnchecked;
 mod fill;
 pub use fill::{Block, Cfg, DisableGasChecks, DisableNonceCheck, NoopBlock, NoopCfg, Tx};
 
-#[cfg(feature = "std")]
 pub mod journal;
 
 mod lifecycle;

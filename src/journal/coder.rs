@@ -1,11 +1,4 @@
 use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
-use alloc::{
-    borrow::{Cow, ToOwned},
-    collections::BTreeMap,
-    fmt::Debug,
-    sync::Arc,
-    vec::Vec,
-};
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::{Buf, BufMut};
 use revm::{
@@ -14,8 +7,14 @@ use revm::{
         eof::EofDecodeError, AccountInfo, Bytecode, Eip7702Bytecode, Eip7702DecodeError, Eof,
     },
 };
+use std::{
+    borrow::{Cow, ToOwned},
+    collections::BTreeMap,
+    fmt::Debug,
+    sync::Arc,
+    vec::Vec,
+};
 
-#[cfg(feature = "std")]
 use zenith_types::Zenith;
 
 type Result<T, E = JournalDecodeError> = core::result::Result<T, E>;
@@ -413,7 +412,6 @@ impl JournalEncode for BundleState {
     }
 }
 
-#[cfg(feature = "std")]
 impl JournalEncode for Zenith::BlockHeader {
     fn serialized_size(&self) -> usize {
         ZENITH_HEADER_BYTES
@@ -639,7 +637,6 @@ impl JournalDecode for BundleState {
     }
 }
 
-#[cfg(feature = "std")]
 impl JournalDecode for Zenith::BlockHeader {
     fn decode(buf: &mut &[u8]) -> Result<Self> {
         Ok(Self {
@@ -655,7 +652,6 @@ impl JournalDecode for Zenith::BlockHeader {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloc::vec;
 
     fn roundtrip<T: JournalDecode + JournalEncode + PartialEq>(expected: &T) {
         let enc = JournalEncode::encoded(expected);
