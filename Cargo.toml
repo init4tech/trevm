@@ -27,16 +27,16 @@ option-if-let-else = "warn"
 redundant-clone = "warn"
 
 [dependencies]
-alloy-rlp = { version = "0.3.10", default-features = false }
+alloy-rlp = { version = "0.3.10", default-features = false, features = ["std"]}
 
-alloy-primitives = { version = "0.8.11", default-features = false }
-alloy-sol-types = { version = "0.8.11", default-features = false }
+alloy-primitives = { version = "0.8.11", default-features = false, features = ["std"]}
+alloy-sol-types = { version = "0.8.11", default-features = false, features = ["std"]}
 
-alloy = { version = "=0.7.3", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256"] }
+alloy = { version = "=0.7.3", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256", "std"] }
 
-revm = { version = "18.0.0", default-features = false }
+revm = { version = "18.0.0", default-features = false, features = ["std"] }
 
-zenith-types = { version = "0.11", optional = true }
+zenith-types = { version = "0.11" }
 
 dashmap = { version = "6.1.0", optional = true }
 
@@ -57,7 +57,6 @@ tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = [
-    "std",
     "concurrent-db",
     "revm/std",
     "revm/c-kzg",
@@ -66,9 +65,7 @@ default = [
     "revm/secp256k1",
 ]
 
-std = ["revm/std", "alloy/std", "alloy-rlp/std", "alloy-primitives/std", "alloy-sol-types/std", "dep:zenith-types"]
-
-concurrent-db = ["std", "dep:dashmap"]
+concurrent-db = ["dep:dashmap"]
 
 test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
 

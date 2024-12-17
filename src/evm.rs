@@ -4,7 +4,6 @@ use crate::{
     EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
     TransactedState, Tx,
 };
-use alloc::{boxed::Box, fmt};
 use alloy_primitives::{Address, Bytes, U256};
 use core::convert::Infallible;
 use revm::{
@@ -15,6 +14,7 @@ use revm::{
     },
     Database, DatabaseCommit, DatabaseRef, Evm,
 };
+use std::fmt;
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///

@@ -1,4 +1,3 @@
-use alloc::vec::Vec;
 use alloy::consensus::{ReceiptEnvelope, TxReceipt};
 use alloy_primitives::{Address, Bloom, Bytes, Log};
 use std::sync::OnceLock;

@@ -1,7 +1,4 @@
-#![cfg(feature = "std")]
-
 use crate::Tx;
-use alloc::vec;
 use alloy_primitives::{Address, U256};
 use alloy_sol_types::SolCall;
 use revm::primitives::{TransactTo, TxEnv};

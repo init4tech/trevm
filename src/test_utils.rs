@@ -7,7 +7,6 @@ use revm::{
     EvmBuilder, GetInspector,
 };
 
-#[cfg(feature = "std")]
 use revm::inspectors::TracerEip3155;
 
 pub use revm::test_utils as revm_test_utils;
@@ -115,7 +114,6 @@ pub fn test_state_trevm() -> EvmNeedsCfg<'static, (), State<EmptyDB>> {
 
 /// Make a new [`Trevm`] with an in-memory database and a tracer inspector.
 /// The tracer will print all EVM instructions to stdout.
-#[cfg(feature = "std")]
 pub fn test_trevm_tracing() -> EvmNeedsCfg<'static, TracerEip3155, CacheDB<EmptyDB>> {
     test_trevm_with_inspector(TracerEip3155::new(Box::new(std::io::stdout())))
 }
