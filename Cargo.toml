@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.16.0"
+version = "0.17.0"
 rust-version = "1.82.0"
 edition = "2021"
 authors = ["init4"]
