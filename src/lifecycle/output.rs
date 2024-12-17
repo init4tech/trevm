@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use alloy::consensus::{ReceiptEnvelope, TxReceipt};
 use alloy_primitives::{Address, Bloom, Bytes, Log};
-use core::cell::OnceCell;
+use std::sync::OnceLock;
 
 /// Information externalized during block execution.
 ///
@@ -16,7 +16,7 @@ pub struct BlockOutput<T: TxReceipt = ReceiptEnvelope> {
     senders: Vec<Address>,
 
     /// The logs bloom of the block.
-    bloom: OnceCell<Bloom>,
+    bloom: OnceLock<Bloom>,
 }
 
 impl Default for BlockOutput {
