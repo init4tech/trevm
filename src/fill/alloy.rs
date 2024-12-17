@@ -262,12 +262,12 @@ impl Block for alloy::rpc::types::eth::Header {
             blob_excess_gas_and_price,
         } = block_env;
         *number = U256::from(self.number);
-        *coinbase = self.miner;
+        *coinbase = self.beneficiary;
         *timestamp = U256::from(self.timestamp);
         *gas_limit = U256::from(self.gas_limit);
         *basefee = U256::from(self.base_fee_per_gas.unwrap_or_default());
         *difficulty = U256::from(self.difficulty);
-        *prevrandao = self.mix_hash;
+        *prevrandao = Some(self.mix_hash);
         *blob_excess_gas_and_price = self.blob_gas_used.map(BlobExcessGasAndPrice::new);
     }
 }
