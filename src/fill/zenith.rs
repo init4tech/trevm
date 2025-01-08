@@ -1,8 +1,8 @@
-use crate::Tx;
+use crate::{Block, Tx};
 use alloy_primitives::{Address, U256};
 use alloy_sol_types::SolCall;
 use revm::primitives::{TransactTo, TxEnv};
-use zenith_types::{Passage::EnterToken, Transactor};
+use zenith_types::{Passage::EnterToken, Transactor, ZenithCallBundle};
 
 impl Tx for Transactor::Transact {
     fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
@@ -77,5 +77,17 @@ impl Tx for EnterToken {
         blob_hashes.clear();
         max_fee_per_blob_gas.take();
         authorization_list.take();
+    }
+}
+
+impl Block for ZenithCallBundle {
+    fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
+        block_env.number =
+            self.bundle.state_block_number.as_number().map(U256::from).unwrap_or(block_env.number);
+        block_env.timestamp = self.bundle.timestamp.map(U256::from).unwrap_or(block_env.timestamp);
+        block_env.gas_limit = self.bundle.gas_limit.map(U256::from).unwrap_or(block_env.gas_limit);
+        block_env.difficulty =
+            self.bundle.difficulty.map(U256::from).unwrap_or(block_env.difficulty);
+        block_env.basefee = self.bundle.base_fee.map(U256::from).unwrap_or(block_env.basefee);
     }
 }
