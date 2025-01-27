@@ -1,10 +1,10 @@
 //! [`Trevm`] - a typestate interface to [`revm`].
 //!
-//! Tevm provides a safe and low-overhead way to interact with the EVM. It is
+//! Trevm provides a safe and low-overhead way to interact with the EVM. It is
 //! based on the [typestate pattern], which allows the compiler to enforce
 //! correct usage of the EVM.
 //!
-//! Tevm is NOT an EVM implementation. It is a thin wrapper around the EVM
+//! Trevm is NOT an EVM implementation. It is a thin wrapper around the EVM
 //! provided by [`revm`].
 //!
 //! [`Trevm`] models the EVM as a state machine with the following states:
@@ -40,7 +40,7 @@
 //!
 //! ```
 //! use revm::{EvmBuilder, db::InMemoryDB};
-//! use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, };
+//! use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx};
 //!
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
@@ -68,7 +68,7 @@
 //! `()` for `Ext`, unless specifically using an inspector or a customized EVM.
 //!
 //! To help you use concrete types, we provide the [`trevm_aliases`] macro. This
-//! macro generates type aliases for the Trevm states with a concrete `Ext` and
+//! macro generates type aliases for the Trevm states with concrete `Ext` and `Db` types.
 //!
 //! ```
 //! use trevm::trevm_aliases;
@@ -97,10 +97,10 @@
 //!   requests by crediting accounts.
 //! - [`eip6110`] - Prague's [EIP-6110], which extracts deposit
 //!   requests from the withdrawal contract events.
-//! - [`eip7002`] - Prague's [EIP-7002], which extracts withdrawal requestss
-//!   from the system withdrwal contract state.
+//! - [`eip7002`] - Prague's [EIP-7002], which extracts withdrawal requests
+//!   from the system withdrawal contract state.
 //! - [`eip7251`] - Prague's [EIP-7251], which extracts
-//!   consolidation requestss from the system consolidation contract state.
+//!   consolidation requests from the system consolidation contract state.
 //!
 //! The [`BlockDriver`] and [`ChainDriver`] trait methods take a mutable
 //! reference to allow the driver to accumulate information about the
@@ -287,7 +287,7 @@
 //!
 //! ## Happy Path Loop
 //!
-//! The most simple, straightforward application of Tevm is applying a
+//! The most simple, straightforward application of Trevm is applying a
 //! set of transaction to the EVM. This is done by following :
 //!
 //! ```none
@@ -339,6 +339,7 @@
 //! [crate readme]: https://github.com/init4tt/trevm
 //! [EIP-2537]: https://eips.ethereum.org/EIPS/eip-2537
 //! [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
+//! [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
 //! [EIP-4844]: https://eips.ethereum.org/EIPS/eip-4844
 //! [EIP-4895]: https://eips.ethereum.org/EIPS/eip-4895
 //! [EIP-6110]: https://eips.ethereum.org/EIPS/eip-6110
