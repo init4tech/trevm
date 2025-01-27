@@ -68,7 +68,7 @@
 //! `()` for `Ext`, unless specifically using an inspector or a customized EVM.
 //!
 //! To help you use concrete types, we provide the [`trevm_aliases`] macro. This
-//! macro generates type aliases for the Trevm states with a concrete `Ext` and `Db` types.
+//! macro generates type aliases for the Trevm states with concrete `Ext` and `Db` types.
 //!
 //! ```
 //! use trevm::trevm_aliases;
