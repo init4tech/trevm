@@ -1,6 +1,8 @@
 use crate::{EvmExtUnchecked, EvmNeedsTx};
-use alloy::eips::eip4895::Withdrawal;
-use alloy_primitives::{map::HashMap, U256};
+use alloy::{
+    eips::eip4895::Withdrawal,
+    primitives::{map::HashMap, U256},
+};
 use revm::{primitives::EVMError, Database, DatabaseCommit};
 
 impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
@@ -36,8 +38,10 @@ impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
 
 #[cfg(test)]
 mod test {
-    use alloy::eips::eip4895::{Withdrawal, GWEI_TO_WEI};
-    use alloy_primitives::{Address, U256};
+    use alloy::{
+        eips::eip4895::{Withdrawal, GWEI_TO_WEI},
+        primitives::{Address, U256},
+    };
 
     use crate::{NoopBlock, NoopCfg};
 

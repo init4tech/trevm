@@ -1,5 +1,5 @@
 use crate::EvmNeedsTx;
-use alloy_primitives::U256;
+use alloy::primitives::U256;
 use revm::{
     primitives::{EVMError, SpecId, BLOCKHASH_SERVE_WINDOW},
     Database, DatabaseCommit,
@@ -57,7 +57,7 @@ impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
 mod test {
     use super::*;
     use crate::{NoopBlock, NoopCfg};
-    use alloy_primitives::B256;
+    use alloy::primitives::B256;
     use revm::primitives::Bytecode;
 
     #[test]

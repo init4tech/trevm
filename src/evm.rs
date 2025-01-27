@@ -4,7 +4,7 @@ use crate::{
     EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
     TransactedState, Tx,
 };
-use alloy_primitives::{Address, Bytes, U256};
+use alloy::primitives::{Address, Bytes, U256};
 use core::convert::Infallible;
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState, State},

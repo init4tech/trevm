@@ -1,4 +1,4 @@
-use alloy_primitives::{Address, B256, U256};
+use alloy::primitives::{Address, B256, U256};
 use revm::{
     primitives::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot, HashMap},
     Database, DatabaseCommit,

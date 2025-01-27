@@ -1,5 +1,5 @@
 use crate::{EvmNeedsCfg, Trevm, TrevmBuilder};
-use alloy_primitives::{Address, U256};
+use alloy::primitives::{Address, U256};
 use revm::{
     db::{CacheDB, EmptyDB, InMemoryDB, State},
     inspector_handle_register,

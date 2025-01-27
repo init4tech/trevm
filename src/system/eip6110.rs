@@ -1,5 +1,5 @@
 use alloy::consensus::ReceiptEnvelope;
-use alloy_primitives::{Bytes, Log};
+use alloy::primitives::{Bytes, Log};
 use alloy_rlp::BufMut;
 use alloy_sol_types::{sol, SolEvent};
 
@@ -146,8 +146,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::consensus::{Receipt, ReceiptEnvelope};
-    use alloy_primitives::bytes;
+    use alloy::{
+        consensus::{Receipt, ReceiptEnvelope},
+        primitives::bytes,
+    };
 
     #[test]
     fn test_parse_deposit_from_log() {

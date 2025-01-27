@@ -51,8 +51,14 @@ pub mod eip7002;
 /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
 pub mod eip7251;
 
+/// The maximum blob gas limit for a block in Cancun.
+pub const MAX_BLOB_GAS_PER_BLOCK_CANCUN: u64 = 786_432;
+
+/// The maximum blob gas limit for a block in Prague.
+pub const MAX_BLOB_GAS_PER_BLOCK_PRAGUE: u64 = 1_179_648;
+
 use crate::{EvmExtUnchecked, Tx};
-use alloy_primitives::{Address, Bytes, U256};
+use alloy::primitives::{Address, Bytes, U256};
 use revm::{
     primitives::{Bytecode, EVMError, ExecutionResult, ResultAndState, KECCAK_EMPTY},
     Database, DatabaseCommit, Evm,

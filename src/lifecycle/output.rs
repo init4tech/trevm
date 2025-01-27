@@ -1,5 +1,7 @@
-use alloy::consensus::{ReceiptEnvelope, TxReceipt};
-use alloy_primitives::{Address, Bloom, Bytes, Log};
+use alloy::{
+    consensus::{ReceiptEnvelope, TxReceipt},
+    primitives::{Address, Bloom, Bytes, Log},
+};
 use std::sync::OnceLock;
 
 /// Information externalized during block execution.
@@ -24,7 +26,7 @@ impl Default for BlockOutput {
     }
 }
 
-impl<T: TxReceipt<Log = alloy_primitives::Log>> BlockOutput<T> {
+impl<T: TxReceipt<Log = alloy::primitives::Log>> BlockOutput<T> {
     /// Create a new block output with memory allocated to hold `capacity`
     /// transaction outcomes.
     pub fn with_capacity(capacity: usize) -> Self {
@@ -77,7 +79,7 @@ impl<T: TxReceipt<Log = alloy_primitives::Log>> BlockOutput<T> {
     }
 
     /// Get the cumulative gas used in the block.
-    pub fn cumulative_gas_used(&self) -> u128 {
+    pub fn cumulative_gas_used(&self) -> u64 {
         self.receipts().last().map(TxReceipt::cumulative_gas_used).unwrap_or_default()
     }
 

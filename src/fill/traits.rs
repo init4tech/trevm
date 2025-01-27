@@ -77,8 +77,10 @@ pub trait Cfg: Send + Sync {
 
 #[cfg(test)]
 mod test {
-    use alloy::consensus::constants::GWEI_TO_WEI;
-    use alloy_primitives::{B256, U256};
+    use alloy::{
+        consensus::constants::GWEI_TO_WEI,
+        primitives::{B256, U256},
+    };
     use revm::primitives::{BlobExcessGasAndPrice, BlockEnv, CfgEnv};
 
     use super::*;
@@ -104,7 +106,7 @@ mod test {
             let diff = B256::repeat_byte(0xab);
             *prevrandao = Some(diff);
             *difficulty = U256::from_be_bytes(diff.into());
-            *blob_excess_gas_and_price = Some(BlobExcessGasAndPrice::new(1_000_000));
+            *blob_excess_gas_and_price = Some(BlobExcessGasAndPrice::new(1_000_000, false));
         }
 
         fn tx_count_hint(&self) -> Option<usize> {

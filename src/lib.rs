@@ -114,7 +114,7 @@
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, BlockDriver};
-//! # use alloy_primitives::B256;
+//! # use alloy::primitives::B256;
 //! # fn t<C: Cfg, D: BlockDriver<()>>(cfg: &C, mut driver: D)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! let trevm = EvmBuilder::default()
@@ -144,7 +144,7 @@
 //! ```
 //! # use revm::{EvmBuilder, db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx};
-//! # use alloy_primitives::B256;
+//! # use alloy::primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! let trevm = match EvmBuilder::default()
@@ -174,7 +174,7 @@
 //!
 //! ```
 //! # use trevm::Tx;
-//! # use alloy_primitives::Address;
+//! # use alloy::primitives::Address;
 //! // You can implement your own Tx to fill the EVM environment with your own
 //! // data.
 //! pub struct MyTx;

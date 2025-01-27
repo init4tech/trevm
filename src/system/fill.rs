@@ -1,5 +1,5 @@
 use crate::Tx;
-use alloy_primitives::{address, Address, Bytes, U256};
+use alloy::primitives::{address, Address, Bytes, U256};
 use revm::primitives::TxEnv;
 
 /// System smart contract calls as specified in [EIP-4788], [EIP-7002],

@@ -1,5 +1,5 @@
 use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
-use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::{Buf, BufMut};
 use revm::{
     db::{states::StorageSlot, BundleState},

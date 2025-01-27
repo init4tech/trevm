@@ -1,16 +1,17 @@
 use crate::{
+    system::{MAX_BLOB_GAS_PER_BLOCK_CANCUN, MAX_BLOB_GAS_PER_BLOCK_PRAGUE},
     trevm_bail, trevm_ensure, unwrap_or_trevm_err, Block, BundleDriver, DriveBundleResult,
 };
 use alloy::{
     consensus::{Transaction, TxEip4844Variant, TxEnvelope},
     eips::{eip2718::Decodable2718, BlockNumberOrTag},
+    primitives::{bytes::Buf, keccak256, Address, Bytes, TxKind, U256},
     rpc::types::mev::{
         EthBundleHash, EthCallBundle, EthCallBundleResponse, EthCallBundleTransactionResult,
         EthSendBundle,
     },
 };
-use alloy_primitives::{bytes::Buf, keccak256, Address, Bytes, TxKind, U256};
-use revm::primitives::{EVMError, ExecutionResult, MAX_BLOB_GAS_PER_BLOCK};
+use revm::primitives::{EVMError, ExecutionResult, SpecId};
 
 /// Possible errors that can occur while driving a bundle.
 pub enum BundleError<Db: revm::Database> {
@@ -29,7 +30,7 @@ pub enum BundleError<Db: revm::Database> {
     /// An error occurred while decoding a transaction contained in the bundle.
     TransactionDecodingError(alloy::eips::eip2718::Eip2718Error),
     /// An error occurred while recovering the sender of a transaction.
-    TransactionSenderRecoveryError(alloy_primitives::SignatureError),
+    TransactionSenderRecoveryError(alloy::primitives::SignatureError),
     /// An error occurred while running the EVM.
     EVMError {
         /// The error that occurred while running the EVM.
@@ -63,8 +64,8 @@ impl<Db: revm::Database> From<alloy::eips::eip2718::Eip2718Error> for BundleErro
     }
 }
 
-impl<Db: revm::Database> From<alloy_primitives::SignatureError> for BundleError<Db> {
-    fn from(err: alloy_primitives::SignatureError) -> Self {
+impl<Db: revm::Database> From<alloy::primitives::SignatureError> for BundleError<Db> {
+    fn from(err: alloy::primitives::SignatureError) -> Self {
         Self::TransactionSenderRecoveryError(err)
     }
 }
@@ -148,17 +149,7 @@ impl<B, R> BundleProcessor<B, R> {
             .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
             .collect::<Result<Vec<_>, _>>()?;
 
-        if txs
-            .iter()
-            .filter_map(|tx| tx.as_eip4844())
-            .map(|tx| tx.tx().tx().blob_gas())
-            .sum::<u64>()
-            > MAX_BLOB_GAS_PER_BLOCK
-        {
-            Err(BundleError::Eip4844BlobGasExceeded)
-        } else {
-            Ok(txs)
-        }
+        Ok(txs)
     }
 
     /// Take the response from the bundle driver. This consumes the driver.
@@ -588,12 +579,17 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
             );
 
             // Check that the bundle does not exceed the maximum gas limit for blob transactions
+            let mbg = match trevm.spec_id() {
+                SpecId::CANCUN => MAX_BLOB_GAS_PER_BLOCK_CANCUN,
+                SpecId::PRAGUE => MAX_BLOB_GAS_PER_BLOCK_PRAGUE,
+                _ => 0,
+            };
             trevm_ensure!(
                 txs.iter()
                     .filter_map(|tx| tx.as_eip4844())
                     .map(|tx| tx.tx().tx().blob_gas())
                     .sum::<u64>()
-                    <= MAX_BLOB_GAS_PER_BLOCK,
+                    <= mbg,
                 trevm,
                 BundleError::Eip4844BlobGasExceeded
             );
@@ -679,12 +675,18 @@ impl<Ext> BundleDriver<Ext> for EthSendBundle {
         );
 
         // Check that the bundle does not exceed the maximum gas limit for blob transactions
+
+        let mbg = match trevm.spec_id() {
+            SpecId::CANCUN => MAX_BLOB_GAS_PER_BLOCK_CANCUN,
+            SpecId::PRAGUE => MAX_BLOB_GAS_PER_BLOCK_PRAGUE,
+            _ => 0,
+        };
         trevm_ensure!(
             txs.iter()
                 .filter_map(|tx| tx.as_eip4844())
                 .map(|tx| tx.tx().tx().blob_gas())
                 .sum::<u64>()
-                <= MAX_BLOB_GAS_PER_BLOCK,
+                <= mbg,
             trevm,
             BundleError::Eip4844BlobGasExceeded
         );

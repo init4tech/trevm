@@ -1,7 +1,7 @@
 use super::{checked_insert_code, execute_system_tx};
 use crate::{system::SystemTx, EvmNeedsTx};
 use alloy::eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_CODE;
-use alloy_primitives::{Address, Bytes};
+use alloy::primitives::{Address, Bytes};
 use revm::{
     primitives::{EVMError, SpecId},
     Database, DatabaseCommit,
@@ -82,8 +82,10 @@ impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy::consensus::constants::ETH_TO_WEI;
-    use alloy_primitives::{fixed_bytes, FixedBytes, TxKind, U256};
+    use alloy::{
+        consensus::constants::ETH_TO_WEI,
+        primitives::{fixed_bytes, FixedBytes, TxKind, U256},
+    };
 
     use crate::{NoopBlock, NoopCfg, Tx};
 

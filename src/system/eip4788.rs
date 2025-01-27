@@ -1,6 +1,6 @@
 use super::{checked_insert_code, execute_system_tx};
 use crate::{system::SystemTx, EvmNeedsTx};
-use alloy_primitives::{Address, Bytes, B256, U256};
+use alloy::primitives::{Address, Bytes, B256, U256};
 use revm::{
     primitives::{EVMError, SpecId},
     Database, DatabaseCommit,
@@ -76,7 +76,7 @@ impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
 mod test {
     use super::*;
     use crate::{NoopBlock, NoopCfg};
-    use alloy_primitives::U256;
+    use alloy::primitives::U256;
     use revm::primitives::Bytecode;
 
     #[test]

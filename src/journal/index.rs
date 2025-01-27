@@ -1,4 +1,4 @@
-use alloy_primitives::{Address, Sign, B256, I256, U256};
+use alloy::primitives::{Address, Sign, B256, I256, U256};
 use revm::{
     db::{states::StorageSlot, AccountStatus, BundleAccount, BundleState},
     primitives::{AccountInfo, Bytecode, HashMap},

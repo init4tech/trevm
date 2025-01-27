@@ -1,6 +1,6 @@
 //! The majority of this code has been reproduced from revm.
 
-use alloy_primitives::{Address, B256};
+use alloy::primitives::{Address, B256};
 use dashmap::DashMap;
 use revm::{
     db::states::{plain_account::PlainStorage, CacheAccount},
