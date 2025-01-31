@@ -4,7 +4,10 @@ use crate::{
     EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
     TransactedState, Tx,
 };
-use alloy::primitives::{Address, Bytes, U256};
+use alloy::{
+    primitives::{Address, Bytes, U256},
+    rpc::types::{state::StateOverride, BlockOverrides},
+};
 use core::convert::Infallible;
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState, State},
@@ -136,6 +139,42 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
             Some(acct) => Ok(Some(self.inner.db_mut().code_by_hash(acct.code_hash)?)),
             None => Ok(None),
         }
+    }
+
+    /// Apply [`StateOverride`]s to the current state.
+    pub fn apply_state_overrides(
+        mut self,
+        overrides: &StateOverride,
+    ) -> Result<Self, EVMError<Db::Error>> {
+        for (address, account_override) in overrides {
+            if let Some(balance) = account_override.balance {
+                self.inner.set_balance(*address, balance).map_err(EVMError::Database)?;
+            }
+            if let Some(nonce) = account_override.nonce {
+                self.inner.set_nonce(*address, nonce).map_err(EVMError::Database)?;
+            }
+            if let Some(code) = account_override.code.as_ref() {
+                self.inner
+                    .set_bytecode(
+                        *address,
+                        Bytecode::new_raw_checked(code.clone())
+                            .map_err(|_| EVMError::Custom("Invalid bytecode".to_string()))?,
+                    )
+                    .map_err(EVMError::Database)?;
+            }
+            if let Some(state) = account_override.state.as_ref() {
+                for (slot, value) in state {
+                    self.inner
+                        .set_storage(
+                            *address,
+                            U256::from_be_bytes((*slot).into()),
+                            U256::from_be_bytes((*value).into()),
+                        )
+                        .map_err(EVMError::Database)?;
+                }
+            }
+        }
+        Ok(self)
     }
 }
 
@@ -978,6 +1017,21 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
                 Err(evm)
             }
         }
+    }
+}
+
+// -- HAS TX with State<Db>
+
+impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
+    /// Apply block overrides to the current block.
+    pub fn apply_block_overrides(mut self, overrides: BlockOverrides) -> Self {
+        overrides.fill_block(&mut self.inner);
+
+        if let Some(hashes) = overrides.block_hash {
+            self.inner.db_mut().block_hashes.extend(hashes)
+        }
+
+        self
     }
 }
 
