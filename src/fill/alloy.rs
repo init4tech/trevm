@@ -284,6 +284,96 @@ impl<T: Send + Sync> Block for alloy::rpc::types::eth::Block<T> {
     }
 }
 
+impl Tx for alloy::rpc::types::TransactionRequest {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        let TxEnv {
+            caller,
+            gas_limit,
+            gas_price,
+            transact_to,
+            value,
+            data,
+            nonce,
+            chain_id,
+            access_list,
+            gas_priority_fee,
+            blob_hashes,
+            max_fee_per_blob_gas,
+            authorization_list,
+        } = tx_env;
+
+        *caller = self.from.unwrap_or_default();
+        *gas_limit = self.gas.unwrap_or_default();
+        *gas_price = U256::from(self.gas_price.unwrap_or_default());
+        *transact_to = self.to.unwrap_or_default();
+        *value = self.value.unwrap_or_default();
+        *data = self.input.input().cloned().unwrap_or_default();
+        *nonce = self.nonce;
+        *chain_id = self.chain_id;
+        if let Some(al) = &self.access_list {
+            access_list.clone_from(al);
+        } else {
+            access_list.clear();
+        }
+        if let Some(gpf) = &self.max_priority_fee_per_gas {
+            *gas_priority_fee = Some(U256::from(*gpf));
+        } else {
+            gas_priority_fee.take();
+        }
+        if let Some(bh) = &self.blob_versioned_hashes {
+            blob_hashes.clone_from(bh);
+        } else {
+            blob_hashes.clear();
+        }
+        if let Some(mfbg) = &self.max_fee_per_blob_gas {
+            *max_fee_per_blob_gas = Some(U256::from(*mfbg));
+        } else {
+            max_fee_per_blob_gas.take();
+        }
+        if let Some(al) = &self.authorization_list {
+            *authorization_list = Some(al.clone().into());
+        } else {
+            authorization_list.take();
+        }
+    }
+}
+
+impl Block for alloy::rpc::types::BlockOverrides {
+    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+        let BlockEnv {
+            number,
+            coinbase,
+            timestamp,
+            gas_limit,
+            basefee,
+            difficulty,
+            prevrandao,
+            blob_excess_gas_and_price: _,
+        } = block_env;
+        if let Some(n) = &self.number {
+            *number = U256::from(*n);
+        }
+        if let Some(d) = &self.difficulty {
+            *difficulty = U256::from(*d);
+        }
+        if let Some(t) = &self.time {
+            *timestamp = U256::from(*t);
+        }
+        if let Some(g) = &self.gas_limit {
+            *gas_limit = U256::from(*g);
+        }
+        if let Some(c) = &self.coinbase {
+            *coinbase = *c;
+        }
+        if let Some(r) = self.random {
+            *prevrandao = Some(r);
+        }
+        if let Some(b) = &self.base_fee {
+            *basefee = U256::from(*b);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{NoopBlock, NoopCfg, TrevmBuilder};
