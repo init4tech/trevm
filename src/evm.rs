@@ -141,7 +141,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
         }
     }
 
-    /// Apply [`StateOverride`]s to the current state.
+    /// Apply [`StateOverride`]s to the current state. Errors if the overrides
+    /// contain invalid bytecode.
     pub fn apply_state_overrides(
         mut self,
         overrides: &StateOverride,
@@ -175,6 +176,18 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
             }
         }
         Ok(self)
+    }
+
+    /// Apply [`StateOverride`]s to the current state, if they are provided.
+    pub fn maybe_apply_state_overrides(
+        self,
+        overrides: Option<&StateOverride>,
+    ) -> Result<Self, EVMError<Db::Error>> {
+        if let Some(overrides) = overrides {
+            self.apply_state_overrides(overrides)
+        } else {
+            Ok(self)
+        }
     }
 }
 
@@ -1024,14 +1037,23 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
 
 impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
     /// Apply block overrides to the current block.
-    pub fn apply_block_overrides(mut self, overrides: BlockOverrides) -> Self {
+    pub fn apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
         overrides.fill_block(&mut self.inner);
 
-        if let Some(hashes) = overrides.block_hash {
+        if let Some(hashes) = &overrides.block_hash {
             self.inner.db_mut().block_hashes.extend(hashes)
         }
 
         self
+    }
+
+    /// Apply block overrides to the current block, if they are provided.
+    pub fn maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
+        if let Some(overrides) = overrides {
+            self.apply_block_overrides(overrides)
+        } else {
+            self
+        }
     }
 }
 
