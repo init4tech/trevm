@@ -338,6 +338,42 @@ impl Tx for alloy::rpc::types::TransactionRequest {
     }
 }
 
+impl Block for alloy::rpc::types::BlockOverrides {
+    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+        let BlockEnv {
+            number,
+            coinbase,
+            timestamp,
+            gas_limit,
+            basefee,
+            difficulty,
+            prevrandao,
+            blob_excess_gas_and_price: _,
+        } = block_env;
+        if let Some(n) = &self.number {
+            *number = U256::from(*n);
+        }
+        if let Some(d) = &self.difficulty {
+            *difficulty = U256::from(*d);
+        }
+        if let Some(t) = &self.time {
+            *timestamp = U256::from(*t);
+        }
+        if let Some(g) = &self.gas_limit {
+            *gas_limit = U256::from(*g);
+        }
+        if let Some(c) = &self.coinbase {
+            *coinbase = *c;
+        }
+        if let Some(r) = self.random {
+            *prevrandao = Some(r);
+        }
+        if let Some(b) = &self.base_fee {
+            *basefee = U256::from(*b);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{NoopBlock, NoopCfg, TrevmBuilder};
