@@ -58,18 +58,18 @@ impl Tx for DisableNonceCheck {
 #[cfg(feature = "estimate_gas")]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(transparent)]
-pub(crate) struct GasEstimation {
+pub(crate) struct GasEstimationFiller {
     pub(crate) gas_limit: u64,
 }
 
-impl From<u64> for GasEstimation {
+impl From<u64> for GasEstimationFiller {
     fn from(gas_limit: u64) -> Self {
         Self { gas_limit }
     }
 }
 
 #[cfg(feature = "estimate_gas")]
-impl Cfg for GasEstimation {
+impl Cfg for GasEstimationFiller {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
         cfg_env.disable_base_fee = true;
         cfg_env.disable_eip3607 = true;
@@ -77,7 +77,7 @@ impl Cfg for GasEstimation {
 }
 
 #[cfg(feature = "estimate_gas")]
-impl Tx for GasEstimation {
+impl Tx for GasEstimationFiller {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         DisableNonceCheck.fill_tx_env(tx_env);
         tx_env.gas_limit = self.gas_limit;

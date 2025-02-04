@@ -1,9 +1,9 @@
 use crate::{
-    driver::DriveBlockResult, est::EstimationResult, fillers::GasEstimation, unwrap_or_trevm_err,
-    Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
-    ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
-    EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, Ready, TransactedState, Tx,
-    MIN_TRANSACTION_GAS,
+    driver::DriveBlockResult, est::EstimationResult, fillers::GasEstimationFiller,
+    unwrap_or_trevm_err, Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult,
+    DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg,
+    EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, Ready,
+    TransactedState, Tx, MIN_TRANSACTION_GAS,
 };
 use alloy::{
     primitives::{Address, Bytes, U256},
@@ -1013,6 +1013,16 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     ) -> Result<EvmTransacted<'a, Ext, Db>, EvmErrored<'a, Ext, Db>> {
         self.fill_tx(filler).run()
     }
+
+    /// Estimate the gas cost of a transaction. Shortcut for `fill_tx(tx).
+    /// estimate()`. Returns an [`EstimationResult`] and the EVM populated with
+    /// the transaction.
+    pub fn estimate_tx_gas<T: Tx>(
+        self,
+        filler: &T,
+    ) -> Result<(EstimationResult, EvmReady<'a, Ext, Db>), EvmErrored<'a, Ext, Db>> {
+        self.fill_tx(filler).estimate_gas()
+    }
 }
 
 // --- HAS TX
@@ -1022,7 +1032,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
     /// run a fallible function.
     fn try_with_estimator<E>(
         self,
-        estimator: &GasEstimation,
+        estimator: &GasEstimationFiller,
         f: impl FnOnce(Self) -> Result<Self, EvmErrored<'a, Ext, Db, E>>,
     ) -> Result<Self, EvmErrored<'a, Ext, Db, E>> {
         self.try_with_cfg(estimator, |this| this.try_with_tx(estimator, f))
@@ -1231,7 +1241,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     /// Convenience function to simplify nesting of [`Self::estimate_gas`].
     fn run_estimate(
         self,
-        estimator: &GasEstimation,
+        estimator: &GasEstimationFiller,
     ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db, EVMError<Db::Error>>> {
         let mut estimation = None;
 
@@ -1273,7 +1283,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let highest_possible_gas = std::cmp::min(highest_possible_gas, allowance);
 
         // Run an estimate with the max gas limit.
-        let estimator = GasEstimation::from(highest_possible_gas);
+        let estimator = GasEstimationFiller::from(highest_possible_gas);
         let (mut estimate, mut trevm) = self.run_estimate(&estimator)?;
 
         // If it failed, no amount of gas is likely to work, so we shortcut
@@ -1298,7 +1308,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // frame.
         let first_search = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
         if first_search < search_max {
-            let estimator = GasEstimation::from(first_search);
+            let estimator = GasEstimationFiller::from(first_search);
             (estimate, trevm) = trevm.run_estimate(&estimator)?;
             // If the halt error propagates, we can shortcut return, as it
             // means that a non-gas-dynamic halt occurred.
@@ -1327,7 +1337,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
 
             // If the halt error propagates, we can shortcut return, as it
             // means that a non-gas-dynamic halt occurred.
-            let estimator = GasEstimation::from(needle);
+            let estimator = GasEstimationFiller::from(needle);
             (estimate, trevm) = trevm.run_estimate(&estimator)?;
             if let Err(e) =
                 estimate.adjust_binary_search_range(needle, &mut search_max, &mut search_min)
