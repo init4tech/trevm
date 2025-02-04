@@ -22,6 +22,16 @@ pub trait Tx: Send + Sync {
         self.fill_tx_env(tx_env);
     }
 }
+
+impl<T> Tx for T
+where
+    T: Fn(&mut TxEnv) + Send + Sync,
+{
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        self(tx_env);
+    }
+}
+
 /// Types that can fill the EVM block environment [`BlockEnv`].
 pub trait Block: Send + Sync {
     /// Fill the block environment.
@@ -44,6 +54,15 @@ pub trait Block: Send + Sync {
     /// memory pre-allocation during block execution.
     fn tx_count_hint(&self) -> Option<usize> {
         None
+    }
+}
+
+impl<T> Block for T
+where
+    T: Fn(&mut BlockEnv) + Send + Sync,
+{
+    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+        self(block_env);
     }
 }
 
@@ -72,6 +91,15 @@ pub trait Cfg: Send + Sync {
     fn fill_cfg<Ext, Db: Database>(&self, evm: &mut Evm<'_, Ext, Db>) {
         let cfg_env: &mut CfgEnv = evm.cfg_mut();
         self.fill_cfg_env(cfg_env);
+    }
+}
+
+impl<T> Cfg for T
+where
+    T: Fn(&mut CfgEnv) + Send + Sync,
+{
+    fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
+        self(cfg_env);
     }
 }
 
