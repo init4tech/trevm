@@ -1105,11 +1105,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
     /// error if the DB errors.
     pub fn callee_account(&mut self) -> Result<Option<AccountInfo>, EVMError<Db::Error>> {
         if let Some(addr) = self.callee() {
-            if let Some(account) = self.try_read_account(addr).map_err(EVMError::Database)? {
-                Ok(Some(account))
-            } else {
-                Ok(Some(AccountInfo::default()))
-            }
+            self.try_read_account(addr)
+                .map(Option::unwrap_or_default)
+                .map(Some)
+                .map_err(EVMError::Database)
         } else {
             Ok(None)
         }
