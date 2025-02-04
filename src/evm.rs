@@ -21,7 +21,7 @@ use revm::{
     },
     Database, DatabaseCommit, DatabaseRef, Evm,
 };
-use std::fmt;
+use std::{fmt, mem::MaybeUninit};
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
@@ -1263,19 +1263,21 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         self,
         estimator: &GasEstimationFiller,
     ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
-        let mut estimation = None;
+        let mut estimation = MaybeUninit::uninit();
 
         let this = self.try_with_estimator(estimator, |this| match this.run() {
             Ok(trevm) => {
                 let (e, t) = trevm.take_estimation();
 
-                estimation = Some(e);
+                estimation.write(e);
                 Ok(t)
             }
             Err(err) => Err(err),
         })?;
 
-        Ok((estimation.expect("definitely exists if not shortcut returned"), this))
+        // SAFETY: if we did not shortcut return, then estimation was
+        // definitely written
+        Ok((unsafe { estimation.assume_init() }, this))
     }
 
     /// Implements gas estimation. This will output an estimate of the minimum
@@ -1592,7 +1594,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
     }
 
     /// Take the [`EstimationResult`] and return it and the EVM. This discards
-    /// pending state changes.
+    /// pending state changes, but leaves the EVM ready to execute the same
+    /// transaction again.
     pub fn take_estimation(self) -> (EstimationResult, EvmReady<'a, Ext, Db>) {
         let estimation = self.estimation();
         (estimation, Trevm { inner: self.inner, state: Ready::new() })
