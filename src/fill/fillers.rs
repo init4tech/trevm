@@ -52,7 +52,7 @@ impl Tx for DisableNonceCheck {
 }
 
 /// Prime the EVM for gas estimation. This filler is all of [`Cfg`], and
-/// [`Tx`]. It is used internally by [`Trevm::estimate_gas`], and is
+/// [`Tx`]. It is used internally by [`crate::Trevm::estimate_gas`], and is
 /// considered a low-level API. Generally it is not correct to import this
 /// type.
 #[cfg(feature = "estimate_gas")]
