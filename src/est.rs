@@ -39,6 +39,12 @@ impl SearchRange {
         self.0.start = min;
     }
 
+    pub(crate) const fn maybe_raise_min(&mut self, candidate: u64) {
+        if candidate > self.min() {
+            self.set_min(candidate);
+        }
+    }
+
     /// Get the end of the search range.
     pub(crate) const fn max(&self) -> u64 {
         self.0.end
@@ -47,6 +53,13 @@ impl SearchRange {
     /// Set the end of the search range.
     pub(crate) const fn set_max(&mut self, max: u64) {
         self.0.end = max;
+    }
+
+    /// Lower the maximum of the search range, if the candidate is lower.
+    pub(crate) const fn maybe_lower_max(&mut self, candidate: u64) {
+        if candidate < self.max() {
+            self.set_max(candidate);
+        }
     }
 
     /// Calculate the search ratio.

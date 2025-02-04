@@ -1326,17 +1326,19 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // We shrink the gas limit to 64 bits, as using more than 18 quintillion
         // gas in a block is not likely.
         let initial_limit = self.gas_limit();
-        let block_gas_limit = self.block_gas_limit().saturating_to::<u64>();
+
+        let mut search_range = SearchRange::new(MIN_TRANSACTION_GAS, initial_limit);
+        search_range.maybe_lower_max(self.block_gas_limit().saturating_to::<u64>());
 
         // The highest possible gas is the minimum of the initial limit and the
         // block gas limit.
         let allowance = unwrap_or_trevm_err!(self.gas_allowance(), self);
-        let highest_possible_gas = std::cmp::min(initial_limit, block_gas_limit);
-        let highest_possible_gas = std::cmp::min(highest_possible_gas, allowance);
+        search_range.maybe_lower_max(allowance);
 
         // Run an estimate with the max gas limit.
-        let estimator = GasEstimationFiller::from(highest_possible_gas);
-        let (mut estimate, mut trevm) = self.run_estimate(&estimator)?;
+        // NB: we declare these mut as we re-use the binding throughout the
+        // function.
+        let (mut estimate, mut trevm) = self.run_estimate(&search_range.max().into())?;
 
         // If it failed, no amount of gas is likely to work, so we shortcut
         // return.
@@ -1349,11 +1351,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let mut gas_used = estimate.gas_estimation().expect("checked is_failure");
         let gas_refunded = estimate.gas_refunded().expect("checked is_failure");
 
-        // Set our binary search bounds.
-        let mut search_range = SearchRange::new(
-            std::cmp::max(gas_used - 1, MIN_TRANSACTION_GAS),
-            highest_possible_gas,
-        );
+        search_range.maybe_raise_min(gas_used - 1);
 
         // NB: This is a heuristic adopted from geth and reth
         // https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186a4/eth/gasestimator/gasestimator.go#L132-L135
@@ -1361,6 +1359,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // frame can forward only 63/64 of the gas it has when it makes a new
         // frame.
         let first_search = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
+        // If the first search is outside the range, we don't need to try it.
         if search_range.contains(first_search) {
             estimate_and_adjust!(estimate, trevm, first_search, search_range);
             // NB: `estimate` is rebound in the macro, so do not move this line
@@ -1378,7 +1377,6 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // used in the binary search is small enough (less than 1.5% of the
         // highest gas limit)
         // <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186
-
         while search_range.size() > 1 && search_range.ratio() > 0.015 {
             estimate_and_adjust!(estimate, trevm, needle, search_range);
 
