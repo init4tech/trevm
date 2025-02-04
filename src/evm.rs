@@ -1,5 +1,7 @@
 use crate::{
-    driver::DriveBlockResult, est::EstimationResult, fillers::GasEstimationFiller,
+    driver::DriveBlockResult,
+    est::{EstimationResult, SearchRange},
+    fillers::GasEstimationFiller,
     unwrap_or_trevm_err, Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult,
     DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg,
     EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, Ready,
@@ -1348,8 +1350,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let gas_refunded = estimate.gas_refunded().expect("checked is_failure");
 
         // Set our binary search bounds.
-        let mut search_max = highest_possible_gas;
-        let mut search_min = std::cmp::max(gas_used - 1, MIN_TRANSACTION_GAS);
+        let mut search_range = SearchRange::new(
+            std::cmp::max(gas_used - 1, MIN_TRANSACTION_GAS),
+            highest_possible_gas,
+        );
 
         // NB: This is a heuristic adopted from geth and reth
         // https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186a4/eth/gasestimator/gasestimator.go#L132-L135
@@ -1357,8 +1361,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // frame can forward only 63/64 of the gas it has when it makes a new
         // frame.
         let first_search = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
-        if first_search < search_max {
-            estimate_and_adjust!(estimate, trevm, first_search, search_max, search_min);
+        if search_range.contains(first_search) {
+            estimate_and_adjust!(estimate, trevm, first_search, search_range);
             // NB: `estimate` is rebound in the macro, so do not move this line
             // up.
             gas_used = estimate.gas_used();
@@ -1366,7 +1370,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
 
         // This is a heuristic adopted from reth.
         // Pick a point that's close to the estimated gas
-        let mut needle = std::cmp::min(gas_used * 3, (search_max + search_min) / 2);
+        let mut needle = std::cmp::min(gas_used * 3, search_range.midpoint());
 
         // Binary search loop.
         // This is a heuristic adopted from reth
@@ -1374,12 +1378,12 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // used in the binary search is small enough (less than 1.5% of the
         // highest gas limit)
         // <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186
-        let search_ratio = (search_max - search_min) as f64 / search_max as f64;
-        while search_max.saturating_sub(search_min) > 1 && search_ratio > 0.015 {
-            estimate_and_adjust!(estimate, trevm, needle, search_max, search_min);
+
+        while search_range.size() > 1 && search_range.ratio() > 0.015 {
+            estimate_and_adjust!(estimate, trevm, needle, search_range);
 
             // NB: 2 is the binary part of the binary search :)
-            needle = (search_max + search_min) / 2;
+            needle = search_range.midpoint();
         }
 
         Ok((estimate, trevm))

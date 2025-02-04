@@ -1,6 +1,67 @@
-use revm::primitives::{Bytes, ExecutionResult, HaltReason, Output};
-
 use crate::MIN_TRANSACTION_GAS;
+use revm::primitives::{Bytes, ExecutionResult, HaltReason, Output};
+use std::ops::Range;
+
+pub(crate) struct SearchRange(Range<u64>);
+
+impl From<Range<u64>> for SearchRange {
+    fn from(value: Range<u64>) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SearchRange> for Range<u64> {
+    fn from(value: SearchRange) -> Self {
+        value.0
+    }
+}
+
+impl SearchRange {
+    /// Create a new search range.
+    pub(crate) const fn new(start: u64, end: u64) -> Self {
+        Self(start..end)
+    }
+
+    /// Calculate the midpoint of the search range.
+    pub(crate) const fn midpoint(&self) -> u64 {
+        (self.0.end - self.0.start) / 2
+    }
+
+    /// Get the start of the search range.
+    pub(crate) const fn min(&self) -> u64 {
+        self.0.start
+    }
+
+    /// Set the start of the search range.
+    pub(crate) const fn set_min(&mut self, min: u64) {
+        self.0.start = min;
+    }
+
+    /// Get the end of the search range.
+    pub(crate) const fn max(&self) -> u64 {
+        self.0.end
+    }
+
+    /// Set the end of the search range.
+    pub(crate) const fn set_max(&mut self, max: u64) {
+        self.0.end = max;
+    }
+
+    /// Calculate the search ratio.
+    pub(crate) const fn ratio(&self) -> f64 {
+        (self.max() - self.min()) as f64 / self.max() as f64
+    }
+
+    /// True if the search range contains the given value.
+    pub(crate) fn contains(&self, value: u64) -> bool {
+        self.0.contains(&value)
+    }
+
+    /// Return the size of the range.
+    pub(crate) const fn size(&self) -> u64 {
+        self.0.end - self.0.start
+    }
+}
 
 /// The result of gas estimation.
 ///
@@ -138,14 +199,11 @@ impl EstimationResult {
     pub(crate) fn adjust_binary_search_range(
         &self,
         limit: u64,
-        max: &mut u64,
-        min: &mut u64,
+        range: &mut SearchRange,
     ) -> Result<(), Self> {
         match self {
-            Self::Success { .. } => {
-                *max = limit;
-            }
-            Self::Revert { .. } => *min = limit,
+            Self::Success { .. } => range.set_max(limit),
+            Self::Revert { .. } => range.set_min(limit),
             Self::Halt { reason, gas_used } => {
                 // Both `OutOfGas` and `InvalidEFOpcode` can occur dynamically
                 // if the gas left is too low. Treat this as an out of gas
@@ -155,7 +213,7 @@ impl EstimationResult {
                 // Common usage of invalid opcode in OpenZeppelin:
                 // <https://github.com/OpenZeppelin/openzeppelin-contracts/blob/94697be8a3f0dfcd95dfb13ffbd39b5973f5c65d/contracts/metatx/ERC2771Forwarder.sol#L360-L367>
                 if matches!(reason, HaltReason::OutOfGas(_) | HaltReason::InvalidFEOpcode) {
-                    *min = limit;
+                    range.set_min(limit);
                 } else {
                     return Err(Self::Halt { reason: *reason, gas_used: *gas_used });
                 }
