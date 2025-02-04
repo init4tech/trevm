@@ -361,6 +361,9 @@
 #![deny(unused_must_use, rust_2018_idioms)]
 #![warn(missing_docs, missing_copy_implementations, missing_debug_implementations)]
 
+#[macro_use]
+mod macros;
+
 mod connect;
 pub use connect::{DbConnect, EvmFactory};
 
@@ -390,8 +393,6 @@ pub mod journal;
 
 mod lifecycle;
 pub use lifecycle::{ethereum_receipt, BlockOutput, PostTx, PostflightResult};
-
-mod macros;
 
 mod states;
 pub(crate) use states::sealed::*;

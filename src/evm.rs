@@ -1358,42 +1358,25 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // frame.
         let first_search = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
         if first_search < search_max {
-            let estimator = GasEstimationFiller::from(first_search);
-            (estimate, trevm) = trevm.run_estimate(&estimator)?;
-            // If the halt error propagates, we can shortcut return, as it
-            // means that a non-gas-dynamic halt occurred.
-            if let Err(e) =
-                estimate.adjust_binary_search_range(first_search, &mut search_max, &mut search_min)
-            {
-                return Ok((e, trevm));
-            }
+            estimate_and_adjust!(estimate, trevm, first_search, search_max, search_min);
+            // NB: `estimate` is rebound in the macro, so do not move this line
+            // up.
             gas_used = estimate.gas_used();
         }
 
-        // This is a heuristic adopted from reth
+        // This is a heuristic adopted from reth.
         // Pick a point that's close to the estimated gas
         let mut needle = std::cmp::min(gas_used * 3, (search_max + search_min) / 2);
 
         // Binary search loop.
-        while search_max.saturating_sub(search_min) > 1 {
-            // This is a heuristic adopted from reth
-            // An estimation error is allowed once the current gas limit range
-            // used in the binary search is small enough (less than 1.5% of the
-            // highest gas limit)
-            // <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186
-            if ((search_max - search_min) as f64 / search_max as f64) < 0.015 {
-                break;
-            };
-
-            // If the halt error propagates, we can shortcut return, as it
-            // means that a non-gas-dynamic halt occurred.
-            let estimator = GasEstimationFiller::from(needle);
-            (estimate, trevm) = trevm.run_estimate(&estimator)?;
-            if let Err(e) =
-                estimate.adjust_binary_search_range(needle, &mut search_max, &mut search_min)
-            {
-                return Ok((e, trevm));
-            }
+        // This is a heuristic adopted from reth
+        // An estimation error is allowed once the current gas limit range
+        // used in the binary search is small enough (less than 1.5% of the
+        // highest gas limit)
+        // <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186
+        let search_ratio = (search_max - search_min) as f64 / search_max as f64;
+        while search_max.saturating_sub(search_min) > 1 && search_ratio > 0.015 {
+            estimate_and_adjust!(estimate, trevm, needle, search_max, search_min);
 
             // NB: 2 is the binary part of the binary search :)
             needle = (search_max + search_min) / 2;

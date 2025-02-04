@@ -26,3 +26,13 @@ macro_rules! trevm_bail {
         return Err($trevm.errored($err))
     };
 }
+
+/// Macro for gas estimation binary loop.
+macro_rules! estimate_and_adjust {
+    ($est:ident, $trevm:ident, $gas_limit:ident, $max:ident, $min:ident) => {
+        ($est, $trevm) = $trevm.run_estimate(&$gas_limit.into())?;
+        if let Err(e) = $est.adjust_binary_search_range($gas_limit, &mut $max, &mut $min) {
+            return Ok((e, $trevm));
+        }
+    };
+}
