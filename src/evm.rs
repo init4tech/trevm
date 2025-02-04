@@ -1083,16 +1083,33 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
         self.tx().caller
     }
 
+    /// Get the account of the caller. Error if the DB errors.
+    pub fn caller_account(&mut self) -> Result<AccountInfo, EVMError<Db::Error>> {
+        self.try_read_account(self.caller())
+            .map(Option::unwrap_or_default)
+            .map_err(EVMError::Database)
+    }
+
     /// Get the address of the callee. `None` if `Self::is_create` is true.
     pub fn callee(&self) -> Option<Address> {
         self.to().into()
     }
 
-    /// Get the account of the callee. `None` if `Self::is_create` is true,
+    /// Get the account of the callee.
+    ///
+    /// Returns as follows:
+    /// - if `Self::is_create` is true, `Ok(None)`
+    /// - if the callee account does not exist, `Ok(AccountInfo::default())`
+    /// - if the DB errors, error
+    /// `None` if `Self::is_create` is true,
     /// error if the DB errors.
     pub fn callee_account(&mut self) -> Result<Option<AccountInfo>, EVMError<Db::Error>> {
         if let Some(addr) = self.callee() {
-            self.try_read_account(addr).map_err(EVMError::Database)
+            if let Some(account) = self.try_read_account(addr).map_err(EVMError::Database)? {
+                Ok(Some(account))
+            } else {
+                Ok(Some(AccountInfo::default()))
+            }
         } else {
             Ok(None)
         }
