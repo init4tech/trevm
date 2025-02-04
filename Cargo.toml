@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.19.2"
+version = "0.19.3"
 rust-version = "1.83.0"
 edition = "2021"
 authors = ["init4"]
@@ -56,6 +56,7 @@ tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
 [features]
 default = [
     "concurrent-db",
+    "estimate_gas",
     "revm/std",
     "revm/c-kzg",
     "revm/blst",
@@ -64,6 +65,8 @@ default = [
 ]
 
 concurrent-db = ["dep:dashmap"]
+
+estimate_gas = ["optional_eip3607", "optional_no_base_fee"]
 
 test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
 
