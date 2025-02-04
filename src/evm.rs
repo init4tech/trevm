@@ -1366,8 +1366,6 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         }
 
         Ok((estimate, trevm))
-
-        // Ok((estimator.gas_limit, trevm))
     }
 }
 
