@@ -1032,12 +1032,12 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
     /// Convenience function to use the estimator to fill both Cfg and Tx, and
     /// run a fallible function.
-    fn try_with_estimator<E>(
+    fn try_with_gas_estimation_filler<E>(
         self,
-        estimator: &GasEstimationFiller,
+        filler: &GasEstimationFiller,
         f: impl FnOnce(Self) -> Result<Self, EvmErrored<'a, Ext, Db, E>>,
     ) -> Result<Self, EvmErrored<'a, Ext, Db, E>> {
-        self.try_with_cfg(estimator, |this| this.try_with_tx(estimator, f))
+        self.try_with_cfg(filler, |this| this.try_with_tx(filler, f))
     }
 
     /// Get a reference to the loaded tx env that will be executed.
@@ -1261,11 +1261,11 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     /// Convenience function to simplify nesting of [`Self::estimate_gas`].
     fn run_estimate(
         self,
-        estimator: &GasEstimationFiller,
+        filler: &GasEstimationFiller,
     ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
         let mut estimation = MaybeUninit::uninit();
 
-        let this = self.try_with_estimator(estimator, |this| match this.run() {
+        let this = self.try_with_gas_estimation_filler(filler, |this| match this.run() {
             Ok(trevm) => {
                 let (e, t) = trevm.take_estimation();
 
@@ -1287,6 +1287,15 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     /// In the worst case this will perform a binary search, resulting in
     /// `O(log(n))` simulations.
     ///
+    /// ## Returns
+    ///
+    /// An [`EstimationResult`] and the EVM with the transaction populated.
+    /// Like with the remainder of the API, an EVM revert or an EVM halt is
+    /// NOT an error. An [`Err`] is returned only if the EVM encounters a
+    /// condition of use violation or a DB access fails.
+    ///
+    /// ## Estimation Algorithm
+    ///
     /// This function is largely based on the reth RPC estimation algorithm,
     /// which can be found [here]. The algorithm is as follows:
     ///
@@ -1295,7 +1304,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     /// - Check if the transaction is a simple transfer
     ///     - Is there input data empty? If yes, proceed to regular estimation
     ///     - Is the callee a contract? If yes, proceed to regular estimation
-    ///     - Otherwise, shortcut return [`MIN_TRANSACTION_GAS`].
+    ///     - Otherwise, shortcut return success with [`MIN_TRANSACTION_GAS`].
     /// - Simulate the transaction with the maximum possible gas limit.
     ///     - If the simulation fails, shortcut return the failure.
     ///     - If succesful, store the gas used as the search minimum.
