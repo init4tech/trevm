@@ -38,19 +38,17 @@ pub enum EstimationResult {
 impl From<&ExecutionResult> for EstimationResult {
     fn from(value: &ExecutionResult) -> Self {
         match value {
-            ExecutionResult::Success { gas_used, output, gas_refunded, .. } => {
-                EstimationResult::Success {
-                    estimation: *gas_used,
-                    refund: *gas_refunded,
-                    gas_used: *gas_used,
-                    output: output.clone(),
-                }
-            }
+            ExecutionResult::Success { gas_used, output, gas_refunded, .. } => Self::Success {
+                estimation: *gas_used,
+                refund: *gas_refunded,
+                gas_used: *gas_used,
+                output: output.clone(),
+            },
             ExecutionResult::Revert { output, gas_used } => {
-                EstimationResult::Revert { reason: output.clone(), gas_used: *gas_used }
+                Self::Revert { reason: output.clone(), gas_used: *gas_used }
             }
             ExecutionResult::Halt { reason, gas_used } => {
-                EstimationResult::Halt { reason: *reason, gas_used: *gas_used }
+                Self::Halt { reason: *reason, gas_used: *gas_used }
             }
         }
     }
@@ -59,7 +57,7 @@ impl From<&ExecutionResult> for EstimationResult {
 impl EstimationResult {
     /// Create a successful estimation result with a gas estimation of 21000.
     pub const fn basic_transfer_success() -> Self {
-        EstimationResult::Success {
+        Self::Success {
             estimation: MIN_TRANSACTION_GAS,
             refund: 0,
             gas_used: MIN_TRANSACTION_GAS,
@@ -69,7 +67,7 @@ impl EstimationResult {
 
     /// Return true if the execution was successful.
     pub const fn is_success(&self) -> bool {
-        matches!(self, EstimationResult::Success { .. })
+        matches!(self, Self::Success { .. })
     }
 
     /// Return true if the execution was not successful.
@@ -80,7 +78,7 @@ impl EstimationResult {
     /// Get the gas estimation, if the execution was successful.
     pub const fn gas_estimation(&self) -> Option<u64> {
         match self {
-            EstimationResult::Success { estimation, .. } => Some(*estimation),
+            Self::Success { estimation, .. } => Some(*estimation),
             _ => None,
         }
     }
@@ -88,7 +86,7 @@ impl EstimationResult {
     /// Get the gas refunded, if the execution was successful.
     pub const fn gas_refunded(&self) -> Option<u64> {
         match self {
-            EstimationResult::Success { refund, .. } => Some(*refund),
+            Self::Success { refund, .. } => Some(*refund),
             _ => None,
         }
     }
@@ -96,7 +94,7 @@ impl EstimationResult {
     /// Get the output, if the execution was successful.
     pub const fn output(&self) -> Option<&Output> {
         match self {
-            EstimationResult::Success { output, .. } => Some(output),
+            Self::Success { output, .. } => Some(output),
             _ => None,
         }
     }
@@ -104,34 +102,34 @@ impl EstimationResult {
     /// Get the gas used in execution, regardless of the outcome.
     pub const fn gas_used(&self) -> u64 {
         match self {
-            EstimationResult::Success { gas_used, .. } => *gas_used,
-            EstimationResult::Revert { gas_used, .. } => *gas_used,
-            EstimationResult::Halt { gas_used, .. } => *gas_used,
+            Self::Success { gas_used, .. } => *gas_used,
+            Self::Revert { gas_used, .. } => *gas_used,
+            Self::Halt { gas_used, .. } => *gas_used,
         }
     }
 
     /// Return true if the execution failed due to revert.
     pub const fn is_revert(&self) -> bool {
-        matches!(self, EstimationResult::Revert { .. })
+        matches!(self, Self::Revert { .. })
     }
 
     /// Get the revert reason if the execution failed due to revert.
     pub const fn revert_reason(&self) -> Option<&Bytes> {
         match self {
-            EstimationResult::Revert { reason, .. } => Some(reason),
+            Self::Revert { reason, .. } => Some(reason),
             _ => None,
         }
     }
 
     /// Return true if the execution failed due to EVM halt.
     pub const fn is_halt(&self) -> bool {
-        matches!(self, EstimationResult::Halt { .. })
+        matches!(self, Self::Halt { .. })
     }
 
     /// Get the halt reason if the execution failed due to EVM halt.
     pub const fn halt_reason(&self) -> Option<&HaltReason> {
         match self {
-            EstimationResult::Halt { reason, .. } => Some(reason),
+            Self::Halt { reason, .. } => Some(reason),
             _ => None,
         }
     }
@@ -144,11 +142,11 @@ impl EstimationResult {
         min: &mut u64,
     ) -> Result<(), Self> {
         match self {
-            EstimationResult::Success { .. } => {
+            Self::Success { .. } => {
                 *max = limit;
             }
-            EstimationResult::Revert { .. } => *min = limit,
-            EstimationResult::Halt { reason, gas_used } => {
+            Self::Revert { .. } => *min = limit,
+            Self::Halt { reason, gas_used } => {
                 // Both `OutOfGas` and `InvalidEFOpcode` can occur dynamically
                 // if the gas left is too low. Treat this as an out of gas
                 // condition, knowing that the call succeeds with a

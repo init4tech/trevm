@@ -1100,18 +1100,14 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
     /// Returns as follows:
     /// - if `Self::is_create` is true, `Ok(None)`
     /// - if the callee account does not exist, `Ok(AccountInfo::default())`
-    /// - if the DB errors, error
-    /// `None` if `Self::is_create` is true,
-    /// error if the DB errors.
+    /// - if the DB errors, `Err(EVMError::Database(err))`
     pub fn callee_account(&mut self) -> Result<Option<AccountInfo>, EVMError<Db::Error>> {
-        if let Some(addr) = self.callee() {
+        self.callee().map_or(Ok(None), |addr| {
             self.try_read_account(addr)
                 .map(Option::unwrap_or_default)
                 .map(Some)
                 .map_err(EVMError::Database)
-        } else {
-            Ok(None)
-        }
+        })
     }
 
     /// Get the account of the callee. `None` if `Self::is_create` is true,
@@ -1120,11 +1116,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
     where
         Db: DatabaseRef,
     {
-        if let Some(addr) = self.callee() {
-            self.try_read_account_ref(addr)
-        } else {
-            Ok(None)
-        }
+        self.callee().map_or(Ok(None), |addr| self.try_read_account_ref(addr))
     }
 
     /// Run a function with the provided transaction, then restore the previous
@@ -1186,6 +1178,11 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
 
 impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
     /// Apply block overrides to the current block.
+    ///
+    /// Note that this is NOT reversible. The overrides are applied directly to
+    /// the underlying state and these changes cannot be removed. If it is
+    /// important that you have access to the pre-change state, you should wrap
+    /// the existing DB in a new [`State`] and apply the overrides to that.
     pub fn apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
         overrides.fill_block(&mut self.inner);
 
@@ -1197,6 +1194,11 @@ impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
     }
 
     /// Apply block overrides to the current block, if they are provided.
+    ///
+    /// Note that this is NOT reversible. The overrides are applied directly to
+    /// the underlying state and these changes cannot be removed. If it is
+    /// important that you have access to the pre-change state, you should wrap
+    /// the existing DB in a new [`State`] and apply the overrides to that.
     pub fn maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
         if let Some(overrides) = overrides {
             self.apply_block_overrides(overrides)
@@ -1258,17 +1260,17 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     fn run_estimate(
         self,
         estimator: &GasEstimationFiller,
-    ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db, EVMError<Db::Error>>> {
+    ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
         let mut estimation = None;
 
-        let this = self.try_with_estimator(&estimator, |this| match this.run() {
+        let this = self.try_with_estimator(estimator, |this| match this.run() {
             Ok(trevm) => {
                 let (e, t) = trevm.take_estimation();
 
                 estimation = Some(e);
                 Ok(t)
             }
-            Err(err) => return Err(err),
+            Err(err) => Err(err),
         })?;
 
         Ok((estimation.expect("definitely exists if not shortcut returned"), this))
@@ -1280,10 +1282,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///
     /// In the worst case this will perform a binary search, resulting in
     /// `O(log(n))` simulations.
-    pub fn estimate_gas(
-        mut self,
-    ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db, EVMError<Db::Error>>> {
-        if let Some(_) = unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
+    pub fn estimate_gas(mut self) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
+        if unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self).is_some() {
             return Ok((EstimationResult::basic_transfer_success(), self));
         }
 
@@ -1418,7 +1418,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, E> EvmErrored<'a, Ext, Db, E> {
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmErrored<'a, Ext, Db, EVMError<Db::Error>> {
+impl<'a, Ext, Db: Database + DatabaseCommit> EvmErrored<'a, Ext, Db> {
     /// Check if the error is a transaction error. This is provided as a
     /// convenience function for common cases, as Transaction errors should
     /// usually be discarded.
