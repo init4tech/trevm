@@ -3,6 +3,7 @@ use crate::{
     Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
     ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
     EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, Ready, TransactedState, Tx,
+    MIN_TRANSACTION_GAS,
 };
 use alloy::{
     primitives::{Address, Bytes, U256},
@@ -1288,7 +1289,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
 
         // Set our binary search bounds.
         let mut search_max = highest_possible_gas;
-        let mut search_min = gas_used - 1;
+        let mut search_min = std::cmp::max(gas_used - 1, MIN_TRANSACTION_GAS);
 
         // NB: This is a heuristic adopted from geth and reth
         // https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186a4/eth/gasestimator/gasestimator.go#L132-L135
@@ -1324,6 +1325,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
                 break;
             };
 
+            // If the halt error propagates, we can shortcut return, as it
+            // means that a non-gas-dynamic halt occurred.
             let estimator = GasEstimation::from(needle);
             (estimate, trevm) = trevm.run_estimate(&estimator)?;
             if let Err(e) =
