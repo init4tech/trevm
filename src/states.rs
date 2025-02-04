@@ -37,7 +37,8 @@ pub type EvmNeedsTx<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsTx>;
 /// with [`EvmReady::clear_tx`]
 pub type EvmReady<'a, Ext, Db> = Trevm<'a, Ext, Db, Ready>;
 
-/// A [`Trevm`] that encountered an error during transaction execution.
+/// A [`Trevm`] that run a transaction, and contains the resulting execution
+/// details and state.
 ///
 /// Expected continuations include:
 /// - [`EvmTransacted::reject`]
@@ -124,13 +125,13 @@ pub(crate) mod sealed {
     impl<E> HasCfg for ErroredState<E> {}
     impl HasCfg for Ready {}
 
-    pub trait HasBlock {}
+    pub trait HasBlock: HasCfg {}
     impl HasBlock for NeedsTx {}
     impl HasBlock for TransactedState {}
     impl<E> HasBlock for ErroredState<E> {}
     impl HasBlock for Ready {}
 
-    pub trait HasTx {}
+    pub trait HasTx: HasBlock + HasCfg {}
     impl HasTx for TransactedState {}
     impl<E> HasTx for ErroredState<E> {}
     impl HasTx for Ready {}

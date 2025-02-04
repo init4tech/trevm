@@ -1,8 +1,8 @@
 use crate::{
-    driver::DriveBlockResult, Block, BlockDriver, BundleDriver, Cfg, ChainDriver,
-    DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock,
-    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
-    TransactedState, Tx,
+    driver::DriveBlockResult, est::EstimationResult, fillers::GasEstimation, unwrap_or_trevm_err,
+    Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
+    ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
+    EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, Ready, TransactedState, Tx,
 };
 use alloy::{
     primitives::{Address, Bytes, U256},
@@ -11,9 +11,10 @@ use alloy::{
 use core::convert::Infallible;
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState, State},
+    interpreter::gas::CALL_STIPEND,
     primitives::{
-        AccountInfo, Bytecode, EVMError, EvmState, ExecutionResult, InvalidTransaction,
-        ResultAndState, SpecId,
+        AccountInfo, BlockEnv, Bytecode, EVMError, EvmState, ExecutionResult, InvalidTransaction,
+        ResultAndState, SpecId, TxEnv, TxKind, KECCAK_EMPTY,
     },
     Database, DatabaseCommit, DatabaseRef, Evm,
 };
@@ -890,6 +891,31 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
 // --- HAS BLOCK
 
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState> {
+    /// Get a reference to the current block environment.
+    pub fn block(&self) -> &BlockEnv {
+        self.inner.block()
+    }
+
+    /// Get the current block gas limit.
+    pub fn block_gas_limit(&self) -> U256 {
+        self.block().gas_limit
+    }
+
+    /// Get the current block number.
+    pub fn block_number(&self) -> U256 {
+        self.block().number
+    }
+
+    /// Get the current block timestamp.
+    pub fn block_timestamp(&self) -> U256 {
+        self.block().timestamp
+    }
+
+    /// Get the block beneficiary address.
+    pub fn beneficiary(&self) -> Address {
+        self.block().coinbase
+    }
+
     /// Run a function with the provided block, then restore the previous block.
     pub fn with_block<B, F, NewState>(mut self, b: &B, f: F) -> Trevm<'a, Ext, Db, NewState>
     where
@@ -991,6 +1017,89 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
 // --- HAS TX
 
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
+    /// Convenience function to use the estimator to fill both Cfg and Tx, and
+    /// run a fallible function.
+    fn try_with_estimator<E>(
+        self,
+        estimator: &GasEstimation,
+        f: impl FnOnce(Self) -> Result<Self, EvmErrored<'a, Ext, Db, E>>,
+    ) -> Result<Self, EvmErrored<'a, Ext, Db, E>> {
+        self.try_with_cfg(estimator, |this| this.try_with_tx(estimator, f))
+    }
+
+    /// Get a reference to the loaded tx env that will be executed.
+    pub fn tx(&self) -> &TxEnv {
+        self.inner.tx()
+    }
+    /// True if the transaction is a simple transfer.
+    pub fn is_transfer(&self) -> bool {
+        self.inner.tx().data.is_empty() && self.to().is_call()
+    }
+
+    /// True if the transaction is a contract creation.
+    pub fn is_create(&self) -> bool {
+        self.to().is_create()
+    }
+
+    /// Get a reference to the transaction input data, which will be used as
+    /// calldata or initcode during EVM execution.
+    pub fn data(&self) -> &Bytes {
+        &self.tx().data
+    }
+
+    /// Read the target of the transaction.
+    pub fn to(&self) -> TxKind {
+        self.tx().transact_to
+    }
+
+    /// Read the value in wei of the transaction.
+    pub fn value(&self) -> U256 {
+        self.tx().value
+    }
+
+    /// Get the gas limit of the loaded transaction.
+    pub fn gas_limit(&self) -> u64 {
+        self.tx().gas_limit
+    }
+
+    /// Get the gas price of the loaded transaction.
+    pub fn gas_price(&self) -> U256 {
+        self.tx().gas_price
+    }
+
+    /// Get the address of the caller.
+    pub fn caller(&self) -> Address {
+        self.tx().caller
+    }
+
+    /// Get the address of the callee. `None` if `Self::is_create` is true.
+    pub fn callee(&self) -> Option<Address> {
+        self.to().into()
+    }
+
+    /// Get the account of the callee. `None` if `Self::is_create` is true,
+    /// error if the DB errors.
+    pub fn callee_account(&mut self) -> Result<Option<AccountInfo>, EVMError<Db::Error>> {
+        if let Some(addr) = self.callee() {
+            self.try_read_account(addr).map_err(EVMError::Database)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Get the account of the callee. `None` if `Self::is_create` is true,
+    /// error if the DB errors.
+    pub fn callee_account_ref(&self) -> Result<Option<AccountInfo>, <Db as DatabaseRef>::Error>
+    where
+        Db: DatabaseRef,
+    {
+        if let Some(addr) = self.callee() {
+            self.try_read_account_ref(addr)
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Run a function with the provided transaction, then restore the previous
     /// transaction.
     pub fn with_tx<T, F, NewState>(mut self, t: &T, f: F) -> Trevm<'a, Ext, Db, NewState>
@@ -1030,6 +1139,19 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
                 Err(evm)
             }
         }
+    }
+
+    /// Return the maximum gas that the caller can purchase. This is the balance
+    /// of the caller divided by the gas price.
+    pub fn gas_allowance(&mut self) -> Result<u64, EVMError<Db::Error>> {
+        // Avoid DB read if gas price is zero
+        if self.gas_price().is_zero() {
+            return Ok(u64::MAX);
+        }
+
+        let balance = self.try_read_balance(self.caller()).map_err(EVMError::Database)?;
+        let gas_price = self.gas_price();
+        Ok((balance / gas_price).saturating_to())
     }
 }
 
@@ -1081,6 +1203,142 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
             Ok(result) => Ok(Trevm { inner, state: TransactedState { result } }),
             Err(error) => Err(EvmErrored { inner, state: ErroredState { error } }),
         }
+    }
+
+    /// Estimate gas for a simple transfer. This will
+    /// - Check that the transaction has no input data.
+    /// - Check that the target is not a `create`.
+    /// - Check that the target is not a contract.
+    /// - Return the minimum gas required for the transfer.
+    fn estimate_gas_simple_transfer(&mut self) -> Result<Option<()>, EVMError<Db::Error>> {
+        if !self.is_transfer() {
+            return Ok(None);
+        }
+
+        // Shortcut if the tx is create, otherwise read the account
+        let Some(acc) = self.callee_account()? else { return Ok(None) };
+
+        // If the code hash is not empty, then the target is a contract
+        if acc.code_hash != KECCAK_EMPTY {
+            return Ok(None);
+        }
+
+        // If the target is not a contract, then the gas is the minimum gas.
+        Ok(Some(()))
+    }
+
+    /// Convenience function to simplify nesting of [`Self::estimate_gas`].
+    fn run_estimate(
+        self,
+        estimator: &GasEstimation,
+    ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db, EVMError<Db::Error>>> {
+        let mut estimation = None;
+
+        let this = self.try_with_estimator(&estimator, |this| match this.run() {
+            Ok(trevm) => {
+                let (e, t) = trevm.take_estimation();
+
+                estimation = Some(e);
+                Ok(t)
+            }
+            Err(err) => return Err(err),
+        })?;
+
+        Ok((estimation.expect("definitely exists if not shortcut returned"), this))
+    }
+
+    /// Implements gas estimation. This will output an estimate of the minimum
+    /// amount of gas that the transaction will consume, calculated via
+    /// iterated simulation.
+    ///
+    /// In the worst case this will perform a binary search, resulting in
+    /// `O(log(n))` simulations.
+    pub fn estimate_gas(
+        mut self,
+    ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db, EVMError<Db::Error>>> {
+        if let Some(_) = unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
+            return Ok((EstimationResult::basic_transfer_success(), self));
+        }
+
+        // We shrink the gas limit to 64 bits, as using more than 18 quintillion
+        // gas in a block is not likely.
+        let initial_limit = self.gas_limit();
+        let block_gas_limit = self.block_gas_limit().saturating_to::<u64>();
+
+        // The highest possible gas is the minimum of the initial limit and the
+        // block gas limit.
+        let allowance = unwrap_or_trevm_err!(self.gas_allowance(), self);
+        let highest_possible_gas = std::cmp::min(initial_limit, block_gas_limit);
+        let highest_possible_gas = std::cmp::min(highest_possible_gas, allowance);
+
+        // Run an estimate with the max gas limit.
+        let estimator = GasEstimation::from(highest_possible_gas);
+        let (mut estimate, mut trevm) = self.run_estimate(&estimator)?;
+
+        // If it failed, no amount of gas is likely to work, so we shortcut
+        // return.
+        if estimate.is_failure() {
+            return Ok((estimate, trevm));
+        }
+
+        // Now we know that it succeeds at _some_ gas limit. We can now binary
+        // search.
+        let mut gas_used = estimate.gas_estimation().expect("checked is_failure");
+        let gas_refunded = estimate.gas_refunded().expect("checked is_failure");
+
+        // Set our binary search bounds.
+        let mut search_max = highest_possible_gas;
+        let mut search_min = gas_used - 1;
+
+        // NB: This is a heuristic adopted from geth and reth
+        // https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186a4/eth/gasestimator/gasestimator.go#L132-L135
+        // NB: 64 / 63 is due to Ethereum's gas-forwarding rules. Each call
+        // frame can forward only 63/64 of the gas it has when it makes a new
+        // frame.
+        let first_search = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
+        if first_search < search_max {
+            let estimator = GasEstimation::from(first_search);
+            (estimate, trevm) = trevm.run_estimate(&estimator)?;
+            // If the halt error propagates, we can shortcut return, as it
+            // means that a non-gas-dynamic halt occurred.
+            if let Err(e) =
+                estimate.adjust_binary_search_range(first_search, &mut search_max, &mut search_min)
+            {
+                return Ok((e, trevm));
+            }
+            gas_used = estimate.gas_used();
+        }
+
+        // This is a heuristic adopted from reth
+        // Pick a point that's close to the estimated gas
+        let mut needle = std::cmp::min(gas_used * 3, (search_max + search_min) / 2);
+
+        // Binary search
+        while search_max.saturating_sub(search_min) > 1 {
+            // This is a heuristic adopted from reth
+            // An estimation error is allowed once the current gas limit range
+            // used in the binary search is small enough (less than 1.5% of the
+            // highest gas limit)
+            // <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186
+            if ((search_max - search_min) as f64 / search_max as f64) < 0.015 {
+                break;
+            };
+
+            let estimator = GasEstimation::from(needle);
+            (estimate, trevm) = trevm.run_estimate(&estimator)?;
+            if let Err(e) =
+                estimate.adjust_binary_search_range(needle, &mut search_max, &mut search_min)
+            {
+                return Ok((e, trevm));
+            }
+
+            // NB: 2 is the binary part of the binary search :)
+            needle = (search_max + search_min) / 2;
+        }
+
+        Ok((estimate, trevm))
+
+        // Ok((estimator.gas_limit, trevm))
     }
 }
 
@@ -1277,6 +1535,18 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
     /// the [`ExecutionResult.`]
     pub fn accept_state(self) -> EvmNeedsTx<'a, Ext, Db> {
         self.accept().1
+    }
+
+    /// Create an [`EstimationResult`] from the transaction [`ExecutionResult`].
+    pub fn estimation(&self) -> EstimationResult {
+        self.result().into()
+    }
+
+    /// Take the [`EstimationResult`] and return it and the EVM. This discards
+    /// pending state changes.
+    pub fn take_estimation(self) -> (EstimationResult, EvmReady<'a, Ext, Db>) {
+        let estimation = self.estimation();
+        (estimation, Trevm { inner: self.inner, state: Ready::new() })
     }
 }
 

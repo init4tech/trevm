@@ -370,20 +370,21 @@ pub mod db;
 
 mod driver;
 pub use driver::{
-    BlockDriver, BundleDriver, ChainDriver, DriveBlockResult, DriveBundleResult, DriveChainResult,
-    RunTxResult,
+    BlockDriver, BundleDriver, BundleError, BundleProcessor, ChainDriver, DriveBlockResult,
+    DriveBundleResult, DriveChainResult, RunTxResult,
 };
-
-pub use driver::{BundleError, BundleProcessor};
 
 mod evm;
 pub use evm::Trevm;
+
+mod est;
+pub use est::EstimationResult;
 
 mod ext;
 pub use ext::EvmExtUnchecked;
 
 mod fill;
-pub use fill::{Block, Cfg, DisableGasChecks, DisableNonceCheck, NoopBlock, NoopCfg, Tx};
+pub use fill::{fillers, Block, Cfg, NoopBlock, NoopCfg, Tx};
 
 pub mod journal;
 
@@ -408,6 +409,9 @@ pub use revm;
 pub mod test_utils;
 
 use revm::{Database, DatabaseCommit, EvmBuilder};
+
+/// The minimum gas required for a transaction.
+pub const MIN_TRANSACTION_GAS: u64 = 21_000;
 
 /// Ext trait for [`EvmBuilder`] that builds a [`Trevm`], and adds features for
 /// [`DbConnect`].
