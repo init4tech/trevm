@@ -1282,6 +1282,40 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///
     /// In the worst case this will perform a binary search, resulting in
     /// `O(log(n))` simulations.
+    ///
+    /// This function is largely based on the reth RPC estimation algorithm,
+    /// which can be found [here]. The algorithm is as follows:
+    ///
+    /// - Disable eip-3607, allowing estimation from contract accounts.
+    /// - Disable base fee checks.
+    /// - Check if the transaction is a simple transfer
+    ///     - Is there input data empty? If yes, proceed to regular estimation
+    ///     - Is the callee a contract? If yes, proceed to regular estimation
+    ///     - Otherwise, shortcut return [`MIN_TRANSACTION_GAS`].
+    /// - Simulate the transaction with the maximum possible gas limit.
+    ///     - If the simulation fails, shortcut return the failure.
+    ///     - If succesful, store the gas used as the search minimum.
+    /// - Simulate the transaction with an "optimistic" gas limit.
+    ///     - If the simulation fails, shortcut return the failure.
+    ///     - If succesful, begin the binary search around that range.
+    /// - Binary search loop:
+    ///     - If the search range is small enough, break the loop and return
+    ///       the current estimate.
+    ///     - Calculate a new gas limit based on the midpoint of the search
+    ///       range.
+    ///     - Simulate the transaction with the new gas limit.
+    ///     - Adjust the search range based on the simulation result:
+    ///         - If the result is a success, pull the search max down to the
+    ///           limit.
+    ///         - If the result is a revert, push the search min up to the
+    ///           limit.
+    ///         - If the result is a halt, check if the halt is potentially a
+    ///           gas-dynamic halt.
+    ///             - If it is, treat it as a revert.
+    ///             - If it is not, shortcut return the halt.
+    ///     - Loop.
+    ///
+    /// [here]: https://github.com/paradigmxyz/reth/blob/ad503a08fa242b28ad3c1fea9caa83df2dfcf72d/crates/rpc/rpc-eth-api/src/helpers/estimate.rs#L35-L42
     pub fn estimate_gas(mut self) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
         if unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self).is_some() {
             return Ok((EstimationResult::basic_transfer_success(), self));
@@ -1340,7 +1374,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // Pick a point that's close to the estimated gas
         let mut needle = std::cmp::min(gas_used * 3, (search_max + search_min) / 2);
 
-        // Binary search
+        // Binary search loop.
         while search_max.saturating_sub(search_min) > 1 {
             // This is a heuristic adopted from reth
             // An estimation error is allowed once the current gas limit range
