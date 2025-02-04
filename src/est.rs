@@ -2,6 +2,8 @@ use crate::MIN_TRANSACTION_GAS;
 use revm::primitives::{Bytes, ExecutionResult, HaltReason, Output};
 use std::ops::Range;
 
+/// Simple wrapper around a range of u64 values, with convenience methods for
+/// binary searching.
 pub(crate) struct SearchRange(Range<u64>);
 
 impl From<Range<u64>> for SearchRange {
