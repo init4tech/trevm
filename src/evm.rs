@@ -1351,25 +1351,30 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let mut gas_used = estimate.gas_estimation().expect("checked is_failure");
         let gas_refunded = estimate.gas_refunded().expect("checked is_failure");
 
+        // NB: if we've made it this far it's very unlikely that `gas_used` is
+        // less than 21_000, but we'll check anyway.
         search_range.maybe_raise_min(gas_used - 1);
 
         // NB: This is a heuristic adopted from geth and reth
+        // The goal is to check if the first-run is actually very close to the
+        // real estimate, thereby cutting down on the number of iterations in
+        // the later search loop.
         // https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186a4/eth/gasestimator/gasestimator.go#L132-L135
         // NB: 64 / 63 is due to Ethereum's gas-forwarding rules. Each call
         // frame can forward only 63/64 of the gas it has when it makes a new
         // frame.
-        let first_search = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
+        let mut needle = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
         // If the first search is outside the range, we don't need to try it.
-        if search_range.contains(first_search) {
-            estimate_and_adjust!(estimate, trevm, first_search, search_range);
+        if search_range.contains(needle) {
+            estimate_and_adjust!(estimate, trevm, needle, search_range);
             // NB: `estimate` is rebound in the macro, so do not move this line
             // up.
             gas_used = estimate.gas_used();
         }
 
-        // This is a heuristic adopted from reth.
+        // NB: This is a heuristic adopted from reth.
         // Pick a point that's close to the estimated gas
-        let mut needle = std::cmp::min(gas_used * 3, search_range.midpoint());
+        needle = std::cmp::min(gas_used * 3, search_range.midpoint());
 
         // Binary search loop.
         // This is a heuristic adopted from reth
@@ -1379,8 +1384,6 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186
         while search_range.size() > 1 && search_range.ratio() > 0.015 {
             estimate_and_adjust!(estimate, trevm, needle, search_range);
-
-            // NB: 2 is the binary part of the binary search :)
             needle = search_range.midpoint();
         }
 
