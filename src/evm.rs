@@ -1172,12 +1172,12 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
     /// of the caller divided by the gas price.
     pub fn gas_allowance(&mut self) -> Result<u64, EVMError<Db::Error>> {
         // Avoid DB read if gas price is zero
-        if self.gas_price().is_zero() {
+        let gas_price = self.gas_price();
+        if gas_price.is_zero() {
             return Ok(u64::MAX);
         }
 
         let balance = self.try_read_balance(self.caller()).map_err(EVMError::Database)?;
-        let gas_price = self.gas_price();
         Ok((balance / gas_price).saturating_to())
     }
 }
