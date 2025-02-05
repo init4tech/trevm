@@ -1341,8 +1341,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let mut search_range = SearchRange::new(MIN_TRANSACTION_GAS, initial_limit);
         search_range.maybe_lower_max(self.block_gas_limit().saturating_to::<u64>());
 
-        // The highest possible gas is the minimum of the initial limit and the
-        // block gas limit.
+        // Check that the account has enough ETH to cover the gas, and lower if
+        // necessary.
         let allowance = unwrap_or_trevm_err!(self.gas_allowance(), self);
         search_range.maybe_lower_max(allowance);
 
