@@ -49,7 +49,8 @@ impl<Ext, Db: DatabaseRef + Sync> EvmNeedsTx<'_, Ext, ConcurrentState<Db>> {
     /// Note that this is NOT reversible. The overrides are applied directly to
     /// the underlying state and these changes cannot be removed. If it is
     /// important that you have access to the pre-change state, you should wrap
-    /// the existing DB in a new [`State`] and apply the overrides to that.
+    /// the existing DB in a new [`ConcurrentState`] and apply the overrides to
+    /// that.
     pub fn apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
         overrides.fill_block(&mut self.inner);
 
@@ -65,7 +66,8 @@ impl<Ext, Db: DatabaseRef + Sync> EvmNeedsTx<'_, Ext, ConcurrentState<Db>> {
     /// Note that this is NOT reversible. The overrides are applied directly to
     /// the underlying state and these changes cannot be removed. If it is
     /// important that you have access to the pre-change state, you should wrap
-    /// the existing DB in a new [`State`] and apply the overrides to that.
+    /// the existing DB in a new [`ConcurrentState`] and apply the overrides to
+    /// that.
     pub fn maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
         if let Some(overrides) = overrides {
             self.apply_block_overrides(overrides)
