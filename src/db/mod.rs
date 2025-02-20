@@ -1,5 +1,6 @@
 mod builder;
 
+use alloy::rpc::types::BlockOverrides;
 pub use builder::ConcurrentStateBuilder;
 
 mod cache_state;
@@ -8,7 +9,7 @@ pub use cache_state::ConcurrentCacheState;
 mod sync_state;
 pub use sync_state::{ConcurrentState, ConcurrentStateInfo};
 
-use crate::{EvmNeedsBlock, Trevm};
+use crate::{Block, EvmNeedsBlock, EvmNeedsTx, Trevm};
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState},
     DatabaseRef,
@@ -39,5 +40,39 @@ impl<Ext, Db: DatabaseRef + Sync> EvmNeedsBlock<'_, Ext, ConcurrentState<Db>> {
         let bundle = evm.db_mut().take_bundle();
 
         bundle
+    }
+}
+
+impl<Ext, Db: DatabaseRef + Sync> EvmNeedsTx<'_, Ext, ConcurrentState<Db>> {
+    /// Apply block overrides to the current block.
+    ///
+    /// Note that this is NOT reversible. The overrides are applied directly to
+    /// the underlying state and these changes cannot be removed. If it is
+    /// important that you have access to the pre-change state, you should wrap
+    /// the existing DB in a new [`ConcurrentState`] and apply the overrides to
+    /// that.
+    pub fn apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
+        overrides.fill_block(&mut self.inner);
+
+        if let Some(hashes) = &overrides.block_hash {
+            self.inner.db_mut().info.block_hashes.write().unwrap().extend(hashes)
+        }
+
+        self
+    }
+
+    /// Apply block overrides to the current block, if they are provided.
+    ///
+    /// Note that this is NOT reversible. The overrides are applied directly to
+    /// the underlying state and these changes cannot be removed. If it is
+    /// important that you have access to the pre-change state, you should wrap
+    /// the existing DB in a new [`ConcurrentState`] and apply the overrides to
+    /// that.
+    pub fn maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
+        if let Some(overrides) = overrides {
+            self.apply_block_overrides(overrides)
+        } else {
+            self
+        }
     }
 }
