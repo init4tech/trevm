@@ -1304,7 +1304,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
 
         // delegate calculation to revm. This ensures that things like bogus
         // 2930 access lists don't mess up our estimates
-        Ok(Some(self.caluculate_initial_gas()))
+        Ok(Some(self.calculate_initial_gas()))
     }
 
     /// Convenience function to simplify nesting of [`Self::estimate_gas`].
