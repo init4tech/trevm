@@ -28,6 +28,15 @@ Trevm is useful for:
 - searchers
 - any other transaction simulation usecase
 
+## Note on Trevm Versioning
+
+Trevm generally uses [semantic versioning](https://semver.org/). However, we
+also strive to indicate the MAJOR version of revm in the MINOR version of
+trevm. For example, trevm `0.19.x` SHOULD BE compatible with revm `19.x.x`. In
+general, we will try to maintain compatibility with the latest revm version,
+and will not backport trevm fixes to older trevm or revm versions. It is
+generally not advised to use old revm versions, as the EVM is a living spec.
+
 ## Limitations
 
 Trevm is a work in progress and is not feature complete. In particular, trevm
