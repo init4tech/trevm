@@ -1272,7 +1272,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///
     /// [EIP-2930]: https://eips.ethereum.org/EIPS/eip-2930
     /// [EIP-7702]: https://eips.ethereum.org/EIPS/eip-7702
-    fn caluculate_initial_gas(&self) -> u64 {
+    fn calculate_initial_gas(&self) -> u64 {
         calculate_initial_tx_gas(
             self.spec_id(),
             &[],
