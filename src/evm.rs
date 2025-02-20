@@ -1399,7 +1399,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         search_range.maybe_lower_max(allowance);
 
         // Raise the floor to the amount of gas required to initialize the EVM.
-        search_range.maybe_raise_min(self.caluculate_initial_gas());
+        search_range.maybe_raise_min(self.calculate_initial_gas());
 
         // Run an estimate with the max gas limit.
         // NB: we declare these mut as we re-use the binding throughout the
