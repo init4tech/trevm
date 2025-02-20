@@ -236,7 +236,7 @@ impl Block for alloy::consensus::Header {
         *basefee = self.base_fee_per_gas.map_or_else(Default::default, U256::from);
 
         *difficulty = self.difficulty;
-        *prevrandao = if self.difficulty.is_zero() { Some(self.mix_hash) } else { None };
+        *prevrandao = Some(self.mix_hash);
 
         if let Some(excess_blob_gas) = self.excess_blob_gas {
             block_env
