@@ -1,4 +1,3 @@
-use crate::MIN_TRANSACTION_GAS;
 use revm::primitives::{Bytes, ExecutionResult, HaltReason, Output};
 use std::ops::Range;
 
@@ -132,11 +131,11 @@ impl From<&ExecutionResult> for EstimationResult {
 
 impl EstimationResult {
     /// Create a successful estimation result with a gas estimation of 21000.
-    pub const fn basic_transfer_success() -> Self {
+    pub const fn basic_transfer_success(estimation: u64) -> Self {
         Self::Success {
-            estimation: MIN_TRANSACTION_GAS,
+            estimation,
             refund: 0,
-            gas_used: MIN_TRANSACTION_GAS,
+            gas_used: estimation,
             output: Output::Call(Bytes::new()),
         }
     }

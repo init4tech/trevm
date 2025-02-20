@@ -14,10 +14,10 @@ use alloy::{
 use core::convert::Infallible;
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState, State},
-    interpreter::gas::CALL_STIPEND,
+    interpreter::gas::{calculate_initial_tx_gas, CALL_STIPEND},
     primitives::{
-        AccountInfo, BlockEnv, Bytecode, EVMError, EvmState, ExecutionResult, InvalidTransaction,
-        ResultAndState, SpecId, TxEnv, TxKind, KECCAK_EMPTY,
+        AccountInfo, AuthorizationList, BlockEnv, Bytecode, EVMError, Env, EvmState,
+        ExecutionResult, InvalidTransaction, ResultAndState, SpecId, TxEnv, TxKind, KECCAK_EMPTY,
     },
     Database, DatabaseCommit, DatabaseRef, Evm,
 };
@@ -69,6 +69,30 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     /// Destructure the [`Trevm`] into its parts.
     pub fn into_inner(self) -> Box<Evm<'a, Ext, Db>> {
         self.inner
+    }
+
+    /// Get a reference to the inner env. This contains the current
+    /// [`BlockEnv`], [`TxEnv`], and [`CfgEnv`].
+    ///
+    /// These values may be meaningless, stale, or otherwise incorrect. Reading
+    /// them should be done with caution, as it may lead to logic bugs.
+    ///
+    /// [`CfgEnv`]: revm::primitives::CfgEnv
+    pub fn env_unchecked(&self) -> &Env {
+        &self.inner().context.evm.inner.env
+    }
+
+    /// Get a mutable reference to the inner env. This contains the current
+    /// [`BlockEnv`], [`TxEnv`], and [`CfgEnv`].
+    ///
+    /// These values may be meaningless, stale, or otherwise incorrect. Reading
+    /// them should be done with caution, as it may lead to logic bugs.
+    /// Modifying these values may lead to inconsistent state or invalid
+    /// execution.
+    ///
+    /// [`CfgEnv`]: revm::primitives::CfgEnv
+    pub fn env_mut_unchecked(&mut self) -> &mut Env {
+        &mut self.inner_mut_unchecked().context.evm.inner.env
     }
 
     /// Get the id of the currently running hardfork spec. Convenience function
@@ -1176,7 +1200,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
     }
 }
 
-// -- HAS TX with State<Db>
+// -- NEEDS TX with State<Db>
 
 impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
     /// Apply block overrides to the current block.
@@ -1236,12 +1260,36 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         }
     }
 
+    /// Calculate the minimum gas required to start EVM execution.
+    ///
+    /// This uses [`calculate_initial_tx_gas`] to calculate the initial gas.
+    /// Its output is dependent on
+    /// - the EVM spec
+    /// - the input data
+    /// - whether the transaction is a contract creation or a call
+    /// - the EIP-2930 access list
+    /// - the number of [EIP-7702] authorizations
+    ///
+    /// [EIP-2930]: https://eips.ethereum.org/EIPS/eip-2930
+    /// [EIP-7702]: https://eips.ethereum.org/EIPS/eip-7702
+    fn caluculate_initial_gas(&self) -> u64 {
+        calculate_initial_tx_gas(
+            self.spec_id(),
+            &[],
+            false,
+            &self.tx().access_list,
+            self.tx().authorization_list.as_ref().map(AuthorizationList::len).unwrap_or_default()
+                as u64,
+        )
+        .initial_gas
+    }
+
     /// Estimate gas for a simple transfer. This will
     /// - Check that the transaction has no input data.
     /// - Check that the target is not a `create`.
     /// - Check that the target is not a contract.
     /// - Return the minimum gas required for the transfer.
-    fn estimate_gas_simple_transfer(&mut self) -> Result<Option<()>, EVMError<Db::Error>> {
+    fn estimate_gas_simple_transfer(&mut self) -> Result<Option<u64>, EVMError<Db::Error>> {
         if !self.is_transfer() {
             return Ok(None);
         }
@@ -1254,8 +1302,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
             return Ok(None);
         }
 
-        // If the target is not a contract, then the gas is the minimum gas.
-        Ok(Some(()))
+        // delegate calculation to revm. This ensures that things like bogus
+        // 2930 access lists don't mess up our estimates
+        Ok(Some(self.caluculate_initial_gas()))
     }
 
     /// Convenience function to simplify nesting of [`Self::estimate_gas`].
@@ -1330,21 +1379,27 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///
     /// [here]: https://github.com/paradigmxyz/reth/blob/ad503a08fa242b28ad3c1fea9caa83df2dfcf72d/crates/rpc/rpc-eth-api/src/helpers/estimate.rs#L35-L42
     pub fn estimate_gas(mut self) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
-        if unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self).is_some() {
-            return Ok((EstimationResult::basic_transfer_success(), self));
+        if let Some(est) = unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
+            return Ok((EstimationResult::basic_transfer_success(est), self));
         }
 
         // We shrink the gas limit to 64 bits, as using more than 18 quintillion
-        // gas in a block is not likely.
+        // gas in a block is unlikely.
         let initial_limit = self.gas_limit();
 
+        // Start the search range at 21_000 gas.
         let mut search_range = SearchRange::new(MIN_TRANSACTION_GAS, initial_limit);
+
+        // Block it to the gas cap.
         search_range.maybe_lower_max(self.block_gas_limit().saturating_to::<u64>());
 
         // Check that the account has enough ETH to cover the gas, and lower if
         // necessary.
         let allowance = unwrap_or_trevm_err!(self.gas_allowance(), self);
         search_range.maybe_lower_max(allowance);
+
+        // Raise the floor to the amount of gas required to initialize the EVM.
+        search_range.maybe_raise_min(self.caluculate_initial_gas());
 
         // Run an estimate with the max gas limit.
         // NB: we declare these mut as we re-use the binding throughout the
