@@ -1477,6 +1477,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///     - Loop.
     ///
     /// [here]: https://github.com/paradigmxyz/reth/blob/ad503a08fa242b28ad3c1fea9caa83df2dfcf72d/crates/rpc/rpc-eth-api/src/helpers/estimate.rs#L35-L42
+    /// [`EstimationREsult`]: crate::EstimationResult
+    /// [`MIN_TRANSACTION_GAS`]: crate::MIN_TRANSACTION_GAS
     #[cfg(feature = "estimate_gas")]
     pub fn estimate_gas(
         mut self,
