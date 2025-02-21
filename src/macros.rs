@@ -28,6 +28,7 @@ macro_rules! trevm_bail {
 }
 
 /// Macro for gas estimation binary search loop.
+#[cfg(feature = "estimate_gas")]
 macro_rules! estimate_and_adjust {
     ($est:ident, $trevm:ident, $gas_limit:ident, $range:ident) => {
         ($est, $trevm) = $trevm.run_estimate(&$gas_limit.into())?;

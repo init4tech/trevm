@@ -380,7 +380,9 @@ pub use driver::{
 mod evm;
 pub use evm::Trevm;
 
+#[cfg(feature = "estimate_gas")]
 mod est;
+#[cfg(feature = "estimate_gas")]
 pub use est::EstimationResult;
 
 mod ext;
