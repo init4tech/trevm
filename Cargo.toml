@@ -55,6 +55,7 @@ tokio = { version = "1.39", features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = [
+    "call",
     "concurrent-db",
     "estimate_gas",
     "revm/std",
@@ -63,6 +64,8 @@ default = [
     "revm/portable",
     "revm/secp256k1",
 ]
+
+call = ["optional_eip3607", "optional_no_base_fee"]
 
 concurrent-db = ["dep:dashmap"]
 

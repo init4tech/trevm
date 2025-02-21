@@ -1,7 +1,6 @@
 use crate::{
     driver::DriveBlockResult,
     est::{EstimationResult, SearchRange},
-    fillers::GasEstimationFiller,
     unwrap_or_trevm_err, Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult,
     DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg,
     EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, Ready,
@@ -217,6 +216,20 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
             Ok(self)
         }
     }
+
+    /// Get the gas allowance for a specific caller and gas price.
+    pub fn try_gas_allowance(
+        &mut self,
+        caller: Address,
+        gas_price: U256,
+    ) -> Result<u64, Db::Error> {
+        if gas_price.is_zero() {
+            return Ok(u64::MAX);
+        }
+        let gas_price = U256::from(gas_price);
+        let balance = self.try_read_balance(caller)?;
+        Ok((balance / gas_price).saturating_to())
+    }
 }
 
 impl<Ext, Db: Database + DatabaseCommit + DatabaseRef, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
@@ -264,6 +277,20 @@ impl<Ext, Db: Database + DatabaseCommit + DatabaseRef, TrevmState> Trevm<'_, Ext
             Some(acct) => Ok(Some(self.inner.db().code_by_hash_ref(acct.code_hash)?)),
             None => Ok(None),
         }
+    }
+
+    /// Get the gas allowance for a specific caller and gas price.
+    pub fn try_gas_allowance_ref(
+        &self,
+        caller: Address,
+        gas_price: U256,
+    ) -> Result<u64, <Db as DatabaseRef>::Error> {
+        if gas_price.is_zero() {
+            return Ok(u64::MAX);
+        }
+        let gas_price = U256::from(gas_price);
+        let balance = self.try_read_balance_ref(caller)?;
+        Ok((balance / gas_price).saturating_to())
     }
 }
 
@@ -1032,7 +1059,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
         unsafe { core::mem::transmute(self) }
     }
 
-    /// Execute a transaction. Shortcut for `fill_tx(tx).run_tx()`.
+    /// Execute a transaction. Shortcut for `fill_tx(tx).run()`.
     pub fn run_tx<T: Tx>(
         self,
         filler: &T,
@@ -1040,9 +1067,25 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
         self.fill_tx(filler).run()
     }
 
+    /// Simulate the transaction, and return the [`ExecutionResult`]. The
+    /// following modifications are made to the environment while simulating.
+    ///
+    /// - [EIP-3607] is disabled.
+    /// - Base fee checks are disabled.
+    /// - Nonce checks are disabled.
+    ///
+    /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
+    pub fn call_tx<T: Tx>(
+        self,
+        filler: &T,
+    ) -> Result<(ExecutionResult, Self), EvmErrored<'a, Ext, Db>> {
+        self.fill_tx(filler).call()
+    }
+
     /// Estimate the gas cost of a transaction. Shortcut for `fill_tx(tx).
     /// estimate()`. Returns an [`EstimationResult`] and the EVM populated with
     /// the transaction.
+    #[cfg(feature = "estimate_gas")]
     pub fn estimate_tx_gas<T: Tx>(
         self,
         filler: &T,
@@ -1054,11 +1097,38 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
 // --- HAS TX
 
 impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
+    #[cfg(feature = "call")]
+    fn try_with_call_filler<NewState: HasCfg + HasBlock>(
+        self,
+        filler: &crate::fillers::CallFiller,
+        f: impl FnOnce(Self) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db>>,
+    ) -> Result<Trevm<'a, Ext, Db, NewState>, EvmErrored<'a, Ext, Db>> {
+        // override all relevant env bits
+        self.try_with_cfg(filler, |this| {
+            this.try_with_block(filler, |mut this| {
+                // reproducing code from `try_with_tx` to avoid trait bounds
+                let previous = this.inner.tx_mut().clone();
+                filler.fill_tx_env(this.inner.tx_mut());
+                match f(this) {
+                    Ok(mut evm) => {
+                        *evm.inner.tx_mut() = previous;
+                        Ok(evm)
+                    }
+                    Err(mut evm) => {
+                        *evm.inner.tx_mut() = previous;
+                        Err(evm)
+                    }
+                }
+            })
+        })
+    }
+
     /// Convenience function to use the estimator to fill both Cfg and Tx, and
     /// run a fallible function.
-    fn try_with_gas_estimation_filler<E>(
+    #[cfg(feature = "estimate_gas")]
+    fn try_with_estimate_gas_filler<E>(
         self,
-        filler: &GasEstimationFiller,
+        filler: &crate::fillers::GasEstimationFiller,
         f: impl FnOnce(Self) -> Result<Self, EvmErrored<'a, Ext, Db, E>>,
     ) -> Result<Self, EvmErrored<'a, Ext, Db, E>> {
         self.try_with_cfg(filler, |this| this.try_with_tx(filler, f))
@@ -1188,15 +1258,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
 
     /// Return the maximum gas that the caller can purchase. This is the balance
     /// of the caller divided by the gas price.
-    pub fn gas_allowance(&mut self) -> Result<u64, EVMError<Db::Error>> {
+    pub fn caller_gas_allowance(&mut self) -> Result<u64, EVMError<Db::Error>> {
         // Avoid DB read if gas price is zero
         let gas_price = self.gas_price();
-        if gas_price.is_zero() {
-            return Ok(u64::MAX);
-        }
-
-        let balance = self.try_read_balance(self.caller()).map_err(EVMError::Database)?;
-        Ok((balance / gas_price).saturating_to())
+        self.try_gas_allowance(self.caller(), gas_price).map_err(EVMError::Database)
     }
 }
 
@@ -1260,6 +1325,38 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         }
     }
 
+    /// Simulate the transaction, and return the [`ExecutionResult`]. The
+    /// following modifications are made to the environment while simulating.
+    ///
+    /// - [EIP-3607] is disabled.
+    /// - Base fee checks are disabled.
+    /// - Nonce checks are disabled.
+    ///
+    /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
+    #[cfg(feature = "call")]
+    pub fn call(
+        self,
+    ) -> Result<(ExecutionResult, EvmNeedsTx<'a, Ext, Db>), EvmErrored<'a, Ext, Db>> {
+        let mut output = MaybeUninit::uninit();
+
+        let gas_limit = self.tx().gas_limit;
+
+        let this = self.try_with_call_filler(
+            &crate::fillers::CallFiller { gas_limit },
+            |this| match this.run() {
+                Ok(t) => {
+                    let (o, t) = t.take_result();
+
+                    output.write(o);
+
+                    Ok(t)
+                }
+                Err(err) => return Err(err),
+            },
+        )?;
+        Ok((unsafe { output.assume_init() }, this))
+    }
+
     /// Calculate the minimum gas required to start EVM execution.
     ///
     /// This uses [`calculate_initial_tx_gas`] to calculate the initial gas.
@@ -1272,7 +1369,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///
     /// [EIP-2930]: https://eips.ethereum.org/EIPS/eip-2930
     /// [EIP-7702]: https://eips.ethereum.org/EIPS/eip-7702
-    fn calculate_initial_gas(&self) -> u64 {
+    pub fn calculate_initial_gas(&self) -> u64 {
         calculate_initial_tx_gas(
             self.spec_id(),
             &[],
@@ -1289,6 +1386,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     /// - Check that the target is not a `create`.
     /// - Check that the target is not a contract.
     /// - Return the minimum gas required for the transfer.
+    #[cfg(feature = "estimate_gas")]
     fn estimate_gas_simple_transfer(&mut self) -> Result<Option<u64>, EVMError<Db::Error>> {
         if !self.is_transfer() {
             return Ok(None);
@@ -1308,13 +1406,14 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     }
 
     /// Convenience function to simplify nesting of [`Self::estimate_gas`].
+    #[cfg(feature = "estimate_gas")]
     fn run_estimate(
         self,
-        filler: &GasEstimationFiller,
+        filler: &crate::fillers::GasEstimationFiller,
     ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
         let mut estimation = MaybeUninit::uninit();
 
-        let this = self.try_with_gas_estimation_filler(filler, |this| match this.run() {
+        let this = self.try_with_estimate_gas_filler(filler, |this| match this.run() {
             Ok(trevm) => {
                 let (e, t) = trevm.take_estimation();
 
@@ -1378,6 +1477,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///     - Loop.
     ///
     /// [here]: https://github.com/paradigmxyz/reth/blob/ad503a08fa242b28ad3c1fea9caa83df2dfcf72d/crates/rpc/rpc-eth-api/src/helpers/estimate.rs#L35-L42
+    #[cfg(feature = "estimate_gas")]
     pub fn estimate_gas(mut self) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
         if let Some(est) = unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
             return Ok((EstimationResult::basic_transfer_success(est), self));
@@ -1395,7 +1495,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
 
         // Check that the account has enough ETH to cover the gas, and lower if
         // necessary.
-        let allowance = unwrap_or_trevm_err!(self.gas_allowance(), self);
+        let allowance = unwrap_or_trevm_err!(self.caller_gas_allowance(), self);
         search_range.maybe_lower_max(allowance);
 
         // Raise the floor to the amount of gas required to initialize the EVM.
