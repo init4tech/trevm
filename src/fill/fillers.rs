@@ -1,8 +1,5 @@
-use crate::{
-    fill::traits::{Cfg, Tx},
-    Block,
-};
-use revm::primitives::{BlockEnv, CfgEnv, TxEnv};
+use crate::fill::traits::{Cfg, Tx};
+use revm::primitives::{CfgEnv, TxEnv};
 
 /// A [`Cfg`] that disables gas-related checks and payment of the
 /// beneficiary reward, while leaving other cfg options unchanged.
@@ -102,8 +99,8 @@ impl Cfg for CallFiller {
 }
 
 #[cfg(feature = "call")]
-impl Block for CallFiller {
-    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+impl crate::Block for CallFiller {
+    fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
         block_env.gas_limit = alloy::primitives::U256::from(self.gas_limit);
     }
 }

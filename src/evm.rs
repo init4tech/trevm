@@ -1,10 +1,8 @@
 use crate::{
-    driver::DriveBlockResult,
-    est::{EstimationResult, SearchRange},
-    unwrap_or_trevm_err, Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult,
-    DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg,
-    EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, Ready,
-    TransactedState, Tx, MIN_TRANSACTION_GAS,
+    driver::DriveBlockResult, Block, BlockDriver, BundleDriver, Cfg, ChainDriver,
+    DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock,
+    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
+    TransactedState, Tx,
 };
 use alloy::{
     primitives::{Address, Bytes, U256},
@@ -13,14 +11,14 @@ use alloy::{
 use core::convert::Infallible;
 use revm::{
     db::{states::bundle_state::BundleRetention, BundleState, State},
-    interpreter::gas::{calculate_initial_tx_gas, CALL_STIPEND},
+    interpreter::gas::calculate_initial_tx_gas,
     primitives::{
         AccountInfo, AuthorizationList, BlockEnv, Bytecode, EVMError, Env, EvmState,
-        ExecutionResult, InvalidTransaction, ResultAndState, SpecId, TxEnv, TxKind, KECCAK_EMPTY,
+        ExecutionResult, InvalidTransaction, ResultAndState, SpecId, TxEnv, TxKind,
     },
     Database, DatabaseCommit, DatabaseRef, Evm,
 };
-use std::{fmt, mem::MaybeUninit};
+use std::fmt;
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
@@ -1075,6 +1073,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     /// - Nonce checks are disabled.
     ///
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
+    #[cfg(feature = "call")]
     pub fn call_tx<T: Tx>(
         self,
         filler: &T,
@@ -1085,11 +1084,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     /// Estimate the gas cost of a transaction. Shortcut for `fill_tx(tx).
     /// estimate()`. Returns an [`EstimationResult`] and the EVM populated with
     /// the transaction.
+    ///
+    /// [`EstimationResult`]: crate::EstimationResult
     #[cfg(feature = "estimate_gas")]
     pub fn estimate_tx_gas<T: Tx>(
         self,
         filler: &T,
-    ) -> Result<(EstimationResult, EvmReady<'a, Ext, Db>), EvmErrored<'a, Ext, Db>> {
+    ) -> Result<(crate::EstimationResult, EvmReady<'a, Ext, Db>), EvmErrored<'a, Ext, Db>> {
         self.fill_tx(filler).estimate_gas()
     }
 }
@@ -1337,23 +1338,20 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     pub fn call(
         self,
     ) -> Result<(ExecutionResult, EvmNeedsTx<'a, Ext, Db>), EvmErrored<'a, Ext, Db>> {
-        let mut output = MaybeUninit::uninit();
+        let mut output = std::mem::MaybeUninit::uninit();
 
         let gas_limit = self.tx().gas_limit;
 
-        let this = self.try_with_call_filler(
-            &crate::fillers::CallFiller { gas_limit },
-            |this| match this.run() {
-                Ok(t) => {
-                    let (o, t) = t.take_result();
+        let this =
+            self.try_with_call_filler(&crate::fillers::CallFiller { gas_limit }, |this| {
+                let t = this.run()?;
 
-                    output.write(o);
+                let (o, t) = t.take_result();
 
-                    Ok(t)
-                }
-                Err(err) => return Err(err),
-            },
-        )?;
+                output.write(o);
+
+                Ok(t)
+            })?;
         Ok((unsafe { output.assume_init() }, this))
     }
 
@@ -1388,6 +1386,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     /// - Return the minimum gas required for the transfer.
     #[cfg(feature = "estimate_gas")]
     fn estimate_gas_simple_transfer(&mut self) -> Result<Option<u64>, EVMError<Db::Error>> {
+        use alloy::consensus::constants::KECCAK_EMPTY;
+
         if !self.is_transfer() {
             return Ok(None);
         }
@@ -1410,8 +1410,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     fn run_estimate(
         self,
         filler: &crate::fillers::GasEstimationFiller,
-    ) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
-        let mut estimation = MaybeUninit::uninit();
+    ) -> Result<(crate::EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
+        let mut estimation = std::mem::MaybeUninit::uninit();
 
         let this = self.try_with_estimate_gas_filler(filler, |this| match this.run() {
             Ok(trevm) => {
@@ -1478,9 +1478,11 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     ///
     /// [here]: https://github.com/paradigmxyz/reth/blob/ad503a08fa242b28ad3c1fea9caa83df2dfcf72d/crates/rpc/rpc-eth-api/src/helpers/estimate.rs#L35-L42
     #[cfg(feature = "estimate_gas")]
-    pub fn estimate_gas(mut self) -> Result<(EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
-        if let Some(est) = unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
-            return Ok((EstimationResult::basic_transfer_success(est), self));
+    pub fn estimate_gas(
+        mut self,
+    ) -> Result<(crate::EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
+        if let Some(est) = crate::unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
+            return Ok((crate::EstimationResult::basic_transfer_success(est), self));
         }
 
         // We shrink the gas limit to 64 bits, as using more than 18 quintillion
@@ -1488,7 +1490,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let initial_limit = self.gas_limit();
 
         // Start the search range at 21_000 gas.
-        let mut search_range = SearchRange::new(MIN_TRANSACTION_GAS, initial_limit);
+        let mut search_range =
+            crate::est::SearchRange::new(crate::MIN_TRANSACTION_GAS, initial_limit);
 
         // Block it to the gas cap.
         search_range.maybe_lower_max(self.block_gas_limit().saturating_to::<u64>());
@@ -1529,7 +1532,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // NB: 64 / 63 is due to Ethereum's gas-forwarding rules. Each call
         // frame can forward only 63/64 of the gas it has when it makes a new
         // frame.
-        let mut needle = gas_used + gas_refunded + CALL_STIPEND * 64 / 63;
+        let mut needle = gas_used + gas_refunded + revm::interpreter::gas::CALL_STIPEND * 64 / 63;
         // If the first search is outside the range, we don't need to try it.
         if search_range.contains(needle) {
             estimate_and_adjust!(estimate, trevm, needle, search_range);
@@ -1753,16 +1756,22 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
     }
 
     /// Create an [`EstimationResult`] from the transaction [`ExecutionResult`].
-    pub fn estimation(&self) -> EstimationResult {
+    ///
+    /// [`EstimationResult`]: crate::EstimationResult
+    #[cfg(feature = "estimate_gas")]
+    pub fn estimation(&self) -> crate::EstimationResult {
         self.result().into()
     }
 
     /// Take the [`EstimationResult`] and return it and the EVM. This discards
     /// pending state changes, but leaves the EVM ready to execute the same
     /// transaction again.
-    pub fn take_estimation(self) -> (EstimationResult, EvmReady<'a, Ext, Db>) {
+    ///
+    /// [`EstimationResult`]: crate::EstimationResult
+    #[cfg(feature = "estimate_gas")]
+    pub fn take_estimation(self) -> (crate::EstimationResult, EvmReady<'a, Ext, Db>) {
         let estimation = self.estimation();
-        (estimation, Trevm { inner: self.inner, state: Ready::new() })
+        (estimation, Trevm { inner: self.inner, state: crate::Ready::new() })
     }
 }
 
