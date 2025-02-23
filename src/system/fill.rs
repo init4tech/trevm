@@ -9,10 +9,9 @@ use revm::primitives::TxEnv;
 /// specified in the EIPs, but this can be overridden using the
 /// [`SystemTx::new_with_caller`] method.
 ///
-///
-/// [`EIP-4788`]: https://eips.ethereum.org/EIPS/eip-4788
-/// [`EIP-7002`]: https://eips.ethereum.org/EIPS/eip-7002
-/// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
+/// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+/// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+/// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SystemTx {
     /// The target address of the system call.
@@ -25,9 +24,9 @@ pub struct SystemTx {
 
 /// The system caller as specified in [EIP-4788], [EIP-7002], and [EIP-7251].
 ///
-/// [`EIP-4788`]: https://eips.ethereum.org/EIPS/eip-4788
-/// [`EIP-7002`]: https://eips.ethereum.org/EIPS/eip-7002
-/// [`EIP-7251`]: https://eips.ethereum.org/EIPS/eip-7251
+/// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+/// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+/// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
 pub const DEFAULT_SYSTEM_CALLER: Address = address!("fffffffffffffffffffffffffffffffffffffffe");
 
 impl SystemTx {

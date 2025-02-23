@@ -24,6 +24,8 @@ mod fill;
 pub use fill::{SystemTx, DEFAULT_SYSTEM_CALLER};
 
 /// Helpers for Prague historical block hash [EIP-2935] system actions.
+///
+/// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
 pub mod eip2935;
 
 /// Helpers for Cancun beacon root [EIP-4788] system actions.
