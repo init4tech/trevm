@@ -1434,6 +1434,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     #[cfg(feature = "estimate_gas")]
     fn estimate_gas_simple_transfer(&mut self) -> Result<Option<u64>, EVMError<Db::Error>> {
         use alloy::consensus::constants::KECCAK_EMPTY;
+        use tracing::trace;
 
         if !self.is_transfer() {
             return Ok(None);
@@ -1449,7 +1450,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
 
         // delegate calculation to revm. This ensures that things like bogus
         // 2930 access lists don't mess up our estimates
-        Ok(Some(self.calculate_initial_gas()))
+        let initial = self.calculate_initial_gas();
+        trace!(initial, "using initial gas for simple transfer");
+        Ok(Some(initial))
     }
 
     /// Convenience function to simplify nesting of [`Self::estimate_gas`].
@@ -1530,6 +1533,8 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
     pub fn estimate_gas(
         mut self,
     ) -> Result<(crate::EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
+        use tracing::{debug, enabled};
+
         if let Some(est) = crate::unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
             return Ok((crate::EstimationResult::basic_transfer_success(est), self));
         }
@@ -1545,8 +1550,12 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let span = tracing::debug_span!(
             "estimate_gas",
             start_min = search_range.min(),
-            start_max = search_range.max()
+            start_max = search_range.max(),
+            tx = "omitted",
         );
+        if enabled!(tracing::Level::TRACE) {
+            span.record("tx", format!("{:?}", &self.tx()));
+        }
         let _e = span.enter();
 
         // Cap the gas limit to the caller's allowance and block limit
@@ -1559,11 +1568,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         // Run an estimate with the max gas limit.
         // NB: we declare these mut as we re-use the binding throughout the
         // function.
+        debug!(gas_limit = search_range.max(), "running optimistic estimate");
         let (mut estimate, mut trevm) = self.run_estimate(&search_range.max().into())?;
 
         // If it failed, no amount of gas is likely to work, so we shortcut
         // return.
         if estimate.is_failure() {
+            debug!(%estimate, "optimistic estimate failed");
             return Ok((estimate, trevm));
         }
 
