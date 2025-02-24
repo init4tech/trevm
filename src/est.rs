@@ -5,6 +5,12 @@ use std::ops::Range;
 /// binary searching.
 pub(crate) struct SearchRange(Range<u64>);
 
+impl core::fmt::Display for SearchRange {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}..{}", self.0.start, self.0.end)
+    }
+}
+
 impl From<Range<u64>> for SearchRange {
     fn from(value: Range<u64>) -> Self {
         Self(value)
@@ -25,7 +31,7 @@ impl SearchRange {
 
     /// Calculate the midpoint of the search range.
     pub(crate) const fn midpoint(&self) -> u64 {
-        (self.0.end - self.0.start) / 2
+        (self.max() + self.min()) / 2
     }
 
     /// Get the start of the search range.
@@ -38,6 +44,7 @@ impl SearchRange {
         self.0.start = min;
     }
 
+    /// Raise the minimum of the search range, if the candidate is higher.
     pub(crate) const fn maybe_raise_min(&mut self, candidate: u64) {
         if candidate > self.min() {
             self.set_min(candidate);
@@ -110,11 +117,33 @@ pub enum EstimationResult {
     },
 }
 
-impl From<&ExecutionResult> for EstimationResult {
-    fn from(value: &ExecutionResult) -> Self {
+impl core::fmt::Display for EstimationResult {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Success { estimation, refund, gas_used, .. } => {
+                write!(
+                    f,
+                    "Success {{ estimation: {}, refund: {}, gas_used: {}, .. }}",
+                    estimation, refund, gas_used
+                )
+            }
+            Self::Revert { gas_used, .. } => {
+                write!(f, "Revert {{ gas_used: {}, .. }}", gas_used)
+            }
+            Self::Halt { reason, gas_used } => {
+                write!(f, "Halt {{ reason: {:?}, gas_used: {} }}", reason, gas_used)
+            }
+        }
+    }
+}
+
+impl EstimationResult {
+    /// Initialize the estimation result from an execution result and the gas
+    /// limit of the transaction that produced the estimation.
+    pub fn from_limit_and_execution_result(limit: u64, value: &ExecutionResult) -> Self {
         match value {
             ExecutionResult::Success { gas_used, output, gas_refunded, .. } => Self::Success {
-                estimation: *gas_used,
+                estimation: limit,
                 refund: *gas_refunded,
                 gas_used: *gas_used,
                 output: output.clone(),
@@ -127,9 +156,7 @@ impl From<&ExecutionResult> for EstimationResult {
             }
         }
     }
-}
 
-impl EstimationResult {
     /// Create a successful estimation result with a gas estimation of 21000.
     pub const fn basic_transfer_success(estimation: u64) -> Self {
         Self::Success {

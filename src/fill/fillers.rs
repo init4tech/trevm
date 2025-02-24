@@ -62,6 +62,7 @@ pub(crate) struct GasEstimationFiller {
     pub(crate) gas_limit: u64,
 }
 
+#[cfg(feature = "estimate_gas")]
 impl From<u64> for GasEstimationFiller {
     fn from(gas_limit: u64) -> Self {
         Self { gas_limit }
@@ -81,5 +82,32 @@ impl Tx for GasEstimationFiller {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         DisableNonceCheck.fill_tx_env(tx_env);
         tx_env.gas_limit = self.gas_limit;
+    }
+}
+
+#[cfg(feature = "call")]
+pub(crate) struct CallFiller {
+    pub gas_limit: u64,
+}
+
+#[cfg(feature = "call")]
+impl Cfg for CallFiller {
+    fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
+        cfg_env.disable_base_fee = true;
+        cfg_env.disable_eip3607 = true;
+    }
+}
+
+#[cfg(feature = "call")]
+impl crate::Block for CallFiller {
+    fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
+        block_env.gas_limit = alloy::primitives::U256::from(self.gas_limit);
+    }
+}
+
+#[cfg(feature = "call")]
+impl Tx for CallFiller {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        DisableNonceCheck.fill_tx_env(tx_env);
     }
 }

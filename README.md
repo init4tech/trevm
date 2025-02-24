@@ -30,12 +30,18 @@ Trevm is useful for:
 
 ## Note on Trevm Versioning
 
-Trevm generally uses [semantic versioning](https://semver.org/). However, we
-also strive to indicate the MAJOR version of revm in the MINOR version of
+Trevm generally uses [semantic versioning](https://semver.org/). While pre-1.0,
+we also strive to indicate the MAJOR version of revm in the MINOR version of
 trevm. For example, trevm `0.19.x` SHOULD BE compatible with revm `19.x.x`. In
 general, we will try to maintain compatibility with the latest revm version,
 and will not backport trevm fixes to older trevm or revm versions. It is
 generally not advised to use old revm versions, as the EVM is a living spec.
+
+In order to maintain this relationship (that trevm MINOR == revm MAJOR) we will
+sometimes make breaking changes in patch versions. This is technically semver
+compliant pre-1.0, but will cause build breakage downstream for users of those
+features. We will take care to document breaking changes in patch releases
+via github release notes.
 
 ## Limitations
 
