@@ -303,7 +303,10 @@ impl Tx for alloy::rpc::types::TransactionRequest {
         } = tx_env;
 
         *caller = self.from.unwrap_or_default();
-        *gas_limit = self.gas.unwrap_or_default();
+
+        // NB: this is set to max if not provided, as users will typically
+        // intend that to mean "as much as possible"
+        *gas_limit = self.gas.unwrap_or(u64::MAX);
         *gas_price = U256::from(self.gas_price.unwrap_or_default());
         *transact_to = self.to.unwrap_or_default();
         *value = self.value.unwrap_or_default();

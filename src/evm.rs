@@ -1264,6 +1264,53 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, D
         let gas_price = self.gas_price();
         self.try_gas_allowance(self.caller(), gas_price).map_err(EVMError::Database)
     }
+
+    /// This function caps the gas limit of the transaction to the allowance of
+    /// the caller.
+    ///
+    /// This is useful for e.g. call simulation, where the exact amount of gas
+    /// used is less important than ensuring that the call succeeds and returns
+    /// a meaningful result.
+    ///
+    /// # Returns
+    ///
+    /// The gas limit after the operation.
+    pub fn cap_tx_gas_to_allowance(&mut self) -> Result<u64, EVMError<Db::Error>> {
+        let allowance = self.caller_gas_allowance()?;
+        let tx = self.inner_mut_unchecked().tx_mut();
+        tx.gas_limit = tx.gas_limit.min(allowance);
+        Ok(tx.gas_limit)
+    }
+
+    /// Cap the gas limit of the transaction to the minimum of the block gas
+    /// limit and the transaction's gas limit.
+    ///
+    /// This is useful for ensuring that the transaction does not exceed the
+    /// block gas limit, e.g. during call simulation.
+    ///
+    /// # Returns
+    ///
+    /// The gas limit after the operation.
+    pub fn cap_tx_gas_to_block_limit(&mut self) -> u64 {
+        let block_gas_limit = self.block_gas_limit().saturating_to();
+        let tx = self.inner_mut_unchecked().tx_mut();
+        tx.gas_limit = tx.gas_limit.min(block_gas_limit);
+        tx.gas_limit
+    }
+
+    /// This function caps the gas limit of the transaction to the minimum of
+    /// the block limit and the caller's gas allowance.
+    ///
+    /// This is equivalent to calling [`Self::cap_tx_gas_to_block_limit`] and
+    /// [`Self::cap_tx_gas_to_allowance`] in sequence.
+    ///
+    /// # Returns
+    ///
+    /// The gas limit after the operation.
+    pub fn cap_tx_gas(&mut self) -> Result<u64, EVMError<Db::Error>> {
+        self.cap_tx_gas_to_block_limit();
+        self.cap_tx_gas_to_allowance()
+    }
 }
 
 // -- NEEDS TX with State<Db>
