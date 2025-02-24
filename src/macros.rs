@@ -32,6 +32,7 @@ macro_rules! trevm_bail {
 macro_rules! estimate_and_adjust {
     ($est:ident, $trevm:ident, $gas_limit:ident, $range:ident) => {
         ::tracing::trace!(
+            estimate = %$est,
             gas_limit = $gas_limit,
             range = %$range,
             "running gas estimate call"

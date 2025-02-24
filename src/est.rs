@@ -31,7 +31,7 @@ impl SearchRange {
 
     /// Calculate the midpoint of the search range.
     pub(crate) const fn midpoint(&self) -> u64 {
-        (self.max() - self.min()) / 2 + self.min()
+        (self.max() + self.min()) / 2
     }
 
     /// Get the start of the search range.
@@ -117,11 +117,33 @@ pub enum EstimationResult {
     },
 }
 
-impl From<&ExecutionResult> for EstimationResult {
-    fn from(value: &ExecutionResult) -> Self {
+impl core::fmt::Display for EstimationResult {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Success { estimation, refund, gas_used, .. } => {
+                write!(
+                    f,
+                    "Success {{ estimation: {}, refund: {}, gas_used: {}, .. }}",
+                    estimation, refund, gas_used
+                )
+            }
+            Self::Revert { gas_used, .. } => {
+                write!(f, "Revert {{ gas_used: {}, .. }}", gas_used)
+            }
+            Self::Halt { reason, gas_used } => {
+                write!(f, "Halt {{ reason: {:?}, gas_used: {} }}", reason, gas_used)
+            }
+        }
+    }
+}
+
+impl EstimationResult {
+    /// Initialize the estimation result from an execution result and the gas
+    /// limit of the transaction that produced the estimation.
+    pub fn from_limit_and_execution_result(limit: u64, value: &ExecutionResult) -> Self {
         match value {
             ExecutionResult::Success { gas_used, output, gas_refunded, .. } => Self::Success {
-                estimation: *gas_used,
+                estimation: limit,
                 refund: *gas_refunded,
                 gas_used: *gas_used,
                 output: output.clone(),
@@ -134,9 +156,7 @@ impl From<&ExecutionResult> for EstimationResult {
             }
         }
     }
-}
 
-impl EstimationResult {
     /// Create a successful estimation result with a gas estimation of 21000.
     pub const fn basic_transfer_success(estimation: u64) -> Self {
         Self::Success {

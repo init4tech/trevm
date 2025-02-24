@@ -1598,7 +1598,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         needle = std::cmp::min(gas_used * 3, search_range.midpoint());
 
         // Binary search loop.
-        // This is a heuristic adopted from reth
+        // The second conditional is a heuristic adopted from geth and reth.
         // An estimation error is allowed once the current gas limit range
         // used in the binary search is small enough (less than 1.5% of the
         // highest gas limit)
@@ -1812,7 +1812,9 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
     /// [`EstimationResult`]: crate::EstimationResult
     #[cfg(feature = "estimate_gas")]
     pub fn estimation(&self) -> crate::EstimationResult {
-        self.result().into()
+        use crate::EstimationResult;
+
+        EstimationResult::from_limit_and_execution_result(self.gas_limit(), self.result())
     }
 
     /// Take the [`EstimationResult`] and return it and the EVM. This discards
