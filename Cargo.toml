@@ -37,7 +37,7 @@ revm = { version = "19.5.0", default-features = false, features = ["std"] }
 zenith-types = { version = "0.14" }
 
 dashmap = { version = "6.1.0", optional = true }
-tracing = "0.1.41"
+tracing = { version = "0.1.41", optional = true}
 
 [dev-dependencies]
 alloy-rlp = { version = "0.3", default-features = false }
@@ -70,7 +70,7 @@ call = ["optional_eip3607", "optional_no_base_fee"]
 
 concurrent-db = ["dep:dashmap"]
 
-estimate_gas = ["optional_eip3607", "optional_no_base_fee"]
+estimate_gas = ["optional_eip3607", "optional_no_base_fee", "dep:tracing"]
 
 test-utils = ["revm/test-utils", "revm/std", "revm/serde-json", "revm/alloydb"]
 
