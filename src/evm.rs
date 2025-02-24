@@ -1542,13 +1542,16 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
         let mut search_range =
             crate::est::SearchRange::new(crate::MIN_TRANSACTION_GAS, initial_limit);
 
-        // Block it to the gas cap.
-        search_range.maybe_lower_max(self.block_gas_limit().saturating_to::<u64>());
+        let span = tracing::debug_span!(
+            "estimate_gas",
+            start_min = search_range.min(),
+            start_max = search_range.max()
+        );
+        let _e = span.enter();
 
-        // Check that the account has enough ETH to cover the gas, and lower if
-        // necessary.
-        let allowance = unwrap_or_trevm_err!(self.caller_gas_allowance(), self);
-        search_range.maybe_lower_max(allowance);
+        // Cap the gas limit to the caller's allowance and block limit
+        unwrap_or_trevm_err!(self.cap_tx_gas(), self);
+        search_range.maybe_lower_max(self.gas_limit());
 
         // Raise the floor to the amount of gas required to initialize the EVM.
         search_range.maybe_raise_min(self.calculate_initial_gas());
