@@ -1,6 +1,8 @@
 use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
-use alloy::primitives::{Address, Bytes, B256, U256};
-use alloy_rlp::{Buf, BufMut};
+use alloy::{
+    primitives::{Address, Bytes, B256, U256},
+    rlp::{Buf, BufMut},
+};
 use revm::{
     db::{states::StorageSlot, BundleState},
     primitives::{
@@ -14,7 +16,6 @@ use std::{
     sync::Arc,
     vec::Vec,
 };
-
 use zenith_types::Zenith;
 
 type Result<T, E = JournalDecodeError> = core::result::Result<T, E>;

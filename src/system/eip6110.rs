@@ -1,12 +1,14 @@
-use alloy::consensus::ReceiptEnvelope;
-use alloy::primitives::{Bytes, Log};
-use alloy_rlp::BufMut;
-use alloy_sol_types::{sol, SolEvent};
+use alloy::{
+    consensus::ReceiptEnvelope,
+    primitives::{Bytes, Log},
+    rlp::BufMut,
+    sol_types::SolEvent,
+};
 
 /// The address for the Ethereum 2.0 deposit contract on the mainnet.
 pub use alloy::eips::eip6110::MAINNET_DEPOSIT_CONTRACT_ADDRESS;
 
-sol! {
+alloy::sol! {
     #[allow(missing_docs)]
     event DepositEvent(
         bytes pubkey,

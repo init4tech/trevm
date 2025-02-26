@@ -380,10 +380,10 @@ impl Block for alloy::rpc::types::BlockOverrides {
 #[cfg(test)]
 mod tests {
     use crate::{NoopBlock, NoopCfg, TrevmBuilder};
-    use alloy::consensus::{Header, TxEnvelope, EMPTY_ROOT_HASH};
-
-    use alloy_rlp::Decodable;
-
+    use alloy::{
+        consensus::{Header, TxEnvelope, EMPTY_ROOT_HASH},
+        rlp::Decodable,
+    };
     use revm::{Evm, InMemoryDB};
 
     #[test]

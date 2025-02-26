@@ -1763,13 +1763,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
     /// a [`SolCall`]. If `validate` is true, the output will be type- and
     /// range-checked.
     ///
-    /// [`SolCall`]: alloy_sol_types::SolCall
-    pub fn output_sol<T: alloy_sol_types::SolCall>(
+    /// [`SolCall`]: alloy::sol_types::SolCall
+    pub fn output_sol<T: alloy::sol_types::SolCall>(
         &self,
         validate: bool,
-    ) -> Option<alloy_sol_types::Result<T::Return>>
+    ) -> Option<alloy::sol_types::Result<T::Return>>
     where
-        T::Return: alloy_sol_types::SolType,
+        T::Return: alloy::sol_types::SolType,
     {
         self.output().map(|output| T::abi_decode_returns(output, validate))
     }
