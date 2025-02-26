@@ -1,6 +1,8 @@
 use crate::{Block, Tx};
-use alloy::primitives::{Address, U256};
-use alloy_sol_types::SolCall;
+use alloy::{
+    primitives::{Address, U256},
+    sol_types::SolCall,
+};
 use revm::primitives::{TransactTo, TxEnv};
 use zenith_types::{Passage::EnterToken, Transactor, ZenithCallBundle};
 
