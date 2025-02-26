@@ -23,26 +23,24 @@ use std::fmt;
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
 /// See the [crate-level documentation](crate) for more information.
-pub struct Trevm<'a, Ext, Db: Database + DatabaseCommit, TrevmState> {
+pub struct Trevm<'a, Ext, Db: Database, TrevmState> {
     pub(crate) inner: Box<Evm<'a, Ext, Db>>,
     pub(crate) state: TrevmState,
 }
 
-impl<Ext, Db: Database + DatabaseCommit, TrevmState> fmt::Debug for Trevm<'_, Ext, Db, TrevmState> {
+impl<Ext, Db: Database, TrevmState> fmt::Debug for Trevm<'_, Ext, Db, TrevmState> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trevm").finish_non_exhaustive()
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> AsRef<Evm<'a, Ext, Db>>
-    for Trevm<'a, Ext, Db, TrevmState>
-{
+impl<'a, Ext, Db: Database, TrevmState> AsRef<Evm<'a, Ext, Db>> for Trevm<'a, Ext, Db, TrevmState> {
     fn as_ref(&self) -> &Evm<'a, Ext, Db> {
         &self.inner
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> From<Evm<'a, Ext, Db>> for EvmNeedsCfg<'a, Ext, Db> {
+impl<'a, Ext, Db: Database> From<Evm<'a, Ext, Db>> for EvmNeedsCfg<'a, Ext, Db> {
     fn from(inner: Evm<'a, Ext, Db>) -> Self {
         Self { inner: Box::new(inner), state: NeedsCfg::new() }
     }
@@ -50,7 +48,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> From<Evm<'a, Ext, Db>> for EvmNeeds
 
 // --- ALL STATES
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
+impl<'a, Ext, Db: Database, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     /// Get a reference to the current [`Evm`].
     pub fn inner(&self) -> &Evm<'a, Ext, Db> {
         self.as_ref()
@@ -171,7 +169,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     pub fn apply_state_overrides(
         mut self,
         overrides: &StateOverride,
-    ) -> Result<Self, EVMError<Db::Error>> {
+    ) -> Result<Self, EVMError<Db::Error>>
+    where
+        Db: DatabaseCommit,
+    {
         for (address, account_override) in overrides {
             if let Some(balance) = account_override.balance {
                 self.inner.set_balance(*address, balance).map_err(EVMError::Database)?;
@@ -207,7 +208,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     pub fn maybe_apply_state_overrides(
         self,
         overrides: Option<&StateOverride>,
-    ) -> Result<Self, EVMError<Db::Error>> {
+    ) -> Result<Self, EVMError<Db::Error>>
+    where
+        Db: DatabaseCommit,
+    {
         if let Some(overrides) = overrides {
             self.apply_state_overrides(overrides)
         } else {
@@ -230,7 +234,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'a, Ext, Db, Trev
     }
 }
 
-impl<Ext, Db: Database + DatabaseCommit + DatabaseRef, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
+impl<Ext, Db: Database + DatabaseRef, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Get the current account info for a specific address.
     pub fn try_read_account_ref(
         &self,
@@ -292,9 +296,7 @@ impl<Ext, Db: Database + DatabaseCommit + DatabaseRef, TrevmState> Trevm<'_, Ext
     }
 }
 
-impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
-    Trevm<'_, Ext, Db, TrevmState>
-{
+impl<Ext, Db: Database<Error = Infallible>, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Get the current account info for a specific address.
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
@@ -332,11 +334,8 @@ impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
     }
 }
 
-impl<
-        Ext,
-        Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible> + DatabaseCommit,
-        TrevmState,
-    > Trevm<'_, Ext, Db, TrevmState>
+impl<Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>, TrevmState>
+    Trevm<'_, Ext, Db, TrevmState>
 {
     /// Get the current account info for a specific address.
     ///
@@ -371,10 +370,13 @@ impl<
     }
 }
 
-impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
+impl<Ext, Db: Database, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Commit a set of state changes to the database. This is a low-level API,
     /// and is not intended for general use. Prefer executing a transaction.
-    pub fn commit_unchecked(&mut self, state: EvmState) {
+    pub fn commit_unchecked(&mut self, state: EvmState)
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.db_mut().commit(state);
     }
 
@@ -384,7 +386,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
         &mut self,
         address: Address,
         f: F,
-    ) -> Result<AccountInfo, Db::Error> {
+    ) -> Result<AccountInfo, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.modify_account(address, f)
     }
 
@@ -394,7 +399,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
         &mut self,
         address: Address,
         nonce: u64,
-    ) -> Result<u64, Db::Error> {
+    ) -> Result<u64, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.set_nonce(address, nonce)
     }
 
@@ -403,7 +411,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
     ///
     /// If the nonce is already at the maximum value, it will not be
     /// incremented.
-    pub fn try_increment_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error> {
+    pub fn try_increment_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.increment_nonce(address)
     }
 
@@ -411,7 +422,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
     /// a low-level API, and is not intended for general use.
     ///
     /// If the nonce is already 0, it will not be decremented.
-    pub fn try_decrement_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error> {
+    pub fn try_decrement_nonce_unchecked(&mut self, address: Address) -> Result<u64, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.decrement_nonce(address)
     }
 
@@ -422,7 +436,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
         address: Address,
         slot: U256,
         value: U256,
-    ) -> Result<U256, Db::Error> {
+    ) -> Result<U256, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.set_storage(address, slot, value)
     }
 
@@ -433,7 +450,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
         &mut self,
         address: Address,
         bytecode: Bytecode,
-    ) -> Result<Option<Bytecode>, Db::Error> {
+    ) -> Result<Option<Bytecode>, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.set_bytecode(address, bytecode)
     }
 
@@ -446,7 +466,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
         &mut self,
         address: Address,
         amount: U256,
-    ) -> Result<U256, Db::Error> {
+    ) -> Result<U256, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.increase_balance(address, amount)
     }
 
@@ -458,7 +481,10 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
         &mut self,
         address: Address,
         amount: U256,
-    ) -> Result<U256, Db::Error> {
+    ) -> Result<U256, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.decrease_balance(address, amount)
     }
 
@@ -468,27 +494,34 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, Db, TrevmSta
         &mut self,
         address: Address,
         amount: U256,
-    ) -> Result<U256, Db::Error> {
+    ) -> Result<U256, Db::Error>
+    where
+        Db: DatabaseCommit,
+    {
         self.inner.set_balance(address, amount)
     }
 }
 
-impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
-    Trevm<'_, Ext, Db, TrevmState>
-{
+impl<Ext, Db: Database<Error = Infallible>, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Modify an account with a closure and commit the modified account. This
     /// is a low-level API, and is not intended for general use.
     pub fn modify_account_unchecked(
         &mut self,
         address: Address,
         f: impl FnOnce(&mut AccountInfo),
-    ) -> AccountInfo {
+    ) -> AccountInfo
+    where
+        Db: DatabaseCommit,
+    {
         self.try_modify_account_unchecked(address, f).expect("infallible")
     }
 
     /// Set the nonce of an account, returning the previous nonce. This is a
     /// low-level API, and is not intended for general use.
-    pub fn set_nonce_unchecked(&mut self, address: Address, nonce: u64) -> u64 {
+    pub fn set_nonce_unchecked(&mut self, address: Address, nonce: u64) -> u64
+    where
+        Db: DatabaseCommit,
+    {
         self.try_set_nonce_unchecked(address, nonce).expect("infallible")
     }
 
@@ -497,7 +530,10 @@ impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
     ///
     /// If this would cause the nonce to overflow, the nonce will be set to the
     /// maximum value.
-    pub fn increment_nonce_unchecked(&mut self, address: Address) -> u64 {
+    pub fn increment_nonce_unchecked(&mut self, address: Address) -> u64
+    where
+        Db: DatabaseCommit,
+    {
         self.try_increment_nonce_unchecked(address).expect("infallible")
     }
 
@@ -505,13 +541,19 @@ impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
     /// a low-level API, and is not intended for general use.
     ///
     /// If this would cause the nonce to underflow, the nonce will be set to 0.
-    pub fn decrement_nonce_unchecked(&mut self, address: Address) -> u64 {
+    pub fn decrement_nonce_unchecked(&mut self, address: Address) -> u64
+    where
+        Db: DatabaseCommit,
+    {
         self.try_decrement_nonce_unchecked(address).expect("infallible")
     }
 
     /// Set the EVM storage at a slot. This is a low-level API, and is not
     /// intended for general use.
-    pub fn set_storage_unchecked(&mut self, address: Address, slot: U256, value: U256) -> U256 {
+    pub fn set_storage_unchecked(&mut self, address: Address, slot: U256, value: U256) -> U256
+    where
+        Db: DatabaseCommit,
+    {
         self.try_set_storage_unchecked(address, slot, value).expect("infallible")
     }
 
@@ -522,32 +564,44 @@ impl<Ext, Db: Database<Error = Infallible> + DatabaseCommit, TrevmState>
         &mut self,
         address: Address,
         bytecode: Bytecode,
-    ) -> Option<Bytecode> {
+    ) -> Option<Bytecode>
+    where
+        Db: DatabaseCommit,
+    {
         self.try_set_bytecode_unchecked(address, bytecode).expect("infallible")
     }
 
     /// Increase the balance of an account. Returns the previous balance. This
     /// is a low-level API, and is not intended for general use.
-    pub fn increase_balance_unchecked(&mut self, address: Address, amount: U256) -> U256 {
+    pub fn increase_balance_unchecked(&mut self, address: Address, amount: U256) -> U256
+    where
+        Db: DatabaseCommit,
+    {
         self.try_increase_balance_unchecked(address, amount).expect("infallible")
     }
 
     /// Decrease the balance of an account. Returns the previous balance. This
     /// is a low-level API, and is not intended for general use.
-    pub fn decrease_balance_unchecked(&mut self, address: Address, amount: U256) -> U256 {
+    pub fn decrease_balance_unchecked(&mut self, address: Address, amount: U256) -> U256
+    where
+        Db: DatabaseCommit,
+    {
         self.try_decrease_balance_unchecked(address, amount).expect("infallible")
     }
 
     /// Set the balance of an account. Returns the previous balance. This is a
     /// low-level API, and is not intended for general use.
-    pub fn set_balance_unchecked(&mut self, address: Address, amount: U256) -> U256 {
+    pub fn set_balance_unchecked(&mut self, address: Address, amount: U256) -> U256
+    where
+        Db: DatabaseCommit,
+    {
         self.try_set_balance_unchecked(address, amount).expect("infallible")
     }
 }
 
 // --- ALL STATES, WITH State<Db>
 
-impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, State<Db>, TrevmState> {
+impl<Ext, Db: Database, TrevmState> Trevm<'_, Ext, State<Db>, TrevmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
@@ -557,7 +611,7 @@ impl<Ext, Db: Database + DatabaseCommit, TrevmState> Trevm<'_, Ext, State<Db>, T
 
 // --- NEEDS CFG
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsCfg<'a, Ext, Db> {
+impl<'a, Ext, Db: Database> EvmNeedsCfg<'a, Ext, Db> {
     /// Fill the configuration environment.
     pub fn fill_cfg<T: Cfg>(mut self, filler: &T) -> EvmNeedsBlock<'a, Ext, Db> {
         filler.fill_cfg(&mut self.inner);
@@ -568,7 +622,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsCfg<'a, Ext, Db> {
 
 // --- HAS CFG
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, Db, TrevmState> {
+impl<'a, Ext, Db: Database, TrevmState: HasCfg> Trevm<'a, Ext, Db, TrevmState> {
     /// Set the [EIP-170] contract code size limit. By default this is set to
     /// 0x6000 bytes (~25KiB). Contracts whose bytecode is larger than this
     /// limit cannot be deployed and will produce a [`CreateInitCodeSizeLimit`]
@@ -878,12 +932,13 @@ impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasCfg> Trevm<'a, Ext, 
 
 // --- NEEDS BLOCK
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
+impl<'a, Ext, Db: Database> EvmNeedsBlock<'a, Ext, Db> {
     /// Open a block, apply some logic, and return the EVM ready for the next
     /// block.
     pub fn drive_block<D>(self, driver: &mut D) -> DriveBlockResult<'a, Ext, Db, D>
     where
         D: BlockDriver<Ext>,
+        Db: DatabaseCommit,
     {
         let trevm = self.fill_block(driver.block());
         let trevm = driver.run_txns(trevm)?;
@@ -904,6 +959,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
     pub fn drive_chain<D>(self, driver: &mut D) -> DriveChainResult<'a, Ext, Db, D>
     where
         D: ChainDriver<Ext>,
+        Db: DatabaseCommit,
     {
         let block_count = driver.blocks().len();
 
@@ -942,7 +998,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsBlock<'a, Ext, Db> {
 
 // --- HAS BLOCK
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState> {
+impl<'a, Ext, Db: Database, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState> {
     /// Get a reference to the current block environment.
     pub fn block(&self) -> &BlockEnv {
         self.inner.block()
@@ -1029,7 +1085,7 @@ impl<Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
 
 // --- NEEDS TX
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
+impl<'a, Ext, Db: Database> EvmNeedsTx<'a, Ext, Db> {
     /// Close the current block, returning the EVM ready for the next block.
     pub fn close_block(self) -> EvmNeedsBlock<'a, Ext, Db> {
         // SAFETY: Same size and repr. Only phantomdata type changes
@@ -1041,6 +1097,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
     pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<'a, Ext, Db, D>
     where
         D: BundleDriver<Ext>,
+        Db: DatabaseCommit,
     {
         let trevm = driver.run_bundle(self)?;
 
@@ -1097,7 +1154,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'a, Ext, Db> {
 
 // --- HAS TX
 
-impl<'a, Ext, Db: Database + DatabaseCommit, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
+impl<'a, Ext, Db: Database, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
     #[cfg(feature = "call")]
     fn try_with_call_filler<NewState: HasCfg + HasBlock>(
         self,
@@ -1349,7 +1406,7 @@ impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
 
 // --- READY
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
+impl<'a, Ext, Db: Database> EvmReady<'a, Ext, Db> {
     /// Clear the current transaction environment.
     pub fn clear_tx(self) -> EvmNeedsTx<'a, Ext, Db> {
         // NB: we do not clear the tx env here, as we may read it during post-tx
@@ -1625,7 +1682,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmReady<'a, Ext, Db> {
 
 // --- ERRORED
 
-impl<'a, Ext, Db: Database + DatabaseCommit, E> EvmErrored<'a, Ext, Db, E> {
+impl<'a, Ext, Db: Database, E> EvmErrored<'a, Ext, Db, E> {
     /// Get a reference to the error.
     pub const fn error(&self) -> &E {
         &self.state.error
@@ -1670,7 +1727,7 @@ impl<'a, Ext, Db: Database + DatabaseCommit, E> EvmErrored<'a, Ext, Db, E> {
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmErrored<'a, Ext, Db> {
+impl<'a, Ext, Db: Database> EvmErrored<'a, Ext, Db> {
     /// Check if the error is a transaction error. This is provided as a
     /// convenience function for common cases, as Transaction errors should
     /// usually be discarded.
@@ -1699,19 +1756,19 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmErrored<'a, Ext, Db> {
 
 // --- TRANSACTED
 
-impl<Ext, Db: Database + DatabaseCommit> AsRef<ResultAndState> for EvmTransacted<'_, Ext, Db> {
+impl<Ext, Db: Database> AsRef<ResultAndState> for EvmTransacted<'_, Ext, Db> {
     fn as_ref(&self) -> &ResultAndState {
         &self.state.result
     }
 }
 
-impl<Ext, Db: Database + DatabaseCommit> AsRef<ExecutionResult> for EvmTransacted<'_, Ext, Db> {
+impl<Ext, Db: Database> AsRef<ExecutionResult> for EvmTransacted<'_, Ext, Db> {
     fn as_ref(&self) -> &ExecutionResult {
         &self.state.result.result
     }
 }
 
-impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
+impl<'a, Ext, Db: Database> EvmTransacted<'a, Ext, Db> {
     /// Get a reference to the result.
     pub fn result(&self) -> &ExecutionResult {
         self.as_ref()
@@ -1804,7 +1861,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
 
     /// Accept the state changes, commiting them to the database, and return the
     /// EVM with the [`ExecutionResult`].
-    pub fn accept(self) -> (ExecutionResult, EvmNeedsTx<'a, Ext, Db>) {
+    pub fn accept(self) -> (ExecutionResult, EvmNeedsTx<'a, Ext, Db>)
+    where
+        Db: DatabaseCommit,
+    {
         let Trevm { mut inner, state: TransactedState { result } } = self;
 
         inner.db_mut().commit(result.state);
@@ -1814,7 +1874,10 @@ impl<'a, Ext, Db: Database + DatabaseCommit> EvmTransacted<'a, Ext, Db> {
 
     /// Accept the state changes, commiting them to the database. Do not return
     /// the [`ExecutionResult.`]
-    pub fn accept_state(self) -> EvmNeedsTx<'a, Ext, Db> {
+    pub fn accept_state(self) -> EvmNeedsTx<'a, Ext, Db>
+    where
+        Db: DatabaseCommit,
+    {
         self.accept().1
     }
 

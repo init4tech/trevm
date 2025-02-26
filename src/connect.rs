@@ -1,7 +1,7 @@
 use core::convert::Infallible;
 use revm::{
     primitives::{EVMError, ResultAndState},
-    Database, DatabaseCommit,
+    Database,
 };
 use std::format;
 
@@ -21,7 +21,7 @@ use crate::{
 /// threads.
 pub trait DbConnect<'a>: Sync {
     /// The database type returned when connecting.
-    type Database: Database + DatabaseCommit;
+    type Database: Database;
 
     /// The error type returned when connecting to the database.
     type Error: core::error::Error;
@@ -32,7 +32,7 @@ pub trait DbConnect<'a>: Sync {
 
 impl<Db> DbConnect<'_> for Db
 where
-    Db: Database + DatabaseCommit + Clone + Sync,
+    Db: Database + Clone + Sync,
 {
     type Database = Self;
 

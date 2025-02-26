@@ -411,21 +411,19 @@ pub use revm;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 
-use revm::{Database, DatabaseCommit, EvmBuilder};
+use revm::{Database, EvmBuilder};
 
 /// The minimum gas required for a transaction.
 pub const MIN_TRANSACTION_GAS: u64 = 21_000;
 
 /// Ext trait for [`EvmBuilder`] that builds a [`Trevm`], and adds features for
 /// [`DbConnect`].
-pub trait TrevmBuilder<'a, Ext, Db: Database + DatabaseCommit> {
+pub trait TrevmBuilder<'a, Ext, Db: Database> {
     /// Builds the [`Trevm`].
     fn build_trevm(self) -> EvmNeedsCfg<'a, Ext, Db>;
 }
 
-impl<'a, Stage, Ext, Db: Database + DatabaseCommit> TrevmBuilder<'a, Ext, Db>
-    for EvmBuilder<'a, Stage, Ext, Db>
-{
+impl<'a, Stage, Ext, Db: Database> TrevmBuilder<'a, Ext, Db> for EvmBuilder<'a, Stage, Ext, Db> {
     /// Builds the [`Trevm`].
     fn build_trevm(self) -> EvmNeedsCfg<'a, Ext, Db> {
         Trevm::from(self.build())

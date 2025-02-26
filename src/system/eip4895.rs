@@ -10,10 +10,7 @@ impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
     pub fn apply_withdrawals<'b>(
         &mut self,
         withdrawals: impl IntoIterator<Item = &'b Withdrawal>,
-    ) -> Result<(), EVMError<Db::Error>>
-    where
-        Db: Database + DatabaseCommit,
-    {
+    ) -> Result<(), EVMError<Db::Error>> {
         // We need to apply the withdrawals by incrementing the balances of the
         // respective accounts, then committing the changes to the database.
         let mut changes = HashMap::default();
