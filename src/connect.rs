@@ -1,13 +1,12 @@
+use crate::{
+    Block, Cfg, EvmErrored, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, Tx,
+};
 use core::convert::Infallible;
 use revm::{
     primitives::{EVMError, ResultAndState},
     Database,
 };
 use std::format;
-
-use crate::{
-    Block, Cfg, EvmErrored, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, Tx,
-};
 
 /// Trait for types that can be used to connect to a database.
 ///
