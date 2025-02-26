@@ -10,16 +10,5 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  rust-base:
-    uses: init4tech/actions/.github/workflows/rust-base.yml@main
-  feature-checks:
-    name: Feature Checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - run: cargo clippy --all-targets --all-features
-      - run: cargo clippy --all-targets --no-default-features
+  rust-library-base:
+    uses: init4tech/actions/.github/workflows/rust-library-base.yml@main
