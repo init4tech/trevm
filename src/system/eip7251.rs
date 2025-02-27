@@ -50,10 +50,7 @@ impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
     /// consolidation requests.
     ///
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    pub fn apply_eip7251(&mut self) -> Result<Bytes, EVMError<Db::Error>>
-    where
-        Db: Database + DatabaseCommit,
-    {
+    pub fn apply_eip7251(&mut self) -> Result<Bytes, EVMError<Db::Error>> {
         if self.spec_id() < SpecId::PRAGUE {
             return Ok(Bytes::new());
         }
