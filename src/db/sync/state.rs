@@ -1,4 +1,4 @@
-use crate::db::ConcurrentCacheState;
+use crate::db::sync::ConcurrentCacheState;
 use alloy::primitives::{Address, B256, U256};
 use dashmap::mapref::one::RefMut;
 use revm::{

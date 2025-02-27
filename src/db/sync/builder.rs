@@ -1,4 +1,4 @@
-use crate::db::ConcurrentState;
+use crate::db::sync::ConcurrentState;
 use revm::{
     db::{
         states::{BundleState, TransitionState},
