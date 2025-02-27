@@ -50,6 +50,10 @@ impl<Db: Database> StateAcc for State<Db> {
 /// use to accumulate state changes during the execution of a sequence of
 /// transactions, and then provide access to the net changes in the form of a
 /// [`BundleState`].
+///
+/// The primary motivator for this trait is to allow for the implementation of
+/// [`StateAcc`] for [`Arc`]-wrapped DBs, which may fail to mutate if the
+/// reference is not unique.
 pub trait TryStateAcc: Sync {
     /// Error type to be thrown when state accumulation fails.
     type Error: core::error::Error;
