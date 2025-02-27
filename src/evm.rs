@@ -1,16 +1,17 @@
 use crate::{
-    driver::DriveBlockResult, Block, BlockDriver, BundleDriver, Cfg, ChainDriver,
-    DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock,
-    EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx,
-    TransactedState, Tx,
+    db::{StateAcc, TryDatabaseCommit, TryStateAcc},
+    driver::DriveBlockResult,
+    Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
+    ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
+    EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
 };
 use alloy::{
     primitives::{Address, Bytes, U256},
     rpc::types::{state::StateOverride, BlockOverrides},
 };
-use core::convert::Infallible;
+use core::{convert::Infallible, fmt};
 use revm::{
-    db::{states::bundle_state::BundleRetention, BundleState, State},
+    db::{states::bundle_state::BundleRetention, BundleState},
     interpreter::gas::calculate_initial_tx_gas,
     primitives::{
         AccountInfo, AuthorizationList, BlockEnv, Bytecode, EVMError, Env, EvmState,
@@ -18,7 +19,6 @@ use revm::{
     },
     Database, DatabaseCommit, DatabaseRef, Evm,
 };
-use std::fmt;
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
@@ -372,7 +372,8 @@ impl<Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>, Tr
 
 impl<Ext, Db: Database, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Commit a set of state changes to the database. This is a low-level API,
-    /// and is not intended for general use. Prefer executing a transaction.
+    /// and is not intended for general use. Regular users should prefer
+    /// executing a transaction.
     pub fn commit_unchecked(&mut self, state: EvmState)
     where
         Db: DatabaseCommit,
@@ -601,11 +602,25 @@ impl<Ext, Db: Database<Error = Infallible>, TrevmState> Trevm<'_, Ext, Db, Trevm
 
 // --- ALL STATES, WITH State<Db>
 
-impl<Ext, Db: Database, TrevmState> Trevm<'_, Ext, State<Db>, TrevmState> {
+impl<Ext, Db: Database + StateAcc, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
         self.inner.db_mut().set_state_clear_flag(flag)
+    }
+}
+
+impl<Ext, Db: Database + TryStateAcc, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
+    /// Fallibly set the [EIP-161] state clear flag, activated in the Spurious
+    /// Dragon hardfork. This function is intended to be used by shared states,
+    /// where mutable access may fail, e.g. an `Arc<Db>`.
+    ///
+    /// Prefer [`Self::set_state_clear_flag`] when available.
+    pub fn try_set_state_clear_flag(
+        &mut self,
+        flag: bool,
+    ) -> Result<(), <Db as TryStateAcc>::Error> {
+        self.inner.db_mut().try_set_state_clear_flag(flag)
     }
 }
 
@@ -1066,7 +1081,7 @@ impl<'a, Ext, Db: Database, TrevmState: HasBlock> Trevm<'a, Ext, Db, TrevmState>
 
 // --- Needs Block with State<Db>
 
-impl<Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
+impl<Ext, Db: Database + StateAcc> EvmNeedsBlock<'_, Ext, Db> {
     /// Finish execution and return the outputs.
     ///
     /// If the State has not been built with
@@ -1074,12 +1089,41 @@ impl<Ext, Db: Database> EvmNeedsBlock<'_, Ext, State<Db>> {
     /// [`BundleState`] will be meaningless.
     ///
     /// See [`State::merge_transitions`] and [`State::take_bundle`].
+    ///
+    /// [`State::merge_transitions`]: revm::db::State::merge_transitions
+    /// [`State::take_bundle`]: revm::db::State::take_bundle
     pub fn finish(self) -> BundleState {
         let Self { inner: mut evm, .. } = self;
         evm.db_mut().merge_transitions(BundleRetention::Reverts);
         let bundle = evm.db_mut().take_bundle();
 
         bundle
+    }
+}
+
+impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsBlock<'a, Ext, Db> {
+    /// Fallibly finish execution and return the outputs. This function is
+    /// intended to be used by shared states, where mutable access may fail, e.
+    /// g. an `Arc<Db>`. Prefer [`Self::finish`] when available.
+    ///
+    /// If the State has not been built with
+    /// [revm::StateBuilder::with_bundle_update] then the returned
+    /// [`BundleState`] will be meaningless.
+    ///
+    /// See [`State::merge_transitions`] and [`State::take_bundle`].
+    ///
+    /// [`State::merge_transitions`]: revm::db::State::merge_transitions
+    /// [`State::take_bundle`]: revm::db::State::take_bundle
+    pub fn try_finish(
+        mut self,
+    ) -> Result<BundleState, EvmErrored<'a, Ext, Db, <Db as TryStateAcc>::Error>> {
+        let db = self.inner.db_mut();
+
+        unwrap_or_trevm_err!(db.try_merge_transitions(BundleRetention::Reverts), self);
+
+        let bundle = unwrap_or_trevm_err!(db.try_take_bundle(), self);
+
+        Ok(bundle)
     }
 }
 
@@ -1372,21 +1416,68 @@ impl<'a, Ext, Db: Database, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
 
 // -- NEEDS TX with State<Db>
 
-impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
+impl<Ext, Db: Database + StateAcc> EvmNeedsTx<'_, Ext, Db> {
+    /// Apply block overrides to the current block. This function is
+    /// intended to be used by shared states, where mutable access may fail, e.
+    /// g. an `Arc<Db>`. Prefer [`Self::try_apply_block_overrides`] when
+    /// available.
+    ///
+    /// Note that this is NOT reversible. The overrides are applied directly to
+    /// the underlying state and these changes cannot be removed. If it is
+    /// important that you have access to the pre-change state, you should wrap
+    /// the existing DB in a new [`State`] and apply the overrides to that.
+    ///
+    /// [`State`]: revm::db::State
+    pub fn try_apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
+        overrides.fill_block(&mut self.inner);
+
+        if let Some(hashes) = overrides.block_hash.as_ref() {
+            self.inner.db_mut().set_block_hashes(hashes)
+        }
+
+        self
+    }
+
+    /// Apply block overrides to the current block, if they are provided. This
+    /// function is intended to be used by shared states, where mutable access
+    /// may fail, e.g. an `Arc<Db>`.Prefer
+    /// [`Self::try_maybe_apply_block_overrides`] when available.
+    ///
+    /// Note that this is NOT reversible. The overrides are applied directly to
+    /// the underlying state and these changes cannot be removed. If it is
+    /// important that you have access to the pre-change state, you should wrap
+    /// the existing DB in a new [`State`] and apply the overrides to that.
+    ///
+    /// [`State`]: revm::db::State
+    pub fn try_maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
+        if let Some(overrides) = overrides {
+            self.try_apply_block_overrides(overrides)
+        } else {
+            self
+        }
+    }
+}
+
+impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsTx<'a, Ext, Db> {
     /// Apply block overrides to the current block.
     ///
     /// Note that this is NOT reversible. The overrides are applied directly to
     /// the underlying state and these changes cannot be removed. If it is
     /// important that you have access to the pre-change state, you should wrap
     /// the existing DB in a new [`State`] and apply the overrides to that.
-    pub fn apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
+    ///
+    /// [`State`]: revm::db::State
+    pub fn apply_block_overrides(
+        mut self,
+        overrides: &BlockOverrides,
+    ) -> Result<Self, EvmErrored<'a, Ext, Db, <Db as TryStateAcc>::Error>> {
         overrides.fill_block(&mut self.inner);
 
-        if let Some(hashes) = &overrides.block_hash {
-            self.inner.db_mut().block_hashes.extend(hashes)
+        if let Some(hashes) = overrides.block_hash.as_ref() {
+            unwrap_or_trevm_err!(self.inner.db_mut().try_set_block_hashes(hashes), self);
         }
 
-        self
+        Ok(self)
     }
 
     /// Apply block overrides to the current block, if they are provided.
@@ -1395,11 +1486,16 @@ impl<Ext, Db: Database> EvmNeedsTx<'_, Ext, State<Db>> {
     /// the underlying state and these changes cannot be removed. If it is
     /// important that you have access to the pre-change state, you should wrap
     /// the existing DB in a new [`State`] and apply the overrides to that.
-    pub fn maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
+    ///
+    /// [`State`]: revm::db::State
+    pub fn maybe_apply_block_overrides(
+        self,
+        overrides: Option<&BlockOverrides>,
+    ) -> Result<Self, EvmErrored<'a, Ext, Db, <Db as TryStateAcc>::Error>> {
         if let Some(overrides) = overrides {
             self.apply_block_overrides(overrides)
         } else {
-            self
+            Ok(self)
         }
     }
 }
@@ -1872,6 +1968,31 @@ impl<'a, Ext, Db: Database> EvmTransacted<'a, Ext, Db> {
         (result.result, Trevm { inner, state: NeedsTx::new() })
     }
 
+    /// Try to accept the state changes, commiting them to the database, and
+    /// return the EVM with the [`ExecutionResult`]. If the commit fails, return
+    /// the EVM with the error, discarding the state changes. This is a fallible
+    /// version of [`Self::accept`], intended for use with databases that can
+    /// fail to commit. Prefer [`Self::accept`] when possible.
+    // Type alias would make it less clear I think
+    #[allow(clippy::type_complexity)]
+    pub fn try_accept(
+        self,
+    ) -> Result<
+        (ExecutionResult, EvmNeedsTx<'a, Ext, Db>),
+        EvmErrored<'a, Ext, Db, <Db as TryDatabaseCommit>::Error>,
+    >
+    where
+        Db: TryDatabaseCommit,
+    {
+        let Trevm { mut inner, state: TransactedState { result } } = self;
+
+        unwrap_or_trevm_err!(
+            inner.db_mut().try_commit(result.state),
+            Trevm { inner, state: NeedsTx::new() }
+        );
+        Ok((result.result, Trevm { inner, state: NeedsTx::new() }))
+    }
+
     /// Accept the state changes, commiting them to the database. Do not return
     /// the [`ExecutionResult.`]
     pub fn accept_state(self) -> EvmNeedsTx<'a, Ext, Db>
@@ -1879,6 +2000,20 @@ impl<'a, Ext, Db: Database> EvmTransacted<'a, Ext, Db> {
         Db: DatabaseCommit,
     {
         self.accept().1
+    }
+
+    /// Try to accept the state changes, commiting them to the database. If the
+    /// commit fails, return the EVM with the error, discarding the state
+    /// changes. This is a fallible version of [`Self::accept_state`], intended
+    /// for use with databases that can fail to commit. Prefer
+    /// [`Self::accept_state`] when possible.
+    pub fn try_accept_state(
+        self,
+    ) -> Result<EvmNeedsTx<'a, Ext, Db>, EvmErrored<'a, Ext, Db, <Db as TryDatabaseCommit>::Error>>
+    where
+        Db: TryDatabaseCommit,
+    {
+        self.try_accept().map(|(_, evm)| evm)
     }
 
     /// Create an [`EstimationResult`] from the transaction [`ExecutionResult`].

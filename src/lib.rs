@@ -367,8 +367,7 @@ mod macros;
 mod connect;
 pub use connect::{DbConnect, EvmFactory};
 
-/// Contains database implementations for concurrent EVM operation.
-#[cfg(feature = "concurrent-db")]
+/// Contains database implementations and related
 pub mod db;
 
 mod driver;
