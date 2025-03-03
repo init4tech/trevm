@@ -11,10 +11,13 @@ use alloy::{
         EthSendBundle,
     },
 };
-use revm::primitives::{EVMError, ExecutionResult, SpecId};
+use revm::{
+    primitives::{EVMError, ExecutionResult, SpecId},
+    Database, DatabaseCommit,
+};
 
 /// Possible errors that can occur while driving a bundle.
-pub enum BundleError<Db: revm::Database> {
+pub enum BundleError<Db: Database> {
     /// The block number of the bundle does not match the block number of the revm block configuration.
     BlockNumberMismatch,
     /// The timestamp of the bundle is out of range.
@@ -38,7 +41,7 @@ pub enum BundleError<Db: revm::Database> {
     },
 }
 
-impl<Db: revm::Database> core::fmt::Display for BundleError<Db> {
+impl<Db: Database> core::fmt::Display for BundleError<Db> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::BlockNumberMismatch => {
@@ -58,25 +61,25 @@ impl<Db: revm::Database> core::fmt::Display for BundleError<Db> {
     }
 }
 
-impl<Db: revm::Database> From<alloy::eips::eip2718::Eip2718Error> for BundleError<Db> {
+impl<Db: Database> From<alloy::eips::eip2718::Eip2718Error> for BundleError<Db> {
     fn from(err: alloy::eips::eip2718::Eip2718Error) -> Self {
         Self::TransactionDecodingError(err)
     }
 }
 
-impl<Db: revm::Database> From<alloy::primitives::SignatureError> for BundleError<Db> {
+impl<Db: Database> From<alloy::primitives::SignatureError> for BundleError<Db> {
     fn from(err: alloy::primitives::SignatureError) -> Self {
         Self::TransactionSenderRecoveryError(err)
     }
 }
 
-impl<Db: revm::Database> From<EVMError<Db::Error>> for BundleError<Db> {
+impl<Db: Database> From<EVMError<Db::Error>> for BundleError<Db> {
     fn from(inner: EVMError<Db::Error>) -> Self {
         Self::EVMError { inner }
     }
 }
 
-impl<Db: revm::Database> std::error::Error for BundleError<Db> {
+impl<Db: Database> std::error::Error for BundleError<Db> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::TransactionDecodingError(err) => Some(err),
@@ -86,7 +89,7 @@ impl<Db: revm::Database> std::error::Error for BundleError<Db> {
     }
 }
 
-impl<Db: revm::Database> core::fmt::Debug for BundleError<Db> {
+impl<Db: Database> core::fmt::Debug for BundleError<Db> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::TimestampOutOfRange => write!(f, "TimestampOutOfRange"),
@@ -141,7 +144,7 @@ where
 
 impl<B, R> BundleProcessor<B, R> {
     /// Decode and validate the transactions in the bundle, performing EIP4844 gas checks.
-    pub fn decode_and_validate_txs<Db: revm::Database>(
+    pub fn decode_and_validate_txs<Db: Database + DatabaseCommit>(
         txs: &[Bytes],
     ) -> Result<Vec<TxEnvelope>, BundleError<Db>> {
         let txs = txs
@@ -175,7 +178,7 @@ impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
     }
 
     /// Process a bundle transaction and accumulate the results into a [EthCallBundleTransactionResult].
-    pub fn process_call_bundle_tx<Db: revm::Database>(
+    pub fn process_call_bundle_tx<Db: Database + DatabaseCommit>(
         tx: &TxEnvelope,
         pre_sim_coinbase_balance: U256,
         post_sim_coinbase_balance: U256,
@@ -257,9 +260,9 @@ impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
 }
 
 impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResponse> {
-    type Error<Db: revm::Database> = BundleError<Db>;
+    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<'a, Db: revm::Database + revm::DatabaseCommit>(
+    fn run_bundle<'a, Db: Database + revm::DatabaseCommit>(
         &mut self,
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
@@ -389,7 +392,7 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
         }
     }
 
-    fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(
+    fn post_bundle<Db: Database + revm::DatabaseCommit>(
         &mut self,
         _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
@@ -398,9 +401,9 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
 }
 
 impl<Ext> BundleDriver<Ext> for BundleProcessor<EthSendBundle, EthBundleHash> {
-    type Error<Db: revm::Database> = BundleError<Db>;
+    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<'a, Db: revm::Database + revm::DatabaseCommit>(
+    fn run_bundle<'a, Db: Database + revm::DatabaseCommit>(
         &mut self,
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
@@ -476,7 +479,7 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthSendBundle, EthBundleHash> {
         }
     }
 
-    fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(
+    fn post_bundle<Db: Database + revm::DatabaseCommit>(
         &mut self,
         _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
@@ -541,9 +544,9 @@ impl From<EthCallBundle> for BundleBlockFiller {
 }
 
 impl<Ext> BundleDriver<Ext> for EthCallBundle {
-    type Error<Db: revm::Database> = BundleError<Db>;
+    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<'a, Db: revm::Database + revm::DatabaseCommit>(
+    fn run_bundle<'a, Db: Database + revm::DatabaseCommit>(
         &mut self,
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
@@ -619,7 +622,7 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
         }
     }
 
-    fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(
+    fn post_bundle<Db: Database + revm::DatabaseCommit>(
         &mut self,
         _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {
@@ -631,9 +634,9 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
 /// This allows us to drive a bundle of transactions and accumulate the resulting state in the EVM.
 /// Allows to simply take an [EthSendBundle] and get the resulting EVM state.
 impl<Ext> BundleDriver<Ext> for EthSendBundle {
-    type Error<Db: revm::Database> = BundleError<Db>;
+    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<'a, Db: revm::Database + revm::DatabaseCommit>(
+    fn run_bundle<'a, Db: Database + revm::DatabaseCommit>(
         &mut self,
         trevm: crate::EvmNeedsTx<'a, Ext, Db>,
     ) -> DriveBundleResult<'a, Ext, Db, Self> {
@@ -724,7 +727,7 @@ impl<Ext> BundleDriver<Ext> for EthSendBundle {
         Ok(t)
     }
 
-    fn post_bundle<Db: revm::Database + revm::DatabaseCommit>(
+    fn post_bundle<Db: Database + revm::DatabaseCommit>(
         &mut self,
         _trevm: &crate::EvmNeedsTx<'_, Ext, Db>,
     ) -> Result<(), Self::Error<Db>> {

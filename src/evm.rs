@@ -61,9 +61,22 @@ impl<'a, Ext, Db: Database, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
         &mut self.inner
     }
 
-    /// Destructure the [`Trevm`] into its parts.
+    /// Destructure the [`Trevm`] into its inner EVM.
     pub fn into_inner(self) -> Box<Evm<'a, Ext, Db>> {
         self.inner
+    }
+
+    /// Deconstruct the [`Trevm`] into the backing DB, dropping the EVM handler
+    /// table and any `Ext` type.
+    ///
+    /// This is a wrapper for [`Evm::into_db_and_env_with_handler_cfg`], and
+    /// then dropping the [`EnvWithHandlerCfg`]. If you need to retain the
+    /// [`EnvWithHandlerCfg`], use [`Self::into_inner`] and then call
+    /// [`Evm::into_db_and_env_with_handler_cfg`] on the inner EVM.
+    ///
+    /// [`EnvWithHandlerCfg`]: revm::primitives::EnvWithHandlerCfg
+    pub fn into_db(self) -> Db {
+        self.inner.into_db_and_env_with_handler_cfg().0
     }
 
     /// Get a reference to the inner env. This contains the current
@@ -125,45 +138,6 @@ impl<'a, Ext, Db: Database, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
         EvmErrored { inner: self.inner, state: ErroredState { error } }
     }
 
-    /// Get the current account info for a specific address.
-    ///
-    /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_account(&mut self, address: Address) -> Result<Option<AccountInfo>, Db::Error> {
-        self.inner.db_mut().basic(address)
-    }
-
-    /// Get the current nonce for a specific address
-    ///
-    /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_nonce(&mut self, address: Address) -> Result<u64, Db::Error> {
-        self.try_read_account(address).map(|a| a.map(|a| a.nonce).unwrap_or_default())
-    }
-
-    /// Get the current nonce for a specific address
-    ///
-    /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_balance(&mut self, address: Address) -> Result<U256, Db::Error> {
-        self.try_read_account(address).map(|a| a.map(|a| a.balance).unwrap_or_default())
-    }
-
-    /// Get the value of a storage slot.
-    ///
-    /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_storage(&mut self, address: Address, slot: U256) -> Result<U256, Db::Error> {
-        self.inner.db_mut().storage(address, slot)
-    }
-
-    /// Get the code at the given account, if any.
-    ///
-    /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_code(&mut self, address: Address) -> Result<Option<Bytecode>, Db::Error> {
-        let acct_info = self.try_read_account(address)?;
-        match acct_info {
-            Some(acct) => Ok(Some(self.inner.db_mut().code_by_hash(acct.code_hash)?)),
-            None => Ok(None),
-        }
-    }
-
     /// Apply [`StateOverride`]s to the current state. Errors if the overrides
     /// contain invalid bytecode.
     pub fn apply_state_overrides(
@@ -218,6 +192,48 @@ impl<'a, Ext, Db: Database, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
             Ok(self)
         }
     }
+}
+
+// Fallible DB Reads with &mut self
+impl<Ext, Db: Database, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
+    /// Get the current account info for a specific address.
+    ///
+    /// Note: due to revm's DB model, this requires a mutable pointer.
+    pub fn try_read_account(&mut self, address: Address) -> Result<Option<AccountInfo>, Db::Error> {
+        self.inner.db_mut().basic(address)
+    }
+
+    /// Get the current nonce for a specific address
+    ///
+    /// Note: due to revm's DB model, this requires a mutable pointer.
+    pub fn try_read_nonce(&mut self, address: Address) -> Result<u64, Db::Error> {
+        self.try_read_account(address).map(|a| a.map(|a| a.nonce).unwrap_or_default())
+    }
+
+    /// Get the current nonce for a specific address
+    ///
+    /// Note: due to revm's DB model, this requires a mutable pointer.
+    pub fn try_read_balance(&mut self, address: Address) -> Result<U256, Db::Error> {
+        self.try_read_account(address).map(|a| a.map(|a| a.balance).unwrap_or_default())
+    }
+
+    /// Get the value of a storage slot.
+    ///
+    /// Note: due to revm's DB model, this requires a mutable pointer.
+    pub fn try_read_storage(&mut self, address: Address, slot: U256) -> Result<U256, Db::Error> {
+        self.inner.db_mut().storage(address, slot)
+    }
+
+    /// Get the code at the given account, if any.
+    ///
+    /// Note: due to revm's DB model, this requires a mutable pointer.
+    pub fn try_read_code(&mut self, address: Address) -> Result<Option<Bytecode>, Db::Error> {
+        let acct_info = self.try_read_account(address)?;
+        match acct_info {
+            Some(acct) => Ok(Some(self.inner.db_mut().code_by_hash(acct.code_hash)?)),
+            None => Ok(None),
+        }
+    }
 
     /// Get the gas allowance for a specific caller and gas price.
     pub fn try_gas_allowance(
@@ -234,6 +250,7 @@ impl<'a, Ext, Db: Database, TrevmState> Trevm<'a, Ext, Db, TrevmState> {
     }
 }
 
+// Fallible DB Reads with &self
 impl<Ext, Db: Database + DatabaseRef, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Get the current account info for a specific address.
     pub fn try_read_account_ref(
@@ -296,6 +313,7 @@ impl<Ext, Db: Database + DatabaseRef, TrevmState> Trevm<'_, Ext, Db, TrevmState>
     }
 }
 
+// Infallible DB Reads with &mut self
 impl<Ext, Db: Database<Error = Infallible>, TrevmState> Trevm<'_, Ext, Db, TrevmState> {
     /// Get the current account info for a specific address.
     ///
@@ -334,6 +352,7 @@ impl<Ext, Db: Database<Error = Infallible>, TrevmState> Trevm<'_, Ext, Db, Trevm
     }
 }
 
+// Infalible DB Reads with &self
 impl<Ext, Db: Database<Error = Infallible> + DatabaseRef<Error = Infallible>, TrevmState>
     Trevm<'_, Ext, Db, TrevmState>
 {
