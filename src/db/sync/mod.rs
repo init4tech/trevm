@@ -1,12 +1,14 @@
 mod builder;
-
 pub use builder::ConcurrentStateBuilder;
 
 mod cache;
 pub use cache::ConcurrentCacheState;
 
+mod error;
+pub use error::ConcurrentStateError;
+
 mod state;
-pub use state::{ConcurrentState, ConcurrentStateInfo};
+pub use state::{Child, ConcurrentState, ConcurrentStateInfo};
 
 use crate::db::StateAcc;
 use revm::{
