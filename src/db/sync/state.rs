@@ -14,7 +14,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-/// A [`Child`] is a [`CacheDB`] that wraps a [`ConcurrentState`].
+/// A [`Child`] is a [`ConcurrentState`] wrapping another [`ConcurrentState`]
+/// in an [`Arc`]. This allows for tiered caching, where the child can be
+/// merged back into the parent.
 pub type Child<Db> = ConcurrentState<Arc<ConcurrentState<Db>>>;
 
 /// State of the blockchain.
@@ -231,11 +233,19 @@ impl<Db: DatabaseRef + Sync> ConcurrentState<Db> {
     }
 
     /// Merge a child DB into this DB, incorporating its changes and overwriting
-    /// any present values. If other children or other copies of the
-    /// `Arc<Self>` exist, this will fail with a [`ArcUpgradeError::NotUnique`]
-    /// error.
+    /// any present values.
     ///
-    /// This function needs to take ownership of the child to ensure that the
+    /// This function needs to take ownership of the [`Child`], as the child
+    /// copntains an `Arc` of the parent. This [`Arc`] must be dropped to ensure
+    /// that the parent's pointer is unique, allowing the parent to be modified
+    /// via [`Arc::get_mut`].
+    ///
+    /// If other children or other copies of the `Arc<Self>` exist, this will
+    /// fail with a [`ConcurrentStateError`]. error. If the child belongs to
+    /// another parent, this will also fail.
+    ///
+    /// These conditions can be checked via [`Self::can_merge`], please see
+    /// that function's documentation for a possible race condition.
     pub fn merge_child(self: &mut Arc<Self>, child: Child<Db>) -> Result<(), ConcurrentStateError> {
         self.can_merge(&child)?;
 
@@ -421,10 +431,10 @@ mod test {
     use revm::db::EmptyDB;
 
     #[test]
-    fn assert_child_trait_impls() {
-        fn assert_database_ref<T: DatabaseRef>() {}
-        fn assert_database_commit<T: DatabaseCommit>() {}
-        fn assert_database<T: Database>() {}
+    const fn assert_child_trait_impls() {
+        const fn assert_database_ref<T: DatabaseRef>() {}
+        const fn assert_database_commit<T: DatabaseCommit>() {}
+        const fn assert_database<T: Database>() {}
 
         assert_database_ref::<Child<EmptyDB>>();
         assert_database_commit::<Child<EmptyDB>>();
@@ -438,7 +448,7 @@ mod test {
         let mut parent = Arc::new(ConcurrentState::new(EmptyDB::new(), Default::default()));
         let mut child = parent.child();
 
-        child.increment_balances([(addr, 100)].into_iter()).unwrap();
+        child.increment_balances([(addr, 100)]).unwrap();
 
         // Check that the parent is not modified
         assert!(parent.load_cache_account_mut(addr).unwrap().value().account_info().is_none());
