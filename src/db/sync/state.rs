@@ -237,15 +237,34 @@ impl<Db: DatabaseRef + Sync> ConcurrentState<Db> {
     ///
     /// This function needs to take ownership of the child to ensure that the
     pub fn merge_child(self: &mut Arc<Self>, child: Child<Db>) -> Result<(), ConcurrentStateError> {
-        if !self.is_parent(&child) {
-            return Err(ConcurrentStateError::not_parent());
-        }
+        self.can_merge(&child)?;
 
         let (_, info) = child.into_parts();
 
         let this = Arc::get_mut(self).ok_or_else(ConcurrentStateError::not_unique)?;
 
         this.info.cache.absorb(info.cache);
+        Ok(())
+    }
+
+    /// True if the child can be merged into this state, false otherwise.
+    ///
+    /// ## Note
+    ///
+    /// Race conditions can occur if the child is shared between threads, as
+    /// the child may be cloned AFTER this check is made, but BEFORE the child
+    /// is merged. In this case the function will spuriously return `Ok(())`
+    /// even though the merge will fail. To avoid this, ensure that the child
+    /// is not shared between threads when [`Self::can_merge`] is called.
+    pub fn can_merge(self: &Arc<Self>, child: &Child<Db>) -> Result<(), ConcurrentStateError> {
+        if !self.is_parent(child) {
+            return Err(ConcurrentStateError::not_parent());
+        }
+
+        if Arc::strong_count(self) != 2 {
+            return Err(ConcurrentStateError::not_unique());
+        }
+
         Ok(())
     }
 
@@ -410,6 +429,42 @@ mod test {
         assert_database_ref::<Child<EmptyDB>>();
         assert_database_commit::<Child<EmptyDB>>();
         assert_database::<Child<EmptyDB>>();
+    }
+
+    #[test]
+    fn merge_child() {
+        let addr = Address::repeat_byte(1);
+
+        let mut parent = Arc::new(ConcurrentState::new(EmptyDB::new(), Default::default()));
+        let mut child = parent.child();
+
+        child.increment_balances([(addr, 100)].into_iter()).unwrap();
+
+        // Check that the parent is not modified
+        assert!(parent.load_cache_account_mut(addr).unwrap().value().account_info().is_none());
+        assert_eq!(
+            child.load_cache_account_mut(addr).unwrap().value().account_info().unwrap().balance,
+            U256::from(100)
+        );
+        assert_eq!(Arc::strong_count(&parent), 2);
+
+        // Check that it errors if there are 2 kids
+        let child_2 = parent.child();
+        assert_eq!(parent.merge_child(child_2).unwrap_err(), ConcurrentStateError::not_unique());
+
+        // Check that it won't absorb the child of a different parent
+        let parent_2 = Arc::new(ConcurrentState::new(EmptyDB::new(), Default::default()));
+        let child_2 = parent_2.child();
+        assert_eq!(parent.merge_child(child_2).unwrap_err(), ConcurrentStateError::not_parent());
+
+        // now merge
+        parent.merge_child(child).unwrap();
+
+        // Check that the child is now merged
+        assert_eq!(
+            parent.load_cache_account_mut(addr).unwrap().value().account_info().unwrap().balance,
+            U256::from(100)
+        );
     }
 }
 
