@@ -450,6 +450,7 @@ mod test {
 
         // Check that it errors if there are 2 kids
         let child_2 = parent.child();
+        assert_eq!(parent.can_merge(&child_2).unwrap_err(), ConcurrentStateError::not_unique());
         assert_eq!(parent.merge_child(child_2).unwrap_err(), ConcurrentStateError::not_unique());
 
         // Check that it won't absorb the child of a different parent
@@ -458,6 +459,7 @@ mod test {
         assert_eq!(parent.merge_child(child_2).unwrap_err(), ConcurrentStateError::not_parent());
 
         // now merge
+        parent.can_merge(&child).unwrap();
         parent.merge_child(child).unwrap();
 
         // Check that the child is now merged
