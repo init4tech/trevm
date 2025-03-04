@@ -9,7 +9,7 @@ pub type DriveBundleResult<'a, Ext, Db, T> =
 /// entire lifecycle of a bundle, simulating the entire list of transactions.
 pub trait BundleDriver<Ext> {
     /// An error type for this driver.
-    type Error<Db: Database>: core::error::Error + From<EVMError<Db::Error>>;
+    type Error<Db: Database + DatabaseCommit>: core::error::Error + From<EVMError<Db::Error>>;
 
     /// Run the transactions contained in the bundle.
     fn run_bundle<'a, Db: Database + DatabaseCommit>(
