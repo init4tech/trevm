@@ -1436,10 +1436,7 @@ impl<'a, Ext, Db: Database, TrevmState: HasTx> Trevm<'a, Ext, Db, TrevmState> {
 // -- NEEDS TX with State<Db>
 
 impl<Ext, Db: Database + StateAcc> EvmNeedsTx<'_, Ext, Db> {
-    /// Apply block overrides to the current block. This function is
-    /// intended to be used by shared states, where mutable access may fail, e.
-    /// g. an `Arc<Db>`. Prefer [`Self::try_apply_block_overrides`] when
-    /// available.
+    /// Apply block overrides to the current block.
     ///
     /// Note that this is NOT reversible. The overrides are applied directly to
     /// the underlying state and these changes cannot be removed. If it is
@@ -1447,7 +1444,7 @@ impl<Ext, Db: Database + StateAcc> EvmNeedsTx<'_, Ext, Db> {
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
     /// [`State`]: revm::db::State
-    pub fn try_apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
+    pub fn apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
         overrides.fill_block(&mut self.inner);
 
         if let Some(hashes) = overrides.block_hash.as_ref() {
@@ -1457,10 +1454,7 @@ impl<Ext, Db: Database + StateAcc> EvmNeedsTx<'_, Ext, Db> {
         self
     }
 
-    /// Apply block overrides to the current block, if they are provided. This
-    /// function is intended to be used by shared states, where mutable access
-    /// may fail, e.g. an `Arc<Db>`.Prefer
-    /// [`Self::try_maybe_apply_block_overrides`] when available.
+    /// Apply block overrides to the current block, if they are provided.
     ///
     /// Note that this is NOT reversible. The overrides are applied directly to
     /// the underlying state and these changes cannot be removed. If it is
@@ -1468,9 +1462,9 @@ impl<Ext, Db: Database + StateAcc> EvmNeedsTx<'_, Ext, Db> {
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
     /// [`State`]: revm::db::State
-    pub fn try_maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
+    pub fn maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
         if let Some(overrides) = overrides {
-            self.try_apply_block_overrides(overrides)
+            self.apply_block_overrides(overrides)
         } else {
             self
         }
@@ -1478,7 +1472,10 @@ impl<Ext, Db: Database + StateAcc> EvmNeedsTx<'_, Ext, Db> {
 }
 
 impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsTx<'a, Ext, Db> {
-    /// Apply block overrides to the current block.
+    /// Apply block overrides to the current block. This function is
+    /// intended to be used by shared states, where mutable access may fail, e.
+    /// g. an `Arc<Db>`. Prefer [`Self::apply_block_overrides`] when
+    /// available.
     ///
     /// Note that this is NOT reversible. The overrides are applied directly to
     /// the underlying state and these changes cannot be removed. If it is
@@ -1486,7 +1483,7 @@ impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsTx<'a, Ext, Db> {
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
     /// [`State`]: revm::db::State
-    pub fn apply_block_overrides(
+    pub fn try_apply_block_overrides(
         mut self,
         overrides: &BlockOverrides,
     ) -> Result<Self, EvmErrored<'a, Ext, Db, <Db as TryStateAcc>::Error>> {
@@ -1499,7 +1496,10 @@ impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsTx<'a, Ext, Db> {
         Ok(self)
     }
 
-    /// Apply block overrides to the current block, if they are provided.
+    /// Apply block overrides to the current block, if they are provided. This
+    /// function is intended to be used by shared states, where mutable access
+    /// may fail, e.g. an `Arc<Db>`.Prefer
+    /// [`Self::maybe_apply_block_overrides`] when available.
     ///
     /// Note that this is NOT reversible. The overrides are applied directly to
     /// the underlying state and these changes cannot be removed. If it is
@@ -1507,12 +1507,12 @@ impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsTx<'a, Ext, Db> {
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
     /// [`State`]: revm::db::State
-    pub fn maybe_apply_block_overrides(
+    pub fn try_maybe_apply_block_overrides(
         self,
         overrides: Option<&BlockOverrides>,
     ) -> Result<Self, EvmErrored<'a, Ext, Db, <Db as TryStateAcc>::Error>> {
         if let Some(overrides) = overrides {
-            self.apply_block_overrides(overrides)
+            self.try_apply_block_overrides(overrides)
         } else {
             Ok(self)
         }
