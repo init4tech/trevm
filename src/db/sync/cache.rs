@@ -44,6 +44,18 @@ impl ConcurrentCacheState {
         Self { accounts: DashMap::default(), contracts: DashMap::default(), has_state_clear }
     }
 
+    /// Absorb other into self, overwriting any existing values.
+    pub fn absorb(&self, other: Self) {
+        // NB: the `Extend` trait takes self by `&mut self`, so we have inlined
+        // it here
+        for pair in other.accounts.into_iter() {
+            self.accounts.insert(pair.0, pair.1);
+        }
+        for pair in other.contracts.into_iter() {
+            self.contracts.insert(pair.0, pair.1);
+        }
+    }
+
     /// Set state clear flag. EIP-161.
     pub fn set_state_clear_flag(&mut self, has_state_clear: bool) {
         self.has_state_clear = has_state_clear;
