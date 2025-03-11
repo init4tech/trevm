@@ -16,7 +16,6 @@ use std::{
     sync::Arc,
     vec::Vec,
 };
-use zenith_types::Zenith;
 
 type Result<T, E = JournalDecodeError> = core::result::Result<T, E>;
 
@@ -41,7 +40,6 @@ const TAG_OPTION_NONE: u8 = 0;
 const TAG_OPTION_SOME: u8 = 1;
 
 // Sizes
-const ZENITH_HEADER_BYTES: usize = 32 + 32 + 32 + 20 + 32;
 const ACCOUNT_INFO_BYTES: usize = 8 + 32 + 32;
 const INFO_OUTCOME_MIN_BYTES: usize = 1 + ACCOUNT_INFO_BYTES;
 const ACCT_DIFF_MIN_BYTES: usize = 4 + INFO_OUTCOME_MIN_BYTES;
@@ -413,22 +411,6 @@ impl JournalEncode for BundleState {
     }
 }
 
-impl JournalEncode for Zenith::BlockHeader {
-    fn serialized_size(&self) -> usize {
-        ZENITH_HEADER_BYTES
-    }
-
-    fn encode(&self, buf: &mut dyn BufMut) {
-        let Self { rollupChainId, hostBlockNumber, gasLimit, rewardAddress, blockDataHash } = self;
-
-        rollupChainId.encode(buf);
-        hostBlockNumber.encode(buf);
-        gasLimit.encode(buf);
-        rewardAddress.encode(buf);
-        blockDataHash.encode(buf);
-    }
-}
-
 /// Trait for decoding journal types from a buffer.
 pub trait JournalDecode: JournalEncode + Sized + 'static {
     /// Decode the type from the buffer.
@@ -638,18 +620,6 @@ impl JournalDecode for BundleState {
     }
 }
 
-impl JournalDecode for Zenith::BlockHeader {
-    fn decode(buf: &mut &[u8]) -> Result<Self> {
-        Ok(Self {
-            rollupChainId: JournalDecode::decode(buf)?,
-            hostBlockNumber: JournalDecode::decode(buf)?,
-            gasLimit: JournalDecode::decode(buf)?,
-            rewardAddress: JournalDecode::decode(buf)?,
-            blockDataHash: JournalDecode::decode(buf)?,
-        })
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -748,13 +718,5 @@ mod test {
             .collect(),
         };
         roundtrip(&bsi);
-
-        roundtrip(&Zenith::BlockHeader {
-            rollupChainId: U256::from(1),
-            hostBlockNumber: U256::from(1),
-            gasLimit: U256::from(1),
-            rewardAddress: Address::repeat_byte(0xa),
-            blockDataHash: B256::repeat_byte(0xa),
-        });
     }
 }
