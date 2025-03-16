@@ -336,7 +336,7 @@
 //!
 //! [`EVMError<Db>`]: revm::primitives::EVMError<Db>
 //! [typestate pattern]: https://cliffle.com/blog/rust-typestate/
-//! [crate readme]: https://github.com/init4tt/trevm
+//! [crate readme]: https://github.com/init4tech/trevm
 //! [EIP-2537]: https://eips.ethereum.org/EIPS/eip-2537
 //! [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
 //! [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
