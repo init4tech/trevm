@@ -1,6 +1,6 @@
 use crate::{
     system::{MAX_BLOB_GAS_PER_BLOCK_CANCUN, MAX_BLOB_GAS_PER_BLOCK_PRAGUE},
-    trevm_bail, trevm_ensure, unwrap_or_trevm_err, Block, BundleDriver, DriveBundleResult,
+    trevm_bail, trevm_ensure, trevm_try, Block, BundleDriver, DriveBundleResult,
 };
 use alloy::{
     consensus::{Transaction, TxEip4844Variant, TxEnvelope},
@@ -299,10 +299,10 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
             let mut trevm = trevm;
 
             // Decode and validate the transactions in the bundle
-            let txs = unwrap_or_trevm_err!(Self::decode_and_validate_txs(&self.bundle.txs), trevm);
+            let txs = trevm_try!(Self::decode_and_validate_txs(&self.bundle.txs), trevm);
 
             // Cache the pre simulation coinbase balance, so we can use it to calculate the coinbase diff after every tx simulated.
-            let initial_coinbase_balance = unwrap_or_trevm_err!(
+            let initial_coinbase_balance = trevm_try!(
                 trevm.try_read_balance(trevm.inner().block().coinbase).map_err(|e| {
                     BundleError::EVMError { inner: revm::primitives::EVMError::Database(e) }
                 }),
@@ -332,7 +332,7 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
                         let basefee = committed_trevm.inner().block().basefee;
 
                         // Get the post simulation coinbase balance
-                        let post_sim_coinbase_balance = unwrap_or_trevm_err!(
+                        let post_sim_coinbase_balance = trevm_try!(
                             committed_trevm.try_read_balance(coinbase).map_err(|e| {
                                 BundleError::EVMError {
                                     inner: revm::primitives::EVMError::Database(e),
@@ -342,7 +342,7 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthCallBundle, EthCallBundleResp
                         );
 
                         // Process the transaction and accumulate the results
-                        let (response, post_sim_coinbase_balance) = unwrap_or_trevm_err!(
+                        let (response, post_sim_coinbase_balance) = trevm_try!(
                             Self::process_call_bundle_tx(
                                 tx,
                                 pre_sim_coinbase_balance,
@@ -437,7 +437,7 @@ impl<Ext> BundleDriver<Ext> for BundleProcessor<EthSendBundle, EthBundleHash> {
             trevm_ensure!(!self.bundle.txs.is_empty(), trevm, BundleError::BundleEmpty);
 
             // Decode and validate the transactions in the bundle
-            let txs = unwrap_or_trevm_err!(Self::decode_and_validate_txs(&self.bundle.txs), trevm);
+            let txs = trevm_try!(Self::decode_and_validate_txs(&self.bundle.txs), trevm);
 
             // Store the current evm state in this mutable variable, so we can continually use the freshest state for each simulation
             let mut t = trevm;
@@ -573,7 +573,7 @@ impl<Ext> BundleDriver<Ext> for EthCallBundle {
         let run_result = trevm.try_with_block(&bundle_filler, |trevm| {
             let mut trevm = trevm;
 
-            let txs = unwrap_or_trevm_err!(
+            let txs = trevm_try!(
                 self.txs
                     .iter()
                     .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))
@@ -669,7 +669,7 @@ impl<Ext> BundleDriver<Ext> for EthSendBundle {
         // Check if the bundle has any transactions
         trevm_ensure!(!self.txs.is_empty(), trevm, BundleError::BundleEmpty);
 
-        let txs = unwrap_or_trevm_err!(
+        let txs = trevm_try!(
             self.txs
                 .iter()
                 .map(|tx| TxEnvelope::decode_2718(&mut tx.chunk()))

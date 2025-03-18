@@ -1138,9 +1138,9 @@ impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsBlock<'a, Ext, Db> {
     ) -> Result<BundleState, EvmErrored<'a, Ext, Db, <Db as TryStateAcc>::Error>> {
         let db = self.inner.db_mut();
 
-        unwrap_or_trevm_err!(db.try_merge_transitions(BundleRetention::Reverts), self);
+        trevm_try!(db.try_merge_transitions(BundleRetention::Reverts), self);
 
-        let bundle = unwrap_or_trevm_err!(db.try_take_bundle(), self);
+        let bundle = trevm_try!(db.try_take_bundle(), self);
 
         Ok(bundle)
     }
@@ -1490,7 +1490,7 @@ impl<'a, Ext, Db: Database + TryStateAcc> EvmNeedsTx<'a, Ext, Db> {
         overrides.fill_block(&mut self.inner);
 
         if let Some(hashes) = overrides.block_hash.as_ref() {
-            unwrap_or_trevm_err!(self.inner.db_mut().try_set_block_hashes(hashes), self);
+            trevm_try!(self.inner.db_mut().try_set_block_hashes(hashes), self);
         }
 
         Ok(self)
@@ -1707,7 +1707,7 @@ impl<'a, Ext, Db: Database> EvmReady<'a, Ext, Db> {
     ) -> Result<(crate::EstimationResult, Self), EvmErrored<'a, Ext, Db>> {
         use tracing::{debug, enabled};
 
-        if let Some(est) = crate::unwrap_or_trevm_err!(self.estimate_gas_simple_transfer(), self) {
+        if let Some(est) = crate::trevm_try!(self.estimate_gas_simple_transfer(), self) {
             return Ok((crate::EstimationResult::basic_transfer_success(est), self));
         }
 
@@ -1731,7 +1731,7 @@ impl<'a, Ext, Db: Database> EvmReady<'a, Ext, Db> {
         let _e = span.enter();
 
         // Cap the gas limit to the caller's allowance and block limit
-        unwrap_or_trevm_err!(self.cap_tx_gas(), self);
+        trevm_try!(self.cap_tx_gas(), self);
         search_range.maybe_lower_max(self.gas_limit());
 
         // Raise the floor to the amount of gas required to initialize the EVM.
@@ -2005,10 +2005,7 @@ impl<'a, Ext, Db: Database> EvmTransacted<'a, Ext, Db> {
     {
         let Trevm { mut inner, state: TransactedState { result } } = self;
 
-        unwrap_or_trevm_err!(
-            inner.db_mut().try_commit(result.state),
-            Trevm { inner, state: NeedsTx::new() }
-        );
+        trevm_try!(inner.db_mut().try_commit(result.state), Trevm { inner, state: NeedsTx::new() });
         Ok((result.result, Trevm { inner, state: NeedsTx::new() }))
     }
 
