@@ -38,7 +38,7 @@ impl Cache {
     }
 
     /// Absorb another cache into this cache, overwriting any existing entries
-    fn absorb(&mut self, other: Cache) {
+    fn absorb(&mut self, other: Self) {
         self.accounts.extend(other.accounts);
         self.contracts.extend(other.contracts);
         self.block_hashes.extend(other.block_hashes);
@@ -75,17 +75,17 @@ impl<Db> CacheOnWrite<Db> {
     }
 
     /// Create a new `CacheOnWrite` with the given inner database and cache.
-    pub fn new_with_cache(inner: Db, cache: Cache) -> Self {
+    pub const fn new_with_cache(inner: Db, cache: Cache) -> Self {
         Self { cache, inner }
     }
 
     /// Get a reference to the inner database.
-    pub fn inner(&self) -> &Db {
+    pub const fn inner(&self) -> &Db {
         &self.inner
     }
 
     /// Get a refernce to the [`Cache`].
-    pub fn cache(&self) -> &Cache {
+    pub const fn cache(&self) -> &Cache {
         &self.cache
     }
 
@@ -100,7 +100,7 @@ impl<Db> CacheOnWrite<Db> {
     }
 
     /// Nest the `CacheOnWrite` into a double cache.
-    pub fn nest(self) -> CacheOnWrite<CacheOnWrite<Db>> {
+    pub fn nest(self) -> CacheOnWrite<Self> {
         CacheOnWrite::new(self)
     }
 }
@@ -152,7 +152,7 @@ impl<Db: DatabaseRef> Database for CacheOnWrite<Db> {
 
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
         if let Some(hash) = self.cache.block_hashes.get(&U256::from(number)) {
-            return Ok(hash.clone());
+            return Ok(*hash);
         }
         self.inner.block_hash_ref(number)
     }
@@ -186,7 +186,7 @@ impl<Db: DatabaseRef> DatabaseRef for CacheOnWrite<Db> {
 
     fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
         if let Some(hash) = self.cache.block_hashes.get(&U256::from(number)) {
-            return Ok(hash.clone());
+            return Ok(*hash);
         }
         self.inner.block_hash_ref(number)
     }
