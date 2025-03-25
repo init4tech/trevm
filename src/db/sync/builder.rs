@@ -1,10 +1,10 @@
 use crate::db::sync::ConcurrentState;
 use revm::{
-    db::{
+    database::{
         states::{BundleState, TransitionState},
-        EmptyDB,
+        DatabaseRef, EmptyDB,
     },
-    primitives::{db::DatabaseRef, B256},
+    primitives::B256,
 };
 use std::collections::BTreeMap;
 

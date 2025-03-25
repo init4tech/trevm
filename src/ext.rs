@@ -1,6 +1,8 @@
 use alloy::primitives::{Address, B256, U256};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot, HashMap},
+    context::{ContextTr, Evm},
+    primitives::HashMap,
+    state::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot},
     Database, DatabaseCommit,
 };
 
@@ -169,8 +171,12 @@ pub trait EvmExtUnchecked<Db: Database> {
     }
 }
 
-impl<Ext, Db: Database> EvmExtUnchecked<Db> for revm::Evm<'_, Ext, Db> {
-    fn db_mut_ext(&mut self) -> &mut Db {
-        self.db_mut()
+impl<Ctx, Insp, Inst, Prec> EvmExtUnchecked<Ctx::Db> for Evm<Ctx, Insp, Inst, Prec>
+where
+    Ctx: ContextTr,
+    <Ctx as ContextTr>::Db: Database,
+{
+    fn db_mut_ext(&mut self) -> &mut Ctx::Db {
+        self.data.ctx.db()
     }
 }

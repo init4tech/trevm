@@ -12,7 +12,7 @@ pub use state::{Child, ConcurrentState, ConcurrentStateInfo};
 
 use crate::db::StateAcc;
 use revm::{
-    db::{states::bundle_state::BundleRetention, BundleState},
+    database::{states::bundle_state::BundleRetention, BundleState},
     primitives::B256,
     DatabaseRef,
 };

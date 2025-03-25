@@ -1,6 +1,7 @@
 use revm::{
-    db::{states::bundle_state::BundleRetention, BundleState, State},
-    primitives::{Account, Address, B256},
+    database::{states::bundle_state::BundleRetention, BundleState, State},
+    primitives::{Address, B256},
+    state::Account,
     Database, DatabaseCommit,
 };
 use std::{collections::BTreeMap, convert::Infallible, sync::Arc};

@@ -60,17 +60,26 @@ pub const MAX_BLOB_GAS_PER_BLOCK_CANCUN: u64 = 786_432;
 pub const MAX_BLOB_GAS_PER_BLOCK_PRAGUE: u64 = 1_179_648;
 
 use crate::{EvmExtUnchecked, Tx};
-use alloy::primitives::{Address, Bytes, U256};
+use alloy::primitives::{Address, Bytes};
 use revm::{
-    primitives::{Bytecode, EVMError, ExecutionResult, ResultAndState, KECCAK_EMPTY},
-    Database, DatabaseCommit, Evm,
+    bytecode::Bytecode,
+    context::{
+        result::{EVMError, ExecutionResult, ResultAndState},
+        Block, BlockEnv, ContextSetters, ContextTr, Evm, Transaction, TxEnv,
+    },
+    primitives::KECCAK_EMPTY,
+    Database, DatabaseCommit,
 };
 
-fn checked_insert_code<Ext, Db: Database + DatabaseCommit>(
-    evm: &mut Evm<'_, Ext, Db>,
+fn checked_insert_code<Ctx, Insp, Inst, Prec>(
+    evm: &mut Evm<Ctx, Insp, Inst, Prec>,
     address: Address,
     code: &Bytes,
-) -> Result<(), EVMError<Db::Error>> {
+) -> Result<(), EVMError<<Ctx::Db as Database>::Error>>
+where
+    Ctx: ContextTr<Block = BlockEnv> + ContextSetters,
+    Ctx::Db: Database + DatabaseCommit,
+{
     if evm.account(address).map_err(EVMError::Database)?.info.code_hash == KECCAK_EMPTY {
         evm.set_bytecode(address, Bytecode::new_raw(code.clone())).map_err(EVMError::Database)?;
     }
@@ -78,20 +87,25 @@ fn checked_insert_code<Ext, Db: Database + DatabaseCommit>(
 }
 
 /// Clean up the system call, restoring the block env.
-fn cleanup_syscall<Ext, Db>(
-    evm: &mut Evm<'_, Ext, Db>,
+fn cleanup_syscall<Ctx, Insp, Inst, Prec>(
+    evm: &mut Evm<Ctx, Insp, Inst, Prec>,
     result: &mut ResultAndState,
     syscall: &SystemTx,
-    old_gas_limit: U256,
-    old_base_fee: U256,
+    old_gas_limit: u64,
+    old_base_fee: u64,
 ) where
-    Db: Database + DatabaseCommit,
+    Ctx: ContextTr<Block = BlockEnv> + ContextSetters,
+    Ctx::Db: Database + DatabaseCommit,
 {
-    evm.block_mut().gas_limit = old_gas_limit;
-    evm.block_mut().basefee = old_base_fee;
+    let mut block = evm.block().clone();
+    let coinbase = block.beneficiary();
+
+    block.gas_limit = old_gas_limit;
+    block.basefee = old_base_fee;
+
+    evm.set_block(block);
 
     // Remove the system caller and fees from the state
-    let coinbase = evm.block().coinbase;
     let state = &mut result.state;
     state.remove(&syscall.caller);
     state.remove(&coinbase);
@@ -105,24 +119,26 @@ fn cleanup_syscall<Ext, Db>(
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
 /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
 /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-pub(crate) fn execute_system_tx<Ext, Db>(
-    evm: &mut Evm<'_, Ext, Db>,
+pub(crate) fn execute_system_tx<Ctx, Insp, Inst, Prec>(
+    evm: &mut Evm<Ctx, Insp, Inst, Prec>,
     syscall: &SystemTx,
-) -> Result<ExecutionResult, EVMError<Db::Error>>
+) -> Result<ExecutionResult, EVMError<<Ctx::Db as Database>::Error>>
 where
-    Db: Database + DatabaseCommit,
+    Ctx: ContextTr<Block = BlockEnv, Tx = TxEnv> + ContextSetters,
+    Ctx::Db: Database + DatabaseCommit,
 {
-    let limit = U256::from(evm.tx().gas_limit);
-    let old_gas_limit = core::mem::replace(&mut evm.block_mut().gas_limit, limit);
-    let old_base_fee = core::mem::replace(&mut evm.block_mut().basefee, U256::ZERO);
+    let limit = evm.tx().gas_limit();
+    let old_gas_limit = core::mem::replace(&mut evm.block().gas_limit(), limit);
+    let old_base_fee = core::mem::take(&mut evm.block().basefee());
 
     syscall.fill_tx(evm);
+
     let mut result = evm.transact()?;
 
     // Cleanup the syscall.
     cleanup_syscall(evm, &mut result, syscall, old_gas_limit, old_base_fee);
 
-    evm.db_mut().commit(result.state);
+    evm.data.ctx.db().commit(result.state);
 
     // apply result, remove receipt from block outputs.
     Ok(result.result)

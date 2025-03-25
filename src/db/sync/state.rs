@@ -2,12 +2,12 @@ use crate::db::sync::{ConcurrentCacheState, ConcurrentStateError};
 use alloy::primitives::{Address, B256, U256};
 use dashmap::mapref::one::RefMut;
 use revm::{
-    db::{
+    database::{
         states::{bundle_state::BundleRetention, plain_account::PlainStorage, CacheAccount},
-        BundleState, State,
+        BundleState, State, TransitionAccount, TransitionState,
     },
-    primitives::{Account, AccountInfo, Bytecode},
-    Database, DatabaseCommit, DatabaseRef, TransitionAccount, TransitionState,
+    state::{Account, AccountInfo, Bytecode},
+    Database, DatabaseCommit, DatabaseRef,
 };
 use std::{
     collections::{hash_map, BTreeMap},
@@ -428,7 +428,7 @@ pub struct ConcurrentStateInfo {
 #[cfg(test)]
 mod test {
     use super::*;
-    use revm::db::EmptyDB;
+    use revm::database::EmptyDB;
 
     #[test]
     const fn assert_child_trait_impls() {

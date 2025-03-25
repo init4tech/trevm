@@ -1,11 +1,10 @@
 use crate::EvmNeedsTx;
 use alloy::primitives::U256;
-use revm::{
-    primitives::{EVMError, SpecId, BLOCKHASH_SERVE_WINDOW},
-    Database, DatabaseCommit,
-};
+use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
 
-pub use alloy::eips::eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE};
+pub use alloy::eips::eip2935::{
+    HISTORY_SERVE_WINDOW, HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE,
+};
 
 use super::checked_insert_code;
 
@@ -13,10 +12,10 @@ use super::checked_insert_code;
 ///
 /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
 pub fn eip2935_slot(block_num: u64) -> U256 {
-    U256::from(block_num % BLOCKHASH_SERVE_WINDOW as u64)
+    U256::from(block_num % HISTORY_SERVE_WINDOW as u64)
 }
 
-impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
+impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<Ext, Db> {
     /// Apply the pre-block logic for [EIP-2935]. This logic was introduced in
     /// Prague and updates historical block hashes in a special system
     /// contract. Unlike other system actions, this is NOT modeled as a
@@ -58,7 +57,7 @@ mod test {
     use super::*;
     use crate::{NoopBlock, NoopCfg};
     use alloy::primitives::B256;
-    use revm::primitives::Bytecode;
+    use revm::bytecode::Bytecode;
 
     #[test]
     fn test_eip2935() {

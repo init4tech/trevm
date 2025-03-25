@@ -1,6 +1,6 @@
 use crate::Tx;
 use alloy::primitives::{address, Address, Bytes, U256};
-use revm::primitives::TxEnv;
+use revm::context::{TransactionType, TxEnv};
 
 /// System smart contract calls as specified in [EIP-4788], [EIP-7002],
 /// and [EIP-7251].
@@ -44,10 +44,11 @@ impl SystemTx {
 impl Tx for SystemTx {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         let TxEnv {
+            tx_type,
             caller,
             gas_limit,
             gas_price,
-            transact_to,
+            kind,
             value,
             data,
             nonce,
@@ -58,25 +59,29 @@ impl Tx for SystemTx {
             max_fee_per_blob_gas,
             authorization_list,
         } = tx_env;
+
+        *tx_type = TransactionType::Custom as u8;
+
         *caller = self.caller;
         *gas_limit = 30_000_000;
         // 0 gas price
-        *gas_price = U256::ZERO;
-        *transact_to = self.target.into();
+        *gas_price = 0;
+        *kind = self.target.into();
         *value = U256::ZERO;
         *data = self.input.clone();
         // disable revm nonce checks
-        nonce.take();
+        *nonce = 0; // TODO: IS THIS CORRECT?
+
         // disable chain id checks
         chain_id.take();
         // set priority fee to 0
         gas_priority_fee.take();
         // disable eip-2930
-        access_list.clear();
+        access_list.0.clear();
         // disable eip-4844
         blob_hashes.clear();
-        max_fee_per_blob_gas.take();
+        *max_fee_per_blob_gas = 0;
         // disable eip-7702
-        authorization_list.take();
+        authorization_list.clear();
     }
 }

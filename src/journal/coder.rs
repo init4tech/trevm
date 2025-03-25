@@ -4,10 +4,13 @@ use alloy::{
     rlp::{Buf, BufMut},
 };
 use revm::{
-    db::{states::StorageSlot, BundleState},
-    primitives::{
-        eof::EofDecodeError, AccountInfo, Bytecode, Eip7702Bytecode, Eip7702DecodeError, Eof,
+    bytecode::{
+        eip7702::{Eip7702Bytecode, Eip7702DecodeError},
+        eof::EofDecodeError,
+        Eof,
     },
+    database::{states::StorageSlot, BundleState},
+    state::{AccountInfo, Bytecode},
 };
 use std::{
     borrow::{Cow, ToOwned},
@@ -361,7 +364,7 @@ impl JournalEncode for Bytecode {
 
     fn encode(&self, buf: &mut dyn BufMut) {
         match self {
-            Self::LegacyRaw(_) | Self::LegacyAnalyzed(_) => buf.put_u8(TAG_BYTECODE_RAW),
+            Self::LegacyAnalyzed(_) => buf.put_u8(TAG_BYTECODE_RAW),
             Self::Eof(_) => buf.put_u8(TAG_BYTECODE_EOF),
             Self::Eip7702(_) => buf.put_u8(TAG_BYTECODE_7702),
         }

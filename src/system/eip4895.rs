@@ -1,16 +1,19 @@
-use crate::{EvmExtUnchecked, EvmNeedsTx};
+use crate::{helpers::TrevmCtxCommit, EvmExtUnchecked, EvmNeedsTx};
 use alloy::{
     eips::eip4895::Withdrawal,
     primitives::{map::HashMap, U256},
 };
-use revm::{primitives::EVMError, Database, DatabaseCommit};
+use revm::{context::result::EVMError, Database};
 
-impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
+impl<Ctx, Insp, Inst, Prec> EvmNeedsTx<Ctx, Insp, Inst, Prec>
+where
+    Ctx: TrevmCtxCommit,
+{
     /// Apply the withdrawals to the EVM state.
     pub fn apply_withdrawals<'b>(
         &mut self,
         withdrawals: impl IntoIterator<Item = &'b Withdrawal>,
-    ) -> Result<(), EVMError<Db::Error>> {
+    ) -> Result<(), EVMError<<Ctx::Db as Database>::Error>> {
         // We need to apply the withdrawals by incrementing the balances of the
         // respective accounts, then committing the changes to the database.
         let mut changes = HashMap::default();

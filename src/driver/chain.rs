@@ -1,25 +1,22 @@
-use crate::{BlockDriver, EvmChainDriverErrored, EvmNeedsBlock};
-use revm::{
-    primitives::{EVMError, SpecId},
-    Database, DatabaseCommit,
-};
+use crate::{helpers::TrevmCtxCommit, BlockDriver, EvmChainDriverErrored, EvmNeedsBlock};
+use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
 
 /// The result of driving a chain to completion.
-pub type DriveChainResult<'a, Ext, Db, D> =
-    Result<EvmNeedsBlock<'a, Ext, Db>, EvmChainDriverErrored<'a, Ext, Db, D>>;
+pub type DriveChainResult<Ctx, Insp, Inst, Prec, D> =
+    Result<EvmNeedsBlock<Ctx, Insp, Inst, Prec>, EvmChainDriverErrored<Ctx, Insp, Inst, Prec, D>>;
 
 /// Driver for a chain of blocks.
-pub trait ChainDriver<Ext> {
+pub trait ChainDriver<Insp> {
     /// The block driver for this chain.
-    type BlockDriver: BlockDriver<Ext>;
+    type BlockDriver: BlockDriver<Insp>;
 
     /// An error type for this driver.
     type Error<Db: Database + DatabaseCommit>: core::error::Error
         + From<EVMError<Db::Error>>
-        + From<<Self::BlockDriver as BlockDriver<Ext>>::Error<Db>>;
+        + From<<Self::BlockDriver as BlockDriver<Insp>>::Error<Db>>;
 
     /// Get the spec id for a block.
-    fn spec_id_for(&self, block: &<Self::BlockDriver as BlockDriver<Ext>>::Block) -> SpecId;
+    fn spec_id_for(&self, block: &<Self::BlockDriver as BlockDriver<Insp>>::Block) -> SpecId;
 
     /// Get the blocks in this chain. The blocks should be in order, and this
     /// function MUST NOT return an empty slice.
@@ -29,9 +26,11 @@ pub trait ChainDriver<Ext> {
     /// or parent-child relationships.
     ///
     /// The `idx` parameter is the index of the block in the chain.
-    fn interblock<Db: Database + DatabaseCommit>(
+    fn interblock<Ctx, Inst, Prec>(
         &mut self,
-        trevm: &EvmNeedsBlock<'_, Ext, Db>,
+        trevm: &EvmNeedsBlock<Ctx, Insp, Inst, Prec>,
         idx: usize,
-    ) -> Result<(), Self::Error<Db>>;
+    ) -> Result<(), Self::Error<Ctx::Db>>
+    where
+        Ctx: TrevmCtxCommit;
 }

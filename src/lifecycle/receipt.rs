@@ -1,5 +1,5 @@
 use alloy::consensus::{Receipt, ReceiptWithBloom};
-use revm::primitives::ExecutionResult;
+use revm::context::result::ExecutionResult;
 
 /// Create an Ethereum [`ReceiptEnvelope`] from an execution result.
 ///

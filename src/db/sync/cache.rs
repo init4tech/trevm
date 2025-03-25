@@ -3,9 +3,11 @@
 use alloy::primitives::{Address, B256};
 use dashmap::DashMap;
 use revm::{
-    db::states::{plain_account::PlainStorage, CacheAccount},
-    primitives::{Account, AccountInfo, Bytecode, EvmState},
-    CacheState, TransitionAccount,
+    database::{
+        states::{plain_account::PlainStorage, CacheAccount},
+        CacheState, TransitionAccount,
+    },
+    state::{Account, AccountInfo, Bytecode, EvmState},
 };
 
 /// A concurrent version of [`revm::db::CacheState`].
