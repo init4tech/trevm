@@ -359,7 +359,7 @@ impl JournalEncode for AcctDiff<'_> {
 impl JournalEncode for Bytecode {
     fn serialized_size(&self) -> usize {
         // tag + u32 for len + len of raw
-        1 + 4 + self.bytes().len()
+        1 + 4 + self.original_bytes().len()
     }
 
     fn encode(&self, buf: &mut dyn BufMut) {
@@ -369,7 +369,9 @@ impl JournalEncode for Bytecode {
             Self::Eip7702(_) => buf.put_u8(TAG_BYTECODE_7702),
         }
 
-        let raw = self.bytes();
+        let raw = self.original_bytes();
+        dbg!(raw.len());
+        dbg!(&raw);
         buf.put_u32(raw.len() as u32);
         buf.put_slice(raw.as_ref());
     }

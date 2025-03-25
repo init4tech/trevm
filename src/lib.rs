@@ -180,11 +180,11 @@
 //! pub struct MyTx;
 //!
 //! impl Tx for MyTx {
-//!    fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
+//!    fn fill_tx_env(&self, tx_env: &mut revm::context::TxEnv) {
 //!       // fill the tx_env with your data
 //!       // we recommend destructuring here to safeguard against future changes
 //!       // to the TxEnv struct
-//!       let revm::primitives::TxEnv {
+//!       let revm::context::TxEnv {
 //!           caller,
 //!           ..
 //!       } = tx_env;
@@ -334,7 +334,7 @@
 //! let (bundle, outputs) = evm.close_block(block, post_block_logic).finish();
 //! ```
 //!
-//! [`EVMError<Db>`]: revm::primitives::EVMError<Db>
+//! [`EVMError<Db>`]: revm::context::EVMError<Db>
 //! [typestate pattern]: https://cliffle.com/blog/rust-typestate/
 //! [crate readme]: https://github.com/init4tech/trevm
 //! [EIP-2537]: https://eips.ethereum.org/EIPS/eip-2537
