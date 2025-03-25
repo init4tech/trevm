@@ -126,11 +126,11 @@ mod test {
                 prevrandao,
                 blob_excess_gas_and_price,
             } = block_env;
-            *number = U256::from(1);
+            *number = 1;
             *beneficiary = Default::default();
-            *timestamp = U256::from(1720450148); // Time when I was writing the test code
-            *gas_limit = U256::from(30_000_000);
-            *basefee = U256::from(5 * GWEI_TO_WEI);
+            *timestamp = 1720450148; // Time when I was writing the test code
+            *gas_limit = 30_000_000;
+            *basefee = 5 * GWEI_TO_WEI;
 
             let diff = B256::repeat_byte(0xab);
             *prevrandao = Some(diff);

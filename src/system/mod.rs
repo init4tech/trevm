@@ -59,26 +59,25 @@ pub const MAX_BLOB_GAS_PER_BLOCK_CANCUN: u64 = 786_432;
 /// The maximum blob gas limit for a block in Prague.
 pub const MAX_BLOB_GAS_PER_BLOCK_PRAGUE: u64 = 1_179_648;
 
-use crate::{EvmExtUnchecked, Tx};
+use crate::{helpers::Evm, EvmExtUnchecked, Tx};
 use alloy::primitives::{Address, Bytes};
 use revm::{
     bytecode::Bytecode,
     context::{
         result::{EVMError, ExecutionResult, ResultAndState},
-        Block, BlockEnv, ContextSetters, ContextTr, Evm, Transaction, TxEnv,
+        Block, ContextTr, Transaction,
     },
     primitives::KECCAK_EMPTY,
-    Database, DatabaseCommit,
+    Database, DatabaseCommit, ExecuteEvm,
 };
 
-fn checked_insert_code<Ctx, Insp, Inst, Prec>(
-    evm: &mut Evm<Ctx, Insp, Inst, Prec>,
+fn checked_insert_code<Db, Insp>(
+    evm: &mut Evm<Db, Insp>,
     address: Address,
     code: &Bytes,
-) -> Result<(), EVMError<<Ctx::Db as Database>::Error>>
+) -> Result<(), EVMError<Db::Error>>
 where
-    Ctx: ContextTr<Block = BlockEnv> + ContextSetters,
-    Ctx::Db: Database + DatabaseCommit,
+    Db: Database + DatabaseCommit,
 {
     if evm.account(address).map_err(EVMError::Database)?.info.code_hash == KECCAK_EMPTY {
         evm.set_bytecode(address, Bytecode::new_raw(code.clone())).map_err(EVMError::Database)?;
@@ -87,15 +86,14 @@ where
 }
 
 /// Clean up the system call, restoring the block env.
-fn cleanup_syscall<Ctx, Insp, Inst, Prec>(
-    evm: &mut Evm<Ctx, Insp, Inst, Prec>,
+fn cleanup_syscall<Db, Insp>(
+    evm: &mut Evm<Db, Insp>,
     result: &mut ResultAndState,
     syscall: &SystemTx,
     old_gas_limit: u64,
     old_base_fee: u64,
 ) where
-    Ctx: ContextTr<Block = BlockEnv> + ContextSetters,
-    Ctx::Db: Database + DatabaseCommit,
+    Db: Database + DatabaseCommit,
 {
     let mut block = evm.block().clone();
     let coinbase = block.beneficiary();
@@ -119,13 +117,12 @@ fn cleanup_syscall<Ctx, Insp, Inst, Prec>(
 /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
 /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
 /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-pub(crate) fn execute_system_tx<Ctx, Insp, Inst, Prec>(
-    evm: &mut Evm<Ctx, Insp, Inst, Prec>,
+pub(crate) fn execute_system_tx<Db, Insp>(
+    evm: &mut Evm<Db, Insp>,
     syscall: &SystemTx,
-) -> Result<ExecutionResult, EVMError<<Ctx::Db as Database>::Error>>
+) -> Result<ExecutionResult, EVMError<Db::Error>>
 where
-    Ctx: ContextTr<Block = BlockEnv, Tx = TxEnv> + ContextSetters,
-    Ctx::Db: Database + DatabaseCommit,
+    Db: Database + DatabaseCommit,
 {
     let limit = evm.tx().gas_limit();
     let old_gas_limit = core::mem::replace(&mut evm.block().gas_limit(), limit);
@@ -133,7 +130,7 @@ where
 
     syscall.fill_tx(evm);
 
-    let mut result = evm.transact()?;
+    let mut result = evm.replay()?;
 
     // Cleanup the syscall.
     cleanup_syscall(evm, &mut result, syscall, old_gas_limit, old_base_fee);

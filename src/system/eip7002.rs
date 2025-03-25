@@ -39,7 +39,7 @@ impl SystemTx {
     }
 }
 
-impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<Ext, Db> {
+impl<Db: Database + DatabaseCommit, Insp> EvmNeedsTx<Db, Insp> {
     /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
     /// post-block action was introduced in Prague, and calls the withdrawal
     /// request contract to accumulate withdrawal requests.
@@ -100,7 +100,7 @@ mod test {
 
             tx_env.caller = WITHDRAWAL_ADDR;
             tx_env.data = input;
-            tx_env.transact_to = TxKind::Call(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS);
+            tx_env.kind = TxKind::Call(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS);
             // `MIN_WITHDRAWAL_REQUEST_FEE`
             tx_env.value = U256::from(1);
         }

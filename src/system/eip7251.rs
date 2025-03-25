@@ -1,10 +1,10 @@
 use super::{checked_insert_code, execute_system_tx};
-use crate::{helpers::TrevmCtxCommit, system::SystemTx, EvmNeedsTx};
+use crate::{system::SystemTx, EvmNeedsTx};
 use alloy::{
     eips::eip7251::CONSOLIDATION_REQUEST_PREDEPLOY_CODE,
     primitives::{Address, Bytes},
 };
-use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database};
+use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
 
 /// The address for the [EIP-7251] consolidation requests contract
 ///
@@ -41,16 +41,16 @@ impl SystemTx {
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsTx<Ctx, Insp, Inst, Prec>
+impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where
-    Ctx: TrevmCtxCommit,
+    Db: Database + DatabaseCommit,
 {
     /// Apply a system transaction as specified in [EIP-7251]. The EIP-7251
     /// post-block action calls the consolidation request contract to process
     /// consolidation requests.
     ///
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    pub fn apply_eip7251(&mut self) -> Result<Bytes, EVMError<<Ctx::Db as Database>::Error>> {
+    pub fn apply_eip7251(&mut self) -> Result<Bytes, EVMError<Db::Error>> {
         if self.spec_id() < SpecId::PRAGUE {
             return Ok(Bytes::new());
         }
@@ -101,7 +101,7 @@ mod test {
 
             tx_env.caller = WITHDRAWAL_ADDR;
             tx_env.data = input;
-            tx_env.transact_to = TxKind::Call(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS);
+            tx_env.kind = TxKind::Call(CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS);
             // `MIN_CONSOLIDATION_REQUEST_FEE`
             tx_env.value = U256::from(1);
         }

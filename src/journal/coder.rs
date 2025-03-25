@@ -577,7 +577,7 @@ impl JournalDecode for AcctDiff<'static> {
 
 impl JournalDecode for Bytecode {
     fn decode(buf: &mut &[u8]) -> Result<Self> {
-        let tag = JournalDecode::decode(buf)?;
+        let tag: u8 = JournalDecode::decode(buf)?;
         let len: u32 = JournalDecode::decode(buf)?;
         check_len!(buf, "BytecodeBody", len as usize);
 
@@ -627,11 +627,13 @@ impl JournalDecode for BundleState {
 mod test {
     use super::*;
 
+    #[track_caller]
     fn roundtrip<T: JournalDecode + JournalEncode + PartialEq>(expected: &T) {
         let enc = JournalEncode::encoded(expected);
-        assert_eq!(enc.len(), expected.serialized_size(), "{}", core::any::type_name::<T>());
+        let ty_name = core::any::type_name::<T>();
+        assert_eq!(enc.len(), expected.serialized_size(), "{ty_name}");
         let dec = T::decode(&mut enc.as_slice()).expect("decoding failed");
-        assert_eq!(&dec, expected);
+        assert_eq!(&dec, expected, "{ty_name}");
     }
 
     #[test]

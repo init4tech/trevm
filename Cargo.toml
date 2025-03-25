@@ -41,6 +41,7 @@ revm = { version = "20.0.0-alpha.7", features = [
     "std",
     "alloydb",
 ] }
+trevm ={ path = ".", features = ["test-utils"] }
 
 # misc
 eyre = "0.6"

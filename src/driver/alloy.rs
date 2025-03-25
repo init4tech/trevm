@@ -1,7 +1,6 @@
 use std::u64;
 
 use crate::{
-    helpers::TrevmCtxCommit,
     system::{MAX_BLOB_GAS_PER_BLOCK_CANCUN, MAX_BLOB_GAS_PER_BLOCK_PRAGUE},
     trevm_bail, trevm_ensure, trevm_try, Block, BundleDriver, DriveBundleResult,
 };
@@ -261,13 +260,13 @@ impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
 impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleResponse> {
     type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<Ctx: TrevmCtxCommit, Inst, Prec>(
+    fn run_bundle<Db: Database + DatabaseCommit>(
         &mut self,
-        trevm: crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> DriveBundleResult<Ctx, Insp, Inst, Prec, Self> {
+        trevm: crate::EvmNeedsTx<Db, Insp>,
+    ) -> DriveBundleResult<Db, Insp, Self> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
-            trevm.inner().block().number == self.bundle.block_number,
+            trevm.inner().block.number == self.bundle.block_number,
             trevm,
             BundleError::BlockNumberMismatch
         );
@@ -285,7 +284,7 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleRe
 
         // Set the state block number this simulation was based on
         self.response.state_block_number =
-            self.bundle.state_block_number.as_number().unwrap_or(trevm.inner().block().number);
+            self.bundle.state_block_number.as_number().unwrap_or(trevm.inner().block.number);
 
         let bundle_filler = BundleBlockFiller::from(&self.bundle);
 
@@ -300,7 +299,7 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleRe
             // Cache the pre simulation coinbase balance, so we can use it to calculate the coinbase diff after every tx simulated.
             let initial_coinbase_balance = trevm_try!(
                 trevm
-                    .try_read_balance(trevm.inner().block().beneficiary)
+                    .try_read_balance(trevm.inner().block.beneficiary)
                     .map_err(|e| { BundleError::EVMError { inner: EVMError::Database(e) } }),
                 trevm
             );
@@ -324,8 +323,8 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleRe
                         let (execution_result, mut committed_trevm) = res.accept();
 
                         // Get the coinbase and basefee from the block
-                        let coinbase = committed_trevm.inner().block().beneficiary;
-                        let basefee = committed_trevm.inner().block().basefee;
+                        let coinbase = committed_trevm.inner().block.beneficiary;
+                        let basefee = committed_trevm.inner().block.basefee;
 
                         // Get the post simulation coinbase balance
                         let post_sim_coinbase_balance = trevm_try!(
@@ -386,10 +385,10 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleRe
         }
     }
 
-    fn post_bundle<Ctx: TrevmCtxCommit, Inst, Prec>(
+    fn post_bundle<Db: Database + DatabaseCommit>(
         &mut self,
-        _trevm: &crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> Result<(), Self::Error<Ctx::Db>> {
+        _trevm: &crate::EvmNeedsTx<Db, Insp>,
+    ) -> Result<(), Self::Error<Db>> {
         Ok(())
     }
 }
@@ -397,14 +396,14 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleRe
 impl<Insp> BundleDriver<Insp> for BundleProcessor<EthSendBundle, EthBundleHash> {
     type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<Ctx: TrevmCtxCommit, Inst, Prec>(
+    fn run_bundle<Db: Database + DatabaseCommit>(
         &mut self,
-        trevm: crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> DriveBundleResult<Ctx, Insp, Inst, Prec, Self> {
+        trevm: crate::EvmNeedsTx<Db, Insp>,
+    ) -> DriveBundleResult<Db, Insp, Self> {
         {
             // Check if the block we're in is valid for this bundle. Both must match
             trevm_ensure!(
-                trevm.inner().block().number == self.bundle.block_number,
+                trevm.inner().block.number == self.bundle.block_number,
                 trevm,
                 BundleError::BlockNumberMismatch
             );
@@ -412,7 +411,7 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthSendBundle, EthBundleHash> 
             // Check for start timestamp range validity
             if let Some(min_timestamp) = self.bundle.min_timestamp {
                 trevm_ensure!(
-                    trevm.inner().block().timestamp >= min_timestamp,
+                    trevm.inner().block.timestamp >= min_timestamp,
                     trevm,
                     BundleError::TimestampOutOfRange
                 );
@@ -421,7 +420,7 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthSendBundle, EthBundleHash> 
             // Check for end timestamp range validity
             if let Some(max_timestamp) = self.bundle.max_timestamp {
                 trevm_ensure!(
-                    trevm.inner().block().timestamp <= max_timestamp,
+                    trevm.inner().block.timestamp <= max_timestamp,
                     trevm,
                     BundleError::TimestampOutOfRange
                 );
@@ -473,10 +472,10 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthSendBundle, EthBundleHash> 
         }
     }
 
-    fn post_bundle<Ctx: TrevmCtxCommit, Inst, Prec>(
+    fn post_bundle<Db: Database + DatabaseCommit>(
         &mut self,
-        _trevm: &crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> Result<(), Self::Error<Ctx::Db>> {
+        _trevm: &crate::EvmNeedsTx<Db, Insp>,
+    ) -> Result<(), Self::Error<Db>> {
         Ok(())
     }
 }
@@ -540,13 +539,13 @@ impl From<EthCallBundle> for BundleBlockFiller {
 impl<Insp> BundleDriver<Insp> for EthCallBundle {
     type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<Ctx: TrevmCtxCommit, Inst, Prec>(
+    fn run_bundle<Db: Database + DatabaseCommit>(
         &mut self,
-        trevm: crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> DriveBundleResult<Ctx, Insp, Inst, Prec, Self> {
+        trevm: crate::EvmNeedsTx<Db, Insp>,
+    ) -> DriveBundleResult<Db, Insp, Self> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
-            trevm.inner().block().number == self.block_number,
+            trevm.inner().block.number == self.block_number,
             trevm,
             BundleError::BlockNumberMismatch
         );
@@ -616,10 +615,10 @@ impl<Insp> BundleDriver<Insp> for EthCallBundle {
         }
     }
 
-    fn post_bundle<Ctx: TrevmCtxCommit, Inst, Prec>(
+    fn post_bundle<Db: Database + DatabaseCommit>(
         &mut self,
-        _trevm: &crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> Result<(), Self::Error<Ctx::Db>> {
+        _trevm: &crate::EvmNeedsTx<Db, Insp>,
+    ) -> Result<(), Self::Error<Db>> {
         Ok(())
     }
 }
@@ -630,16 +629,16 @@ impl<Insp> BundleDriver<Insp> for EthCallBundle {
 impl<Insp> BundleDriver<Insp> for EthSendBundle {
     type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
 
-    fn run_bundle<Ctx, Inst, Prec>(
+    fn run_bundle<Db>(
         &mut self,
-        trevm: crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> DriveBundleResult<Ctx, Insp, Inst, Prec, Self>
+        trevm: crate::EvmNeedsTx<Db, Insp>,
+    ) -> DriveBundleResult<Db, Insp, Self>
     where
-        Ctx: TrevmCtxCommit,
+        Db: Database + DatabaseCommit,
     {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
-            trevm.inner().block().number == self.block_number,
+            trevm.inner().block.number == self.block_number,
             trevm,
             BundleError::BlockNumberMismatch
         );
@@ -648,7 +647,7 @@ impl<Insp> BundleDriver<Insp> for EthSendBundle {
 
         if let Some(min_timestamp) = self.min_timestamp {
             trevm_ensure!(
-                trevm.inner().block().timestamp >= min_timestamp,
+                trevm.inner().block.timestamp >= min_timestamp,
                 trevm,
                 BundleError::TimestampOutOfRange
             );
@@ -657,7 +656,7 @@ impl<Insp> BundleDriver<Insp> for EthSendBundle {
         // Check for end timestamp range validity
         if let Some(max_timestamp) = self.max_timestamp {
             trevm_ensure!(
-                trevm.inner().block().timestamp <= max_timestamp,
+                trevm.inner().block.timestamp <= max_timestamp,
                 trevm,
                 BundleError::TimestampOutOfRange
             );
@@ -724,10 +723,10 @@ impl<Insp> BundleDriver<Insp> for EthSendBundle {
         Ok(t)
     }
 
-    fn post_bundle<Ctx: TrevmCtxCommit, Inst, Prec>(
+    fn post_bundle<Db: Database + DatabaseCommit>(
         &mut self,
-        _trevm: &crate::EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-    ) -> Result<(), Self::Error<Ctx::Db>> {
+        _trevm: &crate::EvmNeedsTx<Db, Insp>,
+    ) -> Result<(), Self::Error<Db>> {
         Ok(())
     }
 }

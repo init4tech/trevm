@@ -1,5 +1,10 @@
 use crate::{
-    db::{StateAcc, TryDatabaseCommit, TryStateAcc}, driver::DriveBlockResult, helpers::{TrevmCtx, TrevmCtxCommit, TrevmCtxRef}, Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult, ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx
+    db::{StateAcc, TryDatabaseCommit, TryStateAcc},
+    driver::DriveBlockResult,
+    helpers::Evm,
+    Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
+    ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
+    EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
 };
 use alloy::{
     primitives::{Address, Bytes, U256},
@@ -9,74 +14,58 @@ use core::{convert::Infallible, fmt};
 use revm::{
     context::{
         result::{EVMError, ExecutionResult, InvalidTransaction, ResultAndState},
-        Block as _,  Cfg as _, ContextSetters, ContextTr, Evm, Transaction as _,
+        Block as _, BlockEnv, Cfg as _, ContextSetters, ContextTr, Transaction as _, TxEnv,
     },
     database::{states::bundle_state::BundleRetention, BundleState},
     interpreter::gas::calculate_initial_tx_gas_for_tx,
     primitives::{hardfork::SpecId, TxKind},
     state::{AccountInfo, Bytecode, EvmState},
-    Database, DatabaseCommit, DatabaseRef,
+    Database, DatabaseCommit, DatabaseRef, ExecuteEvm,
 };
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
 /// See the [crate-level documentation](crate) for more information.
-pub struct Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
-    pub(crate) inner: Box<Evm<Ctx, Insp, Inst, Prec>>,
+pub struct Trevm<Db: Database, Insp, TrevmState> {
+    pub(crate) inner: Box<Evm<Db, Insp>>,
     pub(crate) state: TrevmState,
 }
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> fmt::Debug for Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp, TrevmState> fmt::Debug for Trevm<Db, Insp, TrevmState> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trevm").finish_non_exhaustive()
     }
 }
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> AsRef<Evm<Ctx, Insp, Inst, Prec>>
-    for Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
-    fn as_ref(&self) -> &Evm<Ctx, Insp, Inst, Prec> {
+impl<Db: Database, Insp, TrevmState> AsRef<Evm<Db, Insp>> for Trevm<Db, Insp, TrevmState> {
+    fn as_ref(&self) -> &Evm<Db, Insp> {
         &self.inner
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> From<Evm<Ctx, Insp, Inst, Prec>> for EvmNeedsCfg<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
-    fn from(inner: Evm<Ctx, Insp, Inst, Prec>) -> Self {
+impl<Db: Database, Insp> From<Evm<Db, Insp>> for EvmNeedsCfg<Db, Insp> {
+    fn from(inner: Evm<Db, Insp>) -> Self {
         Self { inner: Box::new(inner), state: NeedsCfg::new() }
     }
 }
 
 // --- ALL STATES
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
     /// Get a reference to the current [`Evm`].
-    pub fn inner(&self) -> &Evm<Ctx, Insp, Inst, Prec> {
+    pub fn inner(&self) -> &Evm<Db, Insp> {
         self.as_ref()
     }
 
     /// Get a mutable reference to the current [`Evm`]. This should be used with
     /// caution, as modifying the EVM may lead to inconsistent Trevmstate or invalid
     /// execution.
-    pub fn inner_mut_unchecked(&mut self) -> &mut Evm<Ctx, Insp, Inst, Prec> {
+    pub fn inner_mut_unchecked(&mut self) -> &mut Evm<Db, Insp> {
         &mut self.inner
     }
 
     /// Destructure the [`Trevm`] into its inner EVM.
-    pub fn into_inner(self) -> Box<Evm<Ctx, Insp, Inst, Prec>> {
+    pub fn into_inner(self) -> Box<Evm<Db, Insp>> {
         self.inner
     }
 
@@ -90,7 +79,7 @@ where
     ///
     /// [`EnvWithHandlerCfg`]: revm::primitives::EnvWithHandlerCfg
     pub fn into_db(self) -> Db {
-        self.inner.into_db_and_env_with_handler_cfg().0
+        self.inner.data.ctx.journaled_state.database
     }
 
     /// Get the id of the currently running hardfork spec. Convenience function
@@ -103,18 +92,14 @@ where
     /// should be called at hardfork boundaries when running multi-block trevm
     /// flows.
     pub fn set_spec_id(&mut self, spec_id: SpecId) {
-        self.inner.modify_spec_id(spec_id)
+        self.inner.modify_cfg(|cfg| cfg.spec = spec_id.into());
     }
 
     /// Run a closure with a different [SpecId], then restore the previous
     /// setting.
-    pub fn with_spec_id<F, NewState>(
-        mut self,
-        spec_id: SpecId,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn with_spec_id<F, NewState>(mut self, spec_id: SpecId, f: F) -> Trevm<Db, Insp, NewState>
     where
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
         let old = self.spec_id();
         self.set_spec_id(spec_id);
@@ -124,7 +109,7 @@ where
     }
 
     /// Convert self into [`EvmErrored`] by supplying an error
-    pub fn errored<E>(self, error: E) -> EvmErrored<Ctx, Insp, Inst, Prec, E> {
+    pub fn errored<E>(self, error: E) -> EvmErrored<Db, Insp, E> {
         EvmErrored { inner: self.inner, state: ErroredState { error } }
     }
 
@@ -133,9 +118,9 @@ where
     pub fn apply_state_overrides(
         mut self,
         overrides: &StateOverride,
-    ) -> Result<Self, EVMError<<Ctx::Db as Database>::Error>>
+    ) -> Result<Self, EVMError<<Db as Database>::Error>>
     where
-        Ctx: TrevmCtxCommit,
+        Db: DatabaseCommit,
     {
         for (address, account_override) in overrides {
             if let Some(balance) = account_override.balance {
@@ -172,9 +157,9 @@ where
     pub fn maybe_apply_state_overrides(
         self,
         overrides: Option<&StateOverride>,
-    ) -> Result<Self, EVMError<<Ctx::Db as Database>::Error>>
+    ) -> Result<Self, EVMError<<Db as Database>::Error>>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         if let Some(overrides) = overrides {
             self.apply_state_overrides(overrides)
@@ -185,37 +170,28 @@ where
 }
 
 // Fallible DB Reads with &mut self
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
     /// Get the current account info for a specific address.
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
     pub fn try_read_account(
         &mut self,
         address: Address,
-    ) -> Result<Option<AccountInfo>, <Ctx::Db as Database>::Error> {
+    ) -> Result<Option<AccountInfo>, <Db as Database>::Error> {
         self.inner.db().basic(address)
     }
 
     /// Get the current nonce for a specific address
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_nonce(
-        &mut self,
-        address: Address,
-    ) -> Result<u64, <Ctx::Db as Database>::Error> {
+    pub fn try_read_nonce(&mut self, address: Address) -> Result<u64, <Db as Database>::Error> {
         self.try_read_account(address).map(|a| a.map(|a| a.nonce).unwrap_or_default())
     }
 
     /// Get the current nonce for a specific address
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_balance(
-        &mut self,
-        address: Address,
-    ) -> Result<U256, <Ctx::Db as Database>::Error> {
+    pub fn try_read_balance(&mut self, address: Address) -> Result<U256, <Db as Database>::Error> {
         self.try_read_account(address).map(|a| a.map(|a| a.balance).unwrap_or_default())
     }
 
@@ -226,7 +202,7 @@ where
         &mut self,
         address: Address,
         slot: U256,
-    ) -> Result<U256, <Ctx::Db as Database>::Error> {
+    ) -> Result<U256, <Db as Database>::Error> {
         self.inner.db().storage(address, slot)
     }
 
@@ -236,7 +212,7 @@ where
     pub fn try_read_code(
         &mut self,
         address: Address,
-    ) -> Result<Option<Bytecode>, <Ctx::Db as Database>::Error> {
+    ) -> Result<Option<Bytecode>, <Db as Database>::Error> {
         let acct_info = self.try_read_account(address)?;
         match acct_info {
             Some(acct) => Ok(Some(self.inner.db().code_by_hash(acct.code_hash)?)),
@@ -249,7 +225,7 @@ where
         &mut self,
         caller: Address,
         gas_price: u128,
-    ) -> Result<u64, <Ctx::Db as Database>::Error> {
+    ) -> Result<u64, <Db as Database>::Error> {
         if gas_price == 0 {
             return Ok(u64::MAX);
         }
@@ -260,25 +236,22 @@ where
 }
 
 // Fallible DB Reads with &self
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Ctx: TrevmCtxRef,
+    Db: Database + DatabaseRef,
 {
     /// Get the current account info for a specific address.
     pub fn try_read_account_ref(
         &self,
         address: Address,
-    ) -> Result<Option<AccountInfo>, <Ctx::Db as DatabaseRef>::Error> {
+    ) -> Result<Option<AccountInfo>, <Db as DatabaseRef>::Error> {
         self.inner.db_ref().basic_ref(address)
     }
 
     /// Get the current nonce for a specific address
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
-    pub fn try_read_nonce_ref(
-        &self,
-        address: Address,
-    ) -> Result<u64, <Ctx::Db as DatabaseRef>::Error> {
+    pub fn try_read_nonce_ref(&self, address: Address) -> Result<u64, <Db as DatabaseRef>::Error> {
         self.try_read_account_ref(address).map(|a| a.map(|a| a.nonce).unwrap_or_default())
     }
 
@@ -288,7 +261,7 @@ where
     pub fn try_read_balance_ref(
         &self,
         address: Address,
-    ) -> Result<U256, <Ctx::Db as DatabaseRef>::Error> {
+    ) -> Result<U256, <Db as DatabaseRef>::Error> {
         self.try_read_account_ref(address).map(|a| a.map(|a| a.balance).unwrap_or_default())
     }
 
@@ -297,7 +270,7 @@ where
         &self,
         address: Address,
         slot: U256,
-    ) -> Result<U256, <Ctx::Db as DatabaseRef>::Error> {
+    ) -> Result<U256, <Db as DatabaseRef>::Error> {
         self.inner.db_ref().storage_ref(address, slot)
     }
 
@@ -305,7 +278,7 @@ where
     pub fn try_read_code_ref(
         &self,
         address: Address,
-    ) -> Result<Option<Bytecode>, <Ctx::Db as DatabaseRef>::Error> {
+    ) -> Result<Option<Bytecode>, <Db as DatabaseRef>::Error> {
         let acct_info = self.try_read_account_ref(address)?;
         match acct_info {
             Some(acct) => Ok(Some(self.inner.db_ref().code_by_hash_ref(acct.code_hash)?)),
@@ -318,7 +291,7 @@ where
         &self,
         caller: Address,
         gas_price: U256,
-    ) -> Result<u64, <Ctx::Db as DatabaseRef>::Error> {
+    ) -> Result<u64, <Db as DatabaseRef>::Error> {
         if gas_price.is_zero() {
             return Ok(u64::MAX);
         }
@@ -329,10 +302,9 @@ where
 }
 
 // Infallible DB Reads with &mut self
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Ctx: TrevmCtx,
-    <Ctx as ContextTr>::Db: Database<Error = Infallible>,
+    Db: Database<Error = Infallible>,
 {
     /// Get the current account info for a specific address.
     ///
@@ -372,10 +344,9 @@ where
 }
 
 // Infalible DB Reads with &self
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Ctx: TrevmCtx,
-    Ctx::Db: DatabaseRef,
+    Db: DatabaseRef,
 {
     /// Get the current account info for a specific address.
     ///
@@ -410,16 +381,13 @@ where
     }
 }
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
     /// Commit a set of state changes to the database. This is a low-level API,
     /// and is not intended for general use. Regular users should prefer
     /// executing a transaction.
     pub fn commit_unchecked(&mut self, state: EvmState)
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.db().commit(state);
     }
@@ -430,9 +398,9 @@ where
         &mut self,
         address: Address,
         f: F,
-    ) -> Result<AccountInfo, <Ctx::Db as Database>::Error>
+    ) -> Result<AccountInfo, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.modify_account(address, f)
     }
@@ -443,9 +411,9 @@ where
         &mut self,
         address: Address,
         nonce: u64,
-    ) -> Result<u64, <Ctx::Db as Database>::Error>
+    ) -> Result<u64, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.set_nonce(address, nonce)
     }
@@ -458,9 +426,9 @@ where
     pub fn try_increment_nonce_unchecked(
         &mut self,
         address: Address,
-    ) -> Result<u64, <Ctx::Db as Database>::Error>
+    ) -> Result<u64, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.increment_nonce(address)
     }
@@ -472,9 +440,9 @@ where
     pub fn try_decrement_nonce_unchecked(
         &mut self,
         address: Address,
-    ) -> Result<u64, <Ctx::Db as Database>::Error>
+    ) -> Result<u64, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.decrement_nonce(address)
     }
@@ -486,9 +454,9 @@ where
         address: Address,
         slot: U256,
         value: U256,
-    ) -> Result<U256, <Ctx::Db as Database>::Error>
+    ) -> Result<U256, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.set_storage(address, slot, value)
     }
@@ -500,9 +468,9 @@ where
         &mut self,
         address: Address,
         bytecode: Bytecode,
-    ) -> Result<Option<Bytecode>, <Ctx::Db as Database>::Error>
+    ) -> Result<Option<Bytecode>, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.set_bytecode(address, bytecode)
     }
@@ -516,9 +484,9 @@ where
         &mut self,
         address: Address,
         amount: U256,
-    ) -> Result<U256, <Ctx::Db as Database>::Error>
+    ) -> Result<U256, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.increase_balance(address, amount)
     }
@@ -531,9 +499,9 @@ where
         &mut self,
         address: Address,
         amount: U256,
-    ) -> Result<U256, <Ctx::Db as Database>::Error>
+    ) -> Result<U256, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.decrease_balance(address, amount)
     }
@@ -544,18 +512,17 @@ where
         &mut self,
         address: Address,
         amount: U256,
-    ) -> Result<U256, <Ctx::Db as Database>::Error>
+    ) -> Result<U256, <Db as Database>::Error>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.inner.set_balance(address, amount)
     }
 }
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Ctx: TrevmCtx,
-    <Ctx as ContextTr>::Db: Database<Error = Infallible>,
+    Db: Database<Error = Infallible>,
 {
     /// Modify an account with a closure and commit the modified account. This
     /// is a low-level API, and is not intended for general use.
@@ -565,7 +532,7 @@ where
         f: impl FnOnce(&mut AccountInfo),
     ) -> AccountInfo
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_modify_account_unchecked(address, f).expect("infallible")
     }
@@ -574,7 +541,7 @@ where
     /// low-level API, and is not intended for general use.
     pub fn set_nonce_unchecked(&mut self, address: Address, nonce: u64) -> u64
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_set_nonce_unchecked(address, nonce).expect("infallible")
     }
@@ -586,7 +553,7 @@ where
     /// maximum value.
     pub fn increment_nonce_unchecked(&mut self, address: Address) -> u64
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_increment_nonce_unchecked(address).expect("infallible")
     }
@@ -597,7 +564,7 @@ where
     /// If this would cause the nonce to underflow, the nonce will be set to 0.
     pub fn decrement_nonce_unchecked(&mut self, address: Address) -> u64
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_decrement_nonce_unchecked(address).expect("infallible")
     }
@@ -606,7 +573,7 @@ where
     /// intended for general use.
     pub fn set_storage_unchecked(&mut self, address: Address, slot: U256, value: U256) -> U256
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_set_storage_unchecked(address, slot, value).expect("infallible")
     }
@@ -620,7 +587,7 @@ where
         bytecode: Bytecode,
     ) -> Option<Bytecode>
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_set_bytecode_unchecked(address, bytecode).expect("infallible")
     }
@@ -629,7 +596,7 @@ where
     /// is a low-level API, and is not intended for general use.
     pub fn increase_balance_unchecked(&mut self, address: Address, amount: U256) -> U256
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_increase_balance_unchecked(address, amount).expect("infallible")
     }
@@ -638,7 +605,7 @@ where
     /// is a low-level API, and is not intended for general use.
     pub fn decrease_balance_unchecked(&mut self, address: Address, amount: U256) -> U256
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_decrease_balance_unchecked(address, amount).expect("infallible")
     }
@@ -647,7 +614,7 @@ where
     /// low-level API, and is not intended for general use.
     pub fn set_balance_unchecked(&mut self, address: Address, amount: U256) -> U256
     where
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         self.try_set_balance_unchecked(address, amount).expect("infallible")
     }
@@ -655,10 +622,9 @@ where
 
 // --- ALL STATES, WITH State<Db>
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Ctx: TrevmCtx,
-    <Ctx as ContextTr>::Db: StateAcc,
+    Db: StateAcc,
 {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
@@ -667,10 +633,9 @@ where
     }
 }
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Ctx: TrevmCtx,
-    <Ctx as ContextTr>::Db: TryStateAcc,
+    Db: TryStateAcc,
 {
     /// Fallibly set the [EIP-161] state clear flag, activated in the Spurious
     /// Dragon hardfork. This function is intended to be used by shared states,
@@ -680,19 +645,16 @@ where
     pub fn try_set_state_clear_flag(
         &mut self,
         flag: bool,
-    ) -> Result<(), <Ctx::Db as TryStateAcc>::Error> {
+    ) -> Result<(), <Db as TryStateAcc>::Error> {
         self.inner.db().try_set_state_clear_flag(flag)
     }
 }
 
 // --- NEEDS CFG
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsCfg<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> EvmNeedsCfg<Db, Insp> {
     /// Fill the configuration environment.
-    pub fn fill_cfg<T: Cfg>(mut self, filler: &T) -> EvmNeedsBlock<Ctx, Insp, Inst, Prec> {
+    pub fn fill_cfg<T: Cfg>(mut self, filler: &T) -> EvmNeedsBlock<Db, Insp> {
         filler.fill_cfg(&mut self.inner);
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { core::mem::transmute(self) }
@@ -701,10 +663,7 @@ where
 
 // --- HAS CFG
 
-impl<Ctx, Insp, Inst, Prec, TrevmState: HasCfg> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
     /// Set the [EIP-170] contract code size limit. By default this is set to
     /// 0x6000 bytes (~25KiB). Contracts whose bytecode is larger than this
     /// limit cannot be deployed and will produce a [`CreateInitCodeSizeLimit`]
@@ -713,8 +672,11 @@ where
     /// [`CreateInitCodeSizeLimit`]: InvalidTransaction::CreateInitCodeSizeLimit
     /// [`Eip-170`]: https://eips.ethereum.org/EIPS/eip-170
     pub fn set_code_size_limit(&mut self, limit: usize) -> Option<usize> {
-        let cfg = self.inner.cfg_mut();
-        cfg.limit_contract_code_size.replace(limit)
+        let mut csl = None;
+        self.inner.data.ctx.modify_cfg(|cfg| {
+            csl = cfg.limit_contract_code_size.replace(limit);
+        });
+        csl
     }
 
     /// Disable the [EIP-170] contract code size limit, returning the previous
@@ -722,17 +684,16 @@ where
     ///
     /// [`Eip-170`]: https://eips.ethereum.org/EIPS/eip-170
     pub fn disable_code_size_limit(&mut self) -> Option<usize> {
-        self.inner.cfg_mut().limit_contract_code_size.take()
+        let mut csl = None;
+        self.inner.data.ctx.modify_cfg(|cfg| csl = cfg.limit_contract_code_size.take());
+        csl
     }
 
     /// Run a closure with the code size limit disabled, then restore the
     /// previous setting.
-    pub fn without_code_size_limit<F, NewState: HasCfg>(
-        mut self,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn without_code_size_limit<F, NewState: HasCfg>(mut self, f: F) -> Trevm<Db, Insp, NewState>
     where
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
         let limit = self.disable_code_size_limit();
         let mut new = f(self);
@@ -756,20 +717,17 @@ where
     /// Run a function with the provided configuration, then restore the
     /// previous configuration. This will not affect the block and tx, if those
     /// have been filled.
-    pub fn with_cfg<C, F, NewState>(
-        mut self,
-        cfg: &C,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn with_cfg<C, F, NewState>(mut self, cfg: &C, f: F) -> Trevm<Db, Insp, NewState>
     where
         C: Cfg,
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
         NewState: HasCfg,
     {
-        let previous = self.inner.cfg_mut().clone();
-        cfg.fill_cfg_env(self.inner.cfg_mut());
+        let previous = self.inner.cfg().clone();
+        cfg.fill_cfg(&mut self.inner);
+
         let mut this = f(self);
-        *this.inner.cfg_mut() = previous;
+        this.inner.data.ctx.modify_cfg(|cfg| *cfg = previous);
         this
     }
 
@@ -780,26 +738,22 @@ where
         mut self,
         cfg: &C,
         f: F,
-    ) -> Result<Trevm<Ctx, Insp, Inst, Prec, NewState>, EvmErrored<Ctx, Insp, Inst, Prec, E>>
+    ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>
     where
         C: Cfg,
-        F: FnOnce(
-            Self,
-        ) -> Result<
-            Trevm<Ctx, Insp, Inst, Prec, NewState>,
-            EvmErrored<Ctx, Insp, Inst, Prec, E>,
-        >,
+        F: FnOnce(Self) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>,
         NewState: HasCfg,
     {
-        let previous = self.inner.cfg_mut().clone();
-        cfg.fill_cfg_env(self.inner.cfg_mut());
+        let previous = self.inner.cfg().clone();
+        cfg.fill_cfg(&mut self.inner);
+
         match f(self) {
             Ok(mut evm) => {
-                *evm.inner.cfg_mut() = previous;
+                evm.inner.modify_cfg(|cfg| *cfg = previous);
                 Ok(evm)
             }
             Err(mut evm) => {
-                *evm.inner.cfg_mut() = previous;
+                evm.inner.modify_cfg(|cfg| *cfg = previous);
                 Err(evm)
             }
         }
@@ -850,12 +804,9 @@ where
     /// Run a closure with balance checks disabled, then restore the previous
     /// setting.
     #[cfg(feature = "optional_balance_check")]
-    pub fn without_balance_check<F, NewState: HasCfg>(
-        mut self,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn without_balance_check<F, NewState: HasCfg>(mut self, f: F) -> Trevm<Db, Insp, NewState>
     where
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
         let previous = self.inner.cfg().disable_balance_check;
         self.disable_balance_check();
@@ -881,12 +832,9 @@ where
     /// Run a closure with block gas limits disabled, then restore the previous
     /// setting.
     #[cfg(feature = "optional_block_gas_limit")]
-    pub fn without_block_gas_limit<F, NewState: HasCfg>(
-        mut self,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn without_block_gas_limit<F, NewState: HasCfg>(mut self, f: F) -> Trevm<Db, Insp, NewState>
     where
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
         let previous = self.inner.cfg().disable_block_gas_limit;
         self.disable_block_gas_limit();
@@ -901,7 +849,7 @@ where
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
     #[cfg(feature = "optional_eip3607")]
     pub fn disable_eip3607(&mut self) {
-        self.inner.cfg_mut().disable_eip3607 = true
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = true)
     }
 
     /// Enable [EIP-3607]. See [`Self::disable_eip3607`].
@@ -909,23 +857,23 @@ where
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
     #[cfg(feature = "optional_eip3607")]
     pub fn enable_eip3607(&mut self) {
-        self.inner.cfg_mut().disable_eip3607 = false
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = false)
     }
 
     /// Run a closure with [EIP-3607] disabled, then restore the previous
     /// setting.
     #[cfg(feature = "optional_eip3607")]
-    pub fn without_eip3607<F, NewState: HasCfg>(
-        mut self,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn without_eip3607<F, NewState: HasCfg>(mut self, f: F) -> Trevm<Db, Insp, NewState>
     where
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
         let previous = self.inner.cfg().disable_eip3607;
         self.disable_eip3607();
+
         let mut new = f(self);
-        new.inner.cfg_mut().disable_eip3607 = previous;
+        if !previous {
+            new.enable_eip3607();
+        }
         new
     }
 
@@ -935,7 +883,7 @@ where
     /// [EIP-1559]: https://eips.ethereum.org/EIPS/eip-1559
     #[cfg(feature = "optional_no_base_fee")]
     pub fn disable_base_fee(&mut self) {
-        self.inner.cfg_mut().disable_base_fee = true;
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_base_fee = true)
     }
 
     /// Enable [EIP-1559] base fee checks. See [`Self::disable_base_fee`].
@@ -943,7 +891,7 @@ where
     /// [EIP-1559]: https://eips.ethereum.org/EIPS/eip-1559
     #[cfg(feature = "optional_no_base_fee")]
     pub fn enable_base_fee(&mut self) {
-        self.inner.cfg_mut().disable_base_fee = false
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_base_fee = false)
     }
 
     /// Run a closure with [EIP-1559] base fee checks disabled, then restore the
@@ -951,33 +899,30 @@ where
     ///
     /// [EIP-1559]: https://eips.ethereum.org/EIPS/eip-1559
     #[cfg(feature = "optional_no_base_fee")]
-    pub fn without_base_fee<F, NewState: HasCfg>(
-        mut self,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn without_base_fee<F, NewState: HasCfg>(mut self, f: F) -> Trevm<Db, Insp, NewState>
     where
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
         let previous = self.inner.cfg().disable_base_fee;
         self.disable_base_fee();
+
         let mut new = f(self);
-        new.inner.cfg_mut().disable_base_fee = previous;
+        if !previous {
+            new.enable_base_fee();
+        }
         new
     }
 }
 
 // --- NEEDS BLOCK
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsBlock<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> EvmNeedsBlock<Db, Insp> {
     /// Open a block, apply some logic, and return the EVM ready for the next
     /// block.
-    pub fn drive_block<D>(self, driver: &mut D) -> DriveBlockResult<Ctx, Insp, Inst, Prec, D>
+    pub fn drive_block<D>(self, driver: &mut D) -> DriveBlockResult<Db, Insp, D>
     where
         D: BlockDriver<Insp>,
-        Ctx: TrevmCtxCommit
+        Db: DatabaseCommit,
     {
         let trevm = self.fill_block(driver.block());
         let trevm = driver.run_txns(trevm)?;
@@ -995,16 +940,16 @@ where
     /// # Panics
     ///
     /// If the driver contains no blocks.
-    pub fn drive_chain<D>(self, driver: &mut D) -> DriveChainResult<Ctx, Insp, Inst, Prec, D>
+    pub fn drive_chain<D>(self, driver: &mut D) -> DriveChainResult<Db, Insp, D>
     where
-        D: ChainDriver<Ext>,
-        Ctx: TrevmCtxCommit
+        D: ChainDriver<Insp>,
+        Db: DatabaseCommit,
     {
         let block_count = driver.blocks().len();
 
         let mut trevm = self
             .drive_block(&mut driver.blocks()[0])
-            .map_err(EvmErrored::err_into::<<D as ChainDriver<Ext>>::Error<Db>>)?;
+            .map_err(EvmErrored::err_into::<<D as ChainDriver<Insp>>::Error<Db>>)?;
 
         if let Err(e) = driver.interblock(&trevm, 0) {
             return Err(trevm.errored(e));
@@ -1014,7 +959,7 @@ where
             trevm = {
                 let trevm = trevm
                     .drive_block(&mut driver.blocks()[i])
-                    .map_err(EvmErrored::err_into::<<D as ChainDriver<Ext>>::Error<Db>>)?;
+                    .map_err(EvmErrored::err_into::<<D as ChainDriver<Insp>>::Error<Db>>)?;
                 if let Err(e) = driver.interblock(&trevm, i) {
                     return Err(trevm.errored(e));
                 }
@@ -1028,7 +973,7 @@ where
     ///
     /// This does not perform any pre- or post-block logic. To manage block
     /// lifecycles, use [`Self::drive_block`] or [`Self::drive_chain`] instead.
-    pub fn fill_block<B: Block>(mut self, filler: &B) -> EvmNeedsTx<Ctx, Insp, Inst, Prec> {
+    pub fn fill_block<B: Block>(mut self, filler: &B) -> EvmNeedsTx<Db, Insp> {
         filler.fill_block(self.inner_mut_unchecked());
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { core::mem::transmute(self) }
@@ -1037,13 +982,12 @@ where
 
 // --- HAS BLOCK
 
-impl<Ctx, Insp, Inst, Prec, TrevmState> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
+impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Ctx: TrevmCtx,
     TrevmState: HasBlock,
 {
     /// Get a reference to the current block environment.
-    pub fn block(&self) -> &Ctx::Block {
+    pub fn block(&self) -> &BlockEnv {
         self.inner.block()
     }
 
@@ -1068,19 +1012,15 @@ where
     }
 
     /// Run a function with the provided block, then restore the previous block.
-    pub fn with_block<B, F, NewState>(
-        mut self,
-        b: &B,
-        f: F,
-    ) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn with_block<B, F, NewState>(mut self, b: &B, f: F) -> Trevm<Db, Insp, NewState>
     where
         B: Block,
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
         NewState: HasBlock,
-        Ctx: ContextSetters,
     {
-        let mut previous = self.inner.block().clone();
-        b.fill_block_env(&mut previous);
+        let previous = self.inner.block().clone();
+        b.fill_block(&mut self.inner);
+
         let mut this = f(self);
         this.inner.data.ctx.set_block(previous);
         this
@@ -1091,21 +1031,14 @@ where
         mut self,
         b: &B,
         f: F,
-    ) -> Result<Trevm<Ctx, Insp, Inst, Prec, NewState>, EvmErrored<Ctx, Insp, Inst, Prec, E>>
+    ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>
     where
-        F: FnOnce(
-            Self,
-        ) -> Result<
-            Trevm<Ctx, Insp, Inst, Prec, NewState>,
-            EvmErrored<Ctx, Insp, Inst, Prec, E>,
-        >,
+        F: FnOnce(Self) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>,
         B: Block,
         NewState: HasBlock,
-        Ctx: ContextSetters,
     {
         let previous = self.inner.block().clone();
-        let mut working = previous.clone();
-        b.fill_block_env(&mut working);
+        b.fill_block(&mut self.inner);
 
         match f(self) {
             Ok(mut evm) => {
@@ -1122,10 +1055,7 @@ where
 
 // --- Needs Block with State<Db>
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsBlock<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx<Db: StateAcc>,
-{
+impl<Db: Database + StateAcc, Insp> EvmNeedsBlock<Db, Insp> {
     /// Finish execution and return the outputs.
     ///
     /// If the State has not been built with
@@ -1145,10 +1075,7 @@ where
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsBlock<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx<Db: TryStateAcc>,
-{
+impl<Db: Database + TryStateAcc, Insp> EvmNeedsBlock<Db, Insp> {
     /// Fallibly finish execution and return the outputs. This function is
     /// intended to be used by shared states, where mutable access may fail, e.
     /// g. an `Arc<Db>`. Prefer [`Self::finish`] when available.
@@ -1163,7 +1090,7 @@ where
     /// [`State::take_bundle`]: revm::db::State::take_bundle
     pub fn try_finish(
         mut self,
-    ) -> Result<BundleState, EvmErrored<Ctx, Insp, Inst, Prec, <Db as TryStateAcc>::Error>> {
+    ) -> Result<BundleState, EvmErrored<Db, Insp, <Db as TryStateAcc>::Error>> {
         let db = self.inner.db();
 
         trevm_try!(db.try_merge_transitions(BundleRetention::Reverts), self);
@@ -1176,22 +1103,19 @@ where
 
 // --- NEEDS TX
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsTx<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> EvmNeedsTx<Db, Insp> {
     /// Close the current block, returning the EVM ready for the next block.
-    pub fn close_block(self) -> EvmNeedsBlock<Ctx, Insp, Inst, Prec> {
+    pub fn close_block(self) -> EvmNeedsBlock<Db, Insp> {
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { core::mem::transmute(self) }
     }
 
     /// Drive a bundle to completion, apply some post-bundle logic, and return the
     /// EVM ready for the next bundle or tx.
-    pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<Ctx, Insp, Inst, Prec, D>
+    pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<Db, Insp, D>
     where
         D: BundleDriver<Insp>,
-        Ctx: TrevmCtxCommit,
+        Db: DatabaseCommit,
     {
         let trevm = driver.run_bundle(self)?;
 
@@ -1202,7 +1126,7 @@ where
     }
 
     /// Fill the transaction environment.
-    pub fn fill_tx<T: Tx>(mut self, filler: &T) -> EvmReady<Ctx, Insp, Inst, Prec> {
+    pub fn fill_tx<T: Tx>(mut self, filler: &T) -> EvmReady<Db, Insp> {
         filler.fill_tx(&mut self.inner);
         // SAFETY: Same size and repr. Only phantomdata type changes
         unsafe { core::mem::transmute(self) }
@@ -1212,7 +1136,7 @@ where
     pub fn run_tx<T: Tx>(
         self,
         filler: &T,
-    ) -> Result<EvmTransacted<Ctx, Insp, Inst, Prec>, EvmErrored<Ctx, Insp, Inst, Prec>> {
+    ) -> Result<EvmTransacted<Db, Insp>, EvmErrored<Db, Insp>> {
         self.fill_tx(filler).run()
     }
 
@@ -1228,7 +1152,7 @@ where
     pub fn call_tx<T: Tx>(
         self,
         filler: &T,
-    ) -> Result<(ExecutionResult, Self), EvmErrored<Ctx, Insp, Inst, Prec>> {
+    ) -> Result<(ExecutionResult, Self), EvmErrored<Db, Insp>> {
         self.fill_tx(filler).call()
     }
 
@@ -1241,49 +1165,22 @@ where
     pub fn estimate_tx_gas<T: Tx>(
         self,
         filler: &T,
-    ) -> Result<
-        (crate::EstimationResult, EvmReady<Ctx, Insp, Inst, Prec>),
-        EvmErrored<Ctx, Insp, Inst, Prec>,
-    > {
+    ) -> Result<(crate::EstimationResult, EvmReady<Db, Insp>), EvmErrored<Db, Insp>> {
         self.fill_tx(filler).estimate_gas()
     }
 }
 
 // --- HAS TX
 
-impl<Ctx, Insp, Inst, Prec, TrevmState: HasTx> Trevm<Ctx, Insp, Inst, Prec, TrevmState>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp, TrevmState: HasTx> Trevm<Db, Insp, TrevmState> {
     #[cfg(feature = "call")]
     fn try_with_call_filler<NewState: HasCfg + HasBlock>(
         self,
         filler: &crate::fillers::CallFiller,
-        f: impl FnOnce(
-            Self,
-        ) -> Result<
-            Trevm<Ctx, Insp, Inst, Prec, NewState>,
-            EvmErrored<Ctx, Insp, Inst, Prec>,
-        >,
-    ) -> Result<Trevm<Ctx, Insp, Inst, Prec, NewState>, EvmErrored<Ctx, Insp, Inst, Prec>> {
+        f: impl FnOnce(Self) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp>>,
+    ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp>> {
         // override all relevant env bits
-        self.try_with_cfg(filler, |this| {
-            this.try_with_block(filler, |mut this| {
-                // reproducing code from `try_with_tx` to avoid trait bounds
-                let previous = this.inner.tx_mut().clone();
-                filler.fill_tx_env(this.inner.tx_mut());
-                match f(this) {
-                    Ok(mut evm) => {
-                        *evm.inner.tx_mut() = previous;
-                        Ok(evm)
-                    }
-                    Err(mut evm) => {
-                        *evm.inner.tx_mut() = previous;
-                        Err(evm)
-                    }
-                }
-            })
-        })
+        self.try_with_cfg(filler, |this| this.try_with_block(filler, f))
     }
 
     /// Convenience function to use the estimator to fill both Cfg and Tx, and
@@ -1292,13 +1189,13 @@ where
     fn try_with_estimate_gas_filler<E>(
         self,
         filler: &crate::fillers::GasEstimationFiller,
-        f: impl FnOnce(Self) -> Result<Self, EvmErrored<Ctx, Insp, Inst, Prec, E>>,
-    ) -> Result<Self, EvmErrored<Ctx, Insp, Inst, Prec, E>> {
+        f: impl FnOnce(Self) -> Result<Self, EvmErrored<Db, Insp, E>>,
+    ) -> Result<Self, EvmErrored<Db, Insp, E>> {
         self.try_with_cfg(filler, |this| this.try_with_tx(filler, f))
     }
 
     /// Get a reference to the loaded tx env that will be executed.
-    pub fn tx(&self) -> &Ctx::Tx {
+    pub fn tx(&self) -> &TxEnv {
         self.inner.tx()
     }
     /// True if the transaction is a simple transfer.
@@ -1343,9 +1240,7 @@ where
     }
 
     /// Get the account of the caller. Error if the DB errors.
-    pub fn caller_account(
-        &mut self,
-    ) -> Result<AccountInfo, EVMError<<Ctx::Db as Database>::Error>> {
+    pub fn caller_account(&mut self) -> Result<AccountInfo, EVMError<<Db as Database>::Error>> {
         self.try_read_account(self.caller())
             .map(Option::unwrap_or_default)
             .map_err(EVMError::Database)
@@ -1364,7 +1259,7 @@ where
     /// - if the DB errors, `Err(EVMError::Database(err))`
     pub fn callee_account(
         &mut self,
-    ) -> Result<Option<AccountInfo>, EVMError<<Ctx::Db as Database>::Error>> {
+    ) -> Result<Option<AccountInfo>, EVMError<<Db as Database>::Error>> {
         self.callee().map_or(Ok(None), |addr| {
             self.try_read_account(addr)
                 .map(Option::unwrap_or_default)
@@ -1375,25 +1270,25 @@ where
 
     /// Get the account of the callee. `None` if `Self::is_create` is true,
     /// error if the DB errors.
-    pub fn callee_account_ref(&self) -> Result<Option<AccountInfo>, <Ctx::Db as DatabaseRef>::Error>
+    pub fn callee_account_ref(&self) -> Result<Option<AccountInfo>, <Db as DatabaseRef>::Error>
     where
-        Ctx: TrevmCtxRef,
+        Db: DatabaseRef,
     {
         self.callee().map_or(Ok(None), |addr| self.try_read_account_ref(addr))
     }
 
     /// Run a function with the provided transaction, then restore the previous
     /// transaction.
-    pub fn with_tx<T, F, NewState>(mut self, t: &T, f: F) -> Trevm<Ctx, Insp, Inst, Prec, NewState>
+    pub fn with_tx<T, F, NewState>(mut self, t: &T, f: F) -> Trevm<Db, Insp, NewState>
     where
         T: Tx,
-        F: FnOnce(Self) -> Trevm<Ctx, Insp, Inst, Prec, NewState>,
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
         NewState: HasTx,
     {
-        let previous = self.inner.tx_mut().clone();
-        t.fill_tx_env(self.inner.tx_mut());
+        let previous = self.inner.tx().clone();
+        t.fill_tx(&mut self.inner);
         let mut this = f(self);
-        *this.inner.tx_mut() = previous;
+        this.inner.data.ctx.set_tx(previous);
         this
     }
 
@@ -1403,22 +1298,14 @@ where
         mut self,
         t: &T,
         f: F,
-    ) -> Result<Trevm<Ctx, Insp, Inst, Prec, NewState>, EvmErrored<Ctx, Insp, Inst, Prec, E>>
+    ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>
     where
         T: Tx,
-        F: FnOnce(
-            Self,
-        ) -> Result<
-            Trevm<Ctx, Insp, Inst, Prec, NewState>,
-            EvmErrored<Ctx, Insp, Inst, Prec, E>,
-        >,
+        F: FnOnce(Self) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>,
         NewState: HasTx,
-        Ctx: ContextSetters,
     {
         let previous = self.inner.tx().clone();
-        let mut working = previous.clone()
-        t.fill_tx_env(&mut working);
-        self.inner.data.ctx.set_tx(working);
+        t.fill_tx(&mut self.inner);
         match f(self) {
             Ok(mut evm) => {
                 evm.inner.data.ctx.set_tx(previous);
@@ -1433,7 +1320,7 @@ where
 
     /// Return the maximum gas that the caller can purchase. This is the balance
     /// of the caller divided by the gas price.
-    pub fn caller_gas_allowance(&mut self) -> Result<u64, EVMError<<Ctx::Db as Database>::Error>> {
+    pub fn caller_gas_allowance(&mut self) -> Result<u64, EVMError<<Db as Database>::Error>> {
         // Avoid DB read if gas price is zero
         let gas_price = self.gas_price();
         self.try_gas_allowance(self.caller(), gas_price).map_err(EVMError::Database)
@@ -1449,13 +1336,12 @@ where
     /// # Returns
     ///
     /// The gas limit after the operation.
-    pub fn cap_tx_gas_to_allowance(
-        &mut self,
-    ) -> Result<u64, EVMError<<Ctx::Db as Database>::Error>> {
+    pub fn cap_tx_gas_to_allowance(&mut self) -> Result<u64, EVMError<<Db as Database>::Error>> {
         let allowance = self.caller_gas_allowance()?;
-        let tx = self.inner_mut_unchecked().tx_mut();
-        tx.gas_limit = tx.gas_limit.min(allowance);
-        Ok(tx.gas_limit)
+
+        self.inner.modify_tx(|tx| tx.gas_limit = tx.gas_limit.min(allowance));
+
+        Ok(self.gas_limit())
     }
 
     /// Cap the gas limit of the transaction to the minimum of the block gas
@@ -1469,9 +1355,10 @@ where
     /// The gas limit after the operation.
     pub fn cap_tx_gas_to_block_limit(&mut self) -> u64 {
         let block_gas_limit = self.block_gas_limit();
-        let tx = self.inner_mut_unchecked().tx_mut();
-        tx.gas_limit = tx.gas_limit.min(block_gas_limit);
-        tx.gas_limit
+
+        self.inner.modify_tx(|tx| tx.gas_limit = tx.gas_limit.min(block_gas_limit));
+
+        self.tx().gas_limit
     }
 
     /// This function caps the gas limit of the transaction to the minimum of
@@ -1483,7 +1370,7 @@ where
     /// # Returns
     ///
     /// The gas limit after the operation.
-    pub fn cap_tx_gas(&mut self) -> Result<u64, EVMError<<Ctx::Db as Database>::Error>> {
+    pub fn cap_tx_gas(&mut self) -> Result<u64, EVMError<<Db as Database>::Error>> {
         self.cap_tx_gas_to_block_limit();
         self.cap_tx_gas_to_allowance()
     }
@@ -1491,9 +1378,9 @@ where
 
 // -- NEEDS TX with State<Db>
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsTx<Ctx, Insp, Inst, Prec>
+impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where
-    Ctx: TrevmCtx<Db: StateAcc>,
+    Db: Database + StateAcc,
 {
     /// Apply block overrides to the current block.
     ///
@@ -1530,9 +1417,9 @@ where
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> EvmNeedsTx<Ctx, Insp, Inst, Prec>
+impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where
-    Ctx: TrevmCtx<Db: TryStateAcc>,
+    Db: Database + TryStateAcc,
 {
     /// Apply block overrides to the current block. This function is
     /// intended to be used by shared states, where mutable access may fail, e.
@@ -1548,7 +1435,7 @@ where
     pub fn try_apply_block_overrides(
         mut self,
         overrides: &BlockOverrides,
-    ) -> Result<Self, EvmErrored<Ctx, Insp, Inst, Prec, <Db as TryStateAcc>::Error>> {
+    ) -> Result<Self, EvmErrored<Db, Insp, <Db as TryStateAcc>::Error>> {
         overrides.fill_block(&mut self.inner);
 
         if let Some(hashes) = overrides.block_hash.as_ref() {
@@ -1572,7 +1459,7 @@ where
     pub fn try_maybe_apply_block_overrides(
         self,
         overrides: Option<&BlockOverrides>,
-    ) -> Result<Self, EvmErrored<Ctx, Insp, Inst, Prec, <Db as TryStateAcc>::Error>> {
+    ) -> Result<Self, EvmErrored<Db, Insp, <Db as TryStateAcc>::Error>> {
         if let Some(overrides) = overrides {
             self.try_apply_block_overrides(overrides)
         } else {
@@ -1583,12 +1470,9 @@ where
 
 // --- READY
 
-impl<Ctx, Insp, Inst, Prec> EvmReady<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> EvmReady<Db, Insp> {
     /// Clear the current transaction environment.
-    pub fn clear_tx(self) -> EvmNeedsTx<Ctx, Insp, Inst, Prec> {
+    pub fn clear_tx(self) -> EvmNeedsTx<Db, Insp> {
         // NB: we do not clear the tx env here, as we may read it during post-tx
         // logic in a block driver
 
@@ -1599,10 +1483,8 @@ where
     /// Execute the loaded transaction. This is a wrapper around
     /// [`Evm::transact`] and produces either [`EvmTransacted`] or
     /// [`EvmErrored`].
-    pub fn run(
-        mut self,
-    ) -> Result<EvmTransacted<Ctx, Insp, Inst, Prec>, EvmErrored<Ctx, Insp, Inst, Prec>> {
-        let result = self.inner.transact();
+    pub fn run(mut self) -> Result<EvmTransacted<Db, Insp>, EvmErrored<Db, Insp>> {
+        let result = self.inner.replay();
 
         let Trevm { inner, .. } = self;
 
@@ -1621,12 +1503,7 @@ where
     ///
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
     #[cfg(feature = "call")]
-    pub fn call(
-        self,
-    ) -> Result<
-        (ExecutionResult, EvmNeedsTx<Ctx, Insp, Inst, Prec>),
-        EvmErrored<Ctx, Insp, Inst, Prec>,
-    > {
+    pub fn call(self) -> Result<(ExecutionResult, EvmNeedsTx<Db, Insp>), EvmErrored<Db, Insp>> {
         let mut output = std::mem::MaybeUninit::uninit();
 
         let gas_limit = self.tx().gas_limit;
@@ -1668,7 +1545,7 @@ where
     #[cfg(feature = "estimate_gas")]
     fn estimate_gas_simple_transfer(
         &mut self,
-    ) -> Result<Option<u64>, EVMError<<Ctx::Db as Database>::Error>> {
+    ) -> Result<Option<u64>, EVMError<<Db as Database>::Error>> {
         use alloy::consensus::constants::KECCAK_EMPTY;
         use tracing::trace;
 
@@ -1696,7 +1573,7 @@ where
     fn run_estimate(
         self,
         filler: &crate::fillers::GasEstimationFiller,
-    ) -> Result<(crate::EstimationResult, Self), EvmErrored<Ctx, Insp, Inst, Prec>> {
+    ) -> Result<(crate::EstimationResult, Self), EvmErrored<Db, Insp>> {
         let mut estimation = std::mem::MaybeUninit::uninit();
 
         let this = self.try_with_estimate_gas_filler(filler, |this| match this.run() {
@@ -1766,9 +1643,7 @@ where
     /// [`EstimationREsult`]: crate::EstimationResult
     /// [`MIN_TRANSACTION_GAS`]: crate::MIN_TRANSACTION_GAS
     #[cfg(feature = "estimate_gas")]
-    pub fn estimate_gas(
-        mut self,
-    ) -> Result<(crate::EstimationResult, Self), EvmErrored<Ctx, Insp, Inst, Prec>> {
+    pub fn estimate_gas(mut self) -> Result<(crate::EstimationResult, Self), EvmErrored<Db, Insp>> {
         use tracing::{debug, enabled};
 
         if let Some(est) = crate::trevm_try!(self.estimate_gas_simple_transfer(), self) {
@@ -1861,10 +1736,7 @@ where
 
 // --- ERRORED
 
-impl<Ctx, Insp, Inst, Prec, E> EvmErrored<Ctx, Insp, Inst, Prec, E>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp, E> EvmErrored<Db, Insp, E> {
     /// Get a reference to the error.
     pub const fn error(&self) -> &E {
         &self.state.error
@@ -1879,7 +1751,7 @@ where
     }
 
     /// Discard the error and return the EVM.
-    pub fn discard_error(self) -> EvmNeedsTx<Ctx, Insp, Inst, Prec> {
+    pub fn discard_error(self) -> EvmNeedsTx<Db, Insp> {
         Trevm { inner: self.inner, state: NeedsTx::new() }
     }
 
@@ -1890,18 +1762,18 @@ where
 
     /// Reset the EVM, returning the error and the EVM ready for the next
     /// transaction.
-    pub fn take_err(self) -> (E, EvmNeedsTx<Ctx, Insp, Inst, Prec>) {
+    pub fn take_err(self) -> (E, EvmNeedsTx<Db, Insp>) {
         let Trevm { inner, state: ErroredState { error } } = self;
         (error, Trevm { inner, state: NeedsTx::new() })
     }
 
     /// Transform the error into a new error type.
-    pub fn err_into<NewErr: From<E>>(self) -> EvmErrored<Ctx, Insp, Inst, Prec, NewErr> {
+    pub fn err_into<NewErr: From<E>>(self) -> EvmErrored<Db, Insp, NewErr> {
         self.map_err(Into::into)
     }
 
     /// Map the error to a new error type.
-    pub fn map_err<F, NewErr>(self, f: F) -> EvmErrored<Ctx, Insp, Inst, Prec, NewErr>
+    pub fn map_err<F, NewErr>(self, f: F) -> EvmErrored<Db, Insp, NewErr>
     where
         F: FnOnce(E) -> NewErr,
     {
@@ -1909,10 +1781,7 @@ where
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> EvmErrored<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> EvmErrored<Db, Insp> {
     /// Check if the error is a transaction error. This is provided as a
     /// convenience function for common cases, as Transaction errors should
     /// usually be discarded.
@@ -1930,7 +1799,7 @@ where
 
     /// Discard the error if it is a transaction error, returning the EVM. If
     /// the error is not a transaction error, return self
-    pub fn discard_transaction_error(self) -> Result<EvmNeedsTx<Ctx, Insp, Inst, Prec>, Self> {
+    pub fn discard_transaction_error(self) -> Result<EvmNeedsTx<Db, Insp>, Self> {
         if self.is_transaction_error() {
             Ok(self.discard_error())
         } else {
@@ -1941,28 +1810,19 @@ where
 
 // --- TRANSACTED
 
-impl<Ctx, Insp, Inst, Prec> AsRef<ResultAndState> for EvmTransacted<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> AsRef<ResultAndState> for EvmTransacted<Db, Insp> {
     fn as_ref(&self) -> &ResultAndState {
         &self.state.result
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> AsRef<ExecutionResult> for EvmTransacted<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> AsRef<ExecutionResult> for EvmTransacted<Db, Insp> {
     fn as_ref(&self) -> &ExecutionResult {
         &self.state.result.result
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> EvmTransacted<Ctx, Insp, Inst, Prec>
-where
-    Ctx: TrevmCtx,
-{
+impl<Db: Database, Insp> EvmTransacted<Db, Insp> {
     /// Get a reference to the result.
     pub fn result(&self) -> &ExecutionResult {
         self.as_ref()
@@ -2031,7 +1891,7 @@ where
     }
 
     /// Discard the state changes and return the EVM.
-    pub fn reject(self) -> EvmNeedsTx<Ctx, Insp, Inst, Prec> {
+    pub fn reject(self) -> EvmNeedsTx<Db, Insp> {
         Trevm { inner: self.inner, state: NeedsTx::new() }
     }
 
@@ -2041,23 +1901,23 @@ where
     }
 
     /// Take the [`ResultAndState`] and return the EVM.
-    pub fn take_result_and_state(self) -> (ResultAndState, EvmNeedsTx<Ctx, Insp, Inst, Prec>) {
+    pub fn take_result_and_state(self) -> (ResultAndState, EvmNeedsTx<Db, Insp>) {
         let Trevm { inner, state: TransactedState { result } } = self;
         (result, Trevm { inner, state: NeedsTx::new() })
     }
 
     /// Take the [`ExecutionResult`], discard the [`EvmState`] and return the
     /// EVM.
-    pub fn take_result(self) -> (ExecutionResult, EvmNeedsTx<Ctx, Insp, Inst, Prec>) {
+    pub fn take_result(self) -> (ExecutionResult, EvmNeedsTx<Db, Insp>) {
         let Trevm { inner, state: TransactedState { result } } = self;
         (result.result, Trevm { inner, state: NeedsTx::new() })
     }
 
     /// Accept the state changes, commiting them to the database, and return the
     /// EVM with the [`ExecutionResult`].
-    pub fn accept(self) -> (ExecutionResult, EvmNeedsTx<Ctx, Insp, Inst, Prec>)
+    pub fn accept(self) -> (ExecutionResult, EvmNeedsTx<Db, Insp>)
     where
-        Ctx: TrevmCtxCommit,
+        Db: DatabaseCommit,
     {
         let Trevm { mut inner, state: TransactedState { result } } = self;
 
@@ -2076,11 +1936,11 @@ where
     pub fn try_accept(
         self,
     ) -> Result<
-        (ExecutionResult, EvmNeedsTx<Ctx, Insp, Inst, Prec>),
-        EvmErrored<Ctx, Insp, Inst, Prec, <Ctx::Db as TryDatabaseCommit>::Error>,
+        (ExecutionResult, EvmNeedsTx<Db, Insp>),
+        EvmErrored<Db, Insp, <Db as TryDatabaseCommit>::Error>,
     >
     where
-        Ctx::Db: TryDatabaseCommit,
+        Db: TryDatabaseCommit,
     {
         let Trevm { mut inner, state: TransactedState { result } } = self;
 
@@ -2090,9 +1950,9 @@ where
 
     /// Accept the state changes, commiting them to the database. Do not return
     /// the [`ExecutionResult.`]
-    pub fn accept_state(self) -> EvmNeedsTx<Ctx, Insp, Inst, Prec>
+    pub fn accept_state(self) -> EvmNeedsTx<Db, Insp>
     where
-        Ctx: TrevmCtxCommit,
+        Db: DatabaseCommit,
     {
         self.accept().1
     }
@@ -2104,12 +1964,9 @@ where
     /// [`Self::accept_state`] when possible.
     pub fn try_accept_state(
         self,
-    ) -> Result<
-        EvmNeedsTx<Ctx, Insp, Inst, Prec>,
-        EvmErrored<Ctx, Insp, Inst, Prec, <Ctx::Db as TryDatabaseCommit>::Error>,
-    >
+    ) -> Result<EvmNeedsTx<Db, Insp>, EvmErrored<Db, Insp, <Db as TryDatabaseCommit>::Error>>
     where
-        Ctx::Db: TryDatabaseCommit,
+        Db: TryDatabaseCommit,
     {
         self.try_accept().map(|(_, evm)| evm)
     }
@@ -2130,7 +1987,7 @@ where
     ///
     /// [`EstimationResult`]: crate::EstimationResult
     #[cfg(feature = "estimate_gas")]
-    pub fn take_estimation(self) -> (crate::EstimationResult, EvmReady<Ctx, Insp, Inst, Prec>) {
+    pub fn take_estimation(self) -> (crate::EstimationResult, EvmReady<Db, Insp>) {
         let estimation = self.estimation();
         (estimation, Trevm { inner: self.inner, state: crate::Ready::new() })
     }

@@ -52,7 +52,7 @@ pub fn eip4788_root_slot(timestamp: u64) -> U256 {
     eip4788_timestamp_slot(timestamp) + U256::from(HISTORY_BUFFER_LENGTH)
 }
 
-impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<Ext, Db> {
+impl<Db: Database + DatabaseCommit, Insp> EvmNeedsTx<Db, Insp> {
     /// Apply a system transaction as specified in [EIP-4788]. The EIP-4788
     /// pre-block action was introduced in Cancun, and calls the beacon root
     /// contract to update the historical beacon root.
@@ -81,7 +81,10 @@ mod test {
         let timestamp = 8;
 
         let mut trevm = crate::test_utils::test_trevm().fill_cfg(&NoopCfg).fill_block(&NoopBlock);
-        trevm.inner_mut_unchecked().block_mut().timestamp = U256::from(timestamp);
+
+        trevm.inner_mut_unchecked().modify_block(|block| {
+            block.timestamp = timestamp;
+        });
 
         let parent_beacon_root = B256::repeat_byte(0xaa);
 

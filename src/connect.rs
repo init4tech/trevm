@@ -54,18 +54,18 @@ where
 /// may contain `&Db`. This allows for (e.g.) shared caches between EVMs on
 /// multiple threads.
 pub trait EvmFactory: DbConnect {
-    /// The `Ext` type used in the resulting EVM.
-    type Ext: Sync;
+    /// The `Insp` type used in the resulting EVM.
+    type Insp: Sync;
 
     /// Create a new EVM instance with the given database connection and
     /// extension.
-    fn create(&self) -> Result<EvmNeedsCfg<Self::Ext, Self::Database>, Self::Error>;
+    fn create(&self) -> Result<EvmNeedsCfg<Self::Database, Self::Insp>, Self::Error>;
 
     /// Create a new EVM instance and parameterize it with a [`Cfg`].
     fn create_with_cfg<C>(
         &self,
         cfg: &C,
-    ) -> Result<EvmNeedsBlock<Self::Ext, Self::Database>, Self::Error>
+    ) -> Result<EvmNeedsBlock<Self::Database, Self::Insp>, Self::Error>
     where
         C: Cfg,
     {
@@ -78,7 +78,7 @@ pub trait EvmFactory: DbConnect {
         &self,
         cfg: &C,
         block: &B,
-    ) -> Result<EvmNeedsTx<Self::Ext, Self::Database>, Self::Error>
+    ) -> Result<EvmNeedsTx<Self::Database, Self::Insp>, Self::Error>
     where
         C: Cfg,
         B: Block,
@@ -93,7 +93,7 @@ pub trait EvmFactory: DbConnect {
         cfg: &C,
         block: &B,
         tx: &T,
-    ) -> Result<EvmReady<Self::Ext, Self::Database>, Self::Error>
+    ) -> Result<EvmReady<Self::Database, Self::Insp>, Self::Error>
     where
         C: Cfg,
         B: Block,
@@ -112,7 +112,7 @@ pub trait EvmFactory: DbConnect {
         block: &B,
         tx: &T,
     ) -> Result<
-        Result<EvmTransacted<Self::Ext, Self::Database>, EvmErrored<Self::Ext, Self::Database>>,
+        Result<EvmTransacted<Self::Database, Self::Insp>, EvmErrored<Self::Database, Self::Insp>>,
         Self::Error,
     >
     where
