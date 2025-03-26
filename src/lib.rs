@@ -39,14 +39,14 @@
 //! Running transactions is simple with Trevm. Here's a basic example:
 //!
 //! ```
-//! use revm::{EvmBuilder, db::InMemoryDB};
+//! use revm::{database::in_memory_db::InMemoryDB};
 //! use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx};
 //!
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! EvmBuilder::default()
+//! TrevmBuilder::new()
 //!     .with_db(InMemoryDB::default())
-//!     .build_trevm()
+//!     .build_trevm()?
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
 //!     .run_tx(tx);
@@ -72,11 +72,11 @@
 //!
 //! ```
 //! use trevm::trevm_aliases;
-//! use revm::db::InMemoryDB;
+//! use revm::database::in_memory_db::InMemoryDB;
 //!
 //! // produces types that look like this:
-//! // type EvmNeedsCfg = trevm::EvmNeedsCfg<'static, (), InMemoryDB>;
-//! trevm_aliases!(revm::db::InMemoryDB);
+//! // type EvmNeedsCfg = trevm::EvmNeedsCfg<InMemoryDB>, ();
+//! trevm_aliases!(revm::database::in_memory_db::InMemoryDB);
 //! ```
 //!
 //! ### [`BlockDriver`] and [`ChainDriver`]
@@ -112,14 +112,14 @@
 //! statistics or indices that are only available after the block is closed.
 //!
 //! ```
-//! # use revm::{EvmBuilder, db::InMemoryDB};
+//! # use revm::{database::in_memory_db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, BlockDriver};
 //! # use alloy::primitives::B256;
 //! # fn t<C: Cfg, D: BlockDriver<()>>(cfg: &C, mut driver: D)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! let trevm = EvmBuilder::default()
+//! let trevm = TrevmBuilder::new()
 //!     .with_db(InMemoryDB::default())
-//!     .build_trevm()
+//!     .build_trevm()?
 //!     .fill_cfg(cfg)
 //!     .drive_block(&mut driver);
 //! # Ok(())
@@ -142,14 +142,14 @@
 //! type is generic over the error type, so you can use it with any error type.
 //!
 //! ```
-//! # use revm::{EvmBuilder, db::InMemoryDB};
+//! # use revm::{database::in_memory_db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx};
 //! # use alloy::primitives::B256;
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! let trevm = match EvmBuilder::default()
+//! let trevm = match TrevmBuilder::new()
 //!     .with_db(InMemoryDB::default())
-//!     .build_trevm()
+//!     .build_trevm()?
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
 //!     .fill_tx(tx)
@@ -237,8 +237,8 @@
 //! Here's an example, with states written out:
 //!
 //! ```
-//! # use revm::{EvmBuilder, db::{InMemoryDB, BundleState}, State,
-//! # StateBuilder};
+//! # use revm::{database::{in_memory_db::InMemoryDB, BundleState,
+//! # State, StateBuilder}};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, BlockOutput,
 //! # EvmNeedsCfg, EvmNeedsBlock, EvmNeedsTx, EvmReady, EvmTransacted};
 //! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
@@ -246,36 +246,36 @@
 //! let state = StateBuilder::new_with_database(InMemoryDB::default()).build();
 //!
 //! // Trevm starts in `EvmNeedsCfg`.
-//! let trevm: EvmNeedsCfg<'_, _, _> = EvmBuilder::default()
+//! let trevm: EvmNeedsCfg<_, _> = TrevmBuilder::new()
 //!     .with_db(state)
-//!     .build_trevm();
+//!     .build_trevm()?;
 //!
 //! // Once the cfg is filled, we move to `EvmNeedsBlock`.
-//! let trevm: EvmNeedsBlock<'_, _, _> = trevm.fill_cfg(cfg);
+//! let trevm: EvmNeedsBlock<_, _> = trevm.fill_cfg(cfg);
 //!
 //! // Filling the block gets us to `EvmNeedsTx`.
-//! let trevm: EvmNeedsTx<'_, _, _> = trevm.fill_block(
+//! let trevm: EvmNeedsTx<_, _> = trevm.fill_block(
 //!     block,
 //! );
 //! // Filling the tx gets us to `EvmReady`.
-//! let trevm: EvmReady<'_, _, _> = trevm.fill_tx(tx);
+//! let trevm: EvmReady<_, _> = trevm.fill_tx(tx);
 //!
 //! let res: Result<
-//!     EvmTransacted<'_, _, _>,
-//!     EvmErrored<'_, _, _, _>,
+//!     EvmTransacted<_, _>,
+//!     EvmErrored<_, _, _>,
 //! > = trevm.run();
 //!
 //!
 //! // Applying the tx or ignoring the error gets us back to `EvmNeedsTx`.
 //! // You could also make additional checks and discard the success result here
-//! let trevm: EvmNeedsTx<'_, _, _> = match res {
+//! let trevm: EvmNeedsTx<_, _> = match res {
 //!    Ok(trevm) => trevm.accept_state(),
 //!    Err(e) => e.discard_error(),
 //! };
 //!
 //! // Clearing or closing a block gets us to `EvmNeedsBlock`, ready for the
 //! // next block.
-//! let trevm: EvmNeedsBlock<'_, _, _> = trevm
+//! let trevm: EvmNeedsBlock<_, _> = trevm
 //!     .close_block();
 //!
 //! // Finishing the EVM gets us the final changes and a list of block outputs
@@ -363,6 +363,9 @@
 
 #[macro_use]
 mod macros;
+
+mod builder;
+pub use builder::{TrevmBuilder, TrevmBuilderError};
 
 mod connect;
 pub use connect::{DbConnect, EvmFactory};

@@ -157,10 +157,11 @@ pub(crate) mod sealed {
 ///
 /// ```
 /// use trevm::trevm_aliases;
-/// use revm::db::InMemoryDB;
+/// use revm::database::in_memory_db::InMemoryDB;
 ///
 /// // produces types that look like this:
-/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<$db, $insptrevm_aliases!(revm::db::InMemoryDB);
+/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<InMemoryDB, ()>
+/// trevm_aliases!(revm::database::in_memory_db::InMemoryDB);
 /// ```
 ///
 /// Invoking with an ext and DB type will use the provided ext type and the
@@ -169,23 +170,11 @@ pub(crate) mod sealed {
 /// ```
 /// # mod t {
 /// # use trevm::trevm_aliases;
-/// # use revm::db::InMemoryDB;
+/// # use revm::database::in_memory_db::InMemoryDB;
 /// # pub struct SomeExtType;
 /// // produces types that look like this:
-/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<$db, $insp/// trevm_aliases!(SomeExtType, InMemoryDB);
-/// # }
-/// ```
-///
-/// To add a lifetime to the ext type, add the word lifetime:
-///
-/// ```
-/// # mod t {
-/// # use trevm::trevm_aliases;
-/// # use revm::db::InMemoryDB;
-/// # pub struct SomeExtType;
-/// // produces types that look like this:
-/// // type EvmNeedsCfg<'a> = trevm::EvmNeedsCfg<SomeExtType, InMemoryDB>;
-/// trevm_aliases!(lifetime: SomeExtType, InMemoryDB);
+/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<InMemoryDb, SomeExtType>
+/// trevm_aliases!(revm::database::in_memory_db::InMemoryDB, SomeExtType);
 /// # }
 /// ```
 macro_rules! trevm_aliases {

@@ -23,7 +23,7 @@
 //! # Usage Example
 //!
 //! ```
-//! # use revm::db::BundleState;
+//! # use revm::database::BundleState;
 //! # use trevm::journal::{BundleStateIndex, JournalEncode, JournalDecode, JournalDecodeError};
 //! # fn make_index(bundle_state: &BundleState) -> Result<(), JournalDecodeError> {
 //! // Make an index over a bundle state.
