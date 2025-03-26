@@ -7,10 +7,10 @@ use revm::{
 };
 
 /// [`revm::Context`] with default env types and adjustable DB
-pub(crate) type Ctx<Db, J = Journal<Db>, C = ()> = Context<BlockEnv, TxEnv, CfgEnv, Db, J, C>;
+pub type Ctx<Db, J = Journal<Db>, C = ()> = Context<BlockEnv, TxEnv, CfgEnv, Db, J, C>;
 
 /// EVM with default env types and adjustable DB.
-pub(crate) type Evm<
+pub type Evm<
     Db,
     Insp = NoOpInspector,
     Inst = EthInstructions<EthInterpreter, Ctx<Db>>,

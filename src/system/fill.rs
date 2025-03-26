@@ -69,8 +69,7 @@ impl Tx for SystemTx {
         *kind = self.target.into();
         *value = U256::ZERO;
         *data = self.input.clone();
-        // disable revm nonce checks
-        *nonce = 0; // TODO: IS THIS CORRECT?
+        *nonce = 0;
 
         // disable chain id checks
         chain_id.take();
