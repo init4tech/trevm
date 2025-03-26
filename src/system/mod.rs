@@ -92,16 +92,20 @@ fn cleanup_syscall<Db, Insp>(
     syscall: &SystemTx,
     old_gas_limit: u64,
     old_base_fee: u64,
+    previous_nonce_check: bool,
 ) where
     Db: Database + DatabaseCommit,
 {
-    let mut block = evm.block().clone();
-    let coinbase = block.beneficiary();
+    let coinbase = evm.block().beneficiary();
 
-    block.gas_limit = old_gas_limit;
-    block.basefee = old_base_fee;
+    // Restore the block environment
+    evm.modify_block(|block| {
+        block.gas_limit = old_gas_limit;
+        block.basefee = old_base_fee;
+    });
 
-    evm.set_block(block);
+    // Restore the nonce check
+    evm.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = previous_nonce_check);
 
     // Remove the system caller and fees from the state
     let state = &mut result.state;
@@ -124,16 +128,21 @@ pub(crate) fn execute_system_tx<Db, Insp>(
 where
     Db: Database + DatabaseCommit,
 {
+    syscall.fill_tx(evm);
+
     let limit = evm.tx().gas_limit();
     let old_gas_limit = core::mem::replace(&mut evm.block().gas_limit(), limit);
     let old_base_fee = core::mem::take(&mut evm.block().basefee());
 
-    syscall.fill_tx(evm);
+    let mut previous_nonce_check = false;
+    evm.data.ctx.modify_cfg(|cfg| {
+        previous_nonce_check = std::mem::replace(&mut cfg.disable_nonce_check, true)
+    });
 
     let mut result = evm.replay()?;
 
     // Cleanup the syscall.
-    cleanup_syscall(evm, &mut result, syscall, old_gas_limit, old_base_fee);
+    cleanup_syscall(evm, &mut result, syscall, old_gas_limit, old_base_fee, previous_nonce_check);
 
     evm.data.ctx.db().commit(result.state);
 
