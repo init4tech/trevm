@@ -22,7 +22,8 @@ pub struct TrevmBuilder<Db, Insp> {
 
 impl TrevmBuilder<InMemoryDB, ()> {
     /// Create a new builder with the default database and inspector.
-    pub fn new() -> Self {
+    #[allow(clippy::new_without_default)] // default would make bad devex :(
+    pub const fn new() -> Self {
         Self { db: None, insp: (), spec: SpecId::PRAGUE }
     }
 }
@@ -42,7 +43,7 @@ impl<Db, Insp> TrevmBuilder<Db, Insp> {
     }
 
     /// Set the spec id for the EVM.
-    pub fn with_spec_id(mut self, spec: SpecId) -> Self {
+    pub const fn with_spec_id(mut self, spec: SpecId) -> Self {
         self.spec = spec;
         self
     }

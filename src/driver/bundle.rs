@@ -12,10 +12,7 @@ pub trait BundleDriver<Insp> {
     type Error<Db: Database + DatabaseCommit>: core::error::Error + From<EVMError<Db::Error>>;
 
     /// Run the transactions contained in the bundle.
-    fn run_bundle<'a, Db>(
-        &mut self,
-        trevm: EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self>
+    fn run_bundle<Db>(&mut self, trevm: EvmNeedsTx<Db, Insp>) -> DriveBundleResult<Db, Insp, Self>
     where
         Db: Database + DatabaseCommit;
 

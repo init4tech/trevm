@@ -80,14 +80,14 @@ impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
 
     /// Get the id of the currently running hardfork spec.
     pub fn spec_id(&self) -> SpecId {
-        self.inner.data.ctx.cfg().spec().into()
+        self.inner.data.ctx.cfg().spec()
     }
 
     /// Set the [SpecId], modifying the EVM handlers accordingly. This function
     /// should be called at hardfork boundaries when running multi-block trevm
     /// flows.
     pub fn set_spec_id(&mut self, spec_id: SpecId) {
-        self.inner.modify_cfg(|cfg| cfg.spec = spec_id.into());
+        self.inner.modify_cfg(|cfg| cfg.spec = spec_id);
     }
 
     /// Run a closure with a different [SpecId], then restore the previous
@@ -765,8 +765,12 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
     /// [OutOfGasError::Memory]: revm::context::result::OutOfGasError::Memory
     #[cfg(feature = "memory_limit")]
     pub fn set_memory_limit(&mut self, new_limit: u64) -> u64 {
-        let cfg = self.inner.cfg_mut();
-        core::mem::replace(&mut cfg.memory_limit, new_limit)
+        let mut ml = 0;
+        self.inner
+            .data
+            .ctx
+            .modify_cfg(|cfg| ml = core::mem::replace(&mut cfg.memory_limit, new_limit));
+        ml
     }
 
     /// Disable balance checks. If the sender does not have enough balance to
@@ -774,13 +778,13 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
     /// execution doesn't fail.
     #[cfg(feature = "optional_balance_check")]
     pub fn disable_balance_check(&mut self) {
-        self.inner.cfg_mut().disable_balance_check = true
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = true)
     }
 
     /// Enable balance checks. See [`Self::disable_balance_check`].
     #[cfg(feature = "optional_balance_check")]
     pub fn enable_balance_check(&mut self) {
-        self.inner.cfg_mut().disable_balance_check = false
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = false)
     }
 
     /// Run a closure with balance checks disabled, then restore the previous
@@ -793,7 +797,7 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
         let previous = self.inner.cfg().disable_balance_check;
         self.disable_balance_check();
         let mut new = f(self);
-        new.inner.cfg_mut().disable_balance_check = previous;
+        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = previous);
         new
     }
 
@@ -802,13 +806,13 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
     /// simulating large transactions like forge scripts.
     #[cfg(feature = "optional_block_gas_limit")]
     pub fn disable_block_gas_limit(&mut self) {
-        self.inner.cfg_mut().disable_beneficiary_reward = true
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = true);
     }
 
     /// Enable block gas limits. See [`Self::disable_block_gas_limit`].
     #[cfg(feature = "optional_block_gas_limit")]
     pub fn enable_block_gas_limit(&mut self) {
-        self.inner.cfg_mut().disable_beneficiary_reward = false
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = false);
     }
 
     /// Run a closure with block gas limits disabled, then restore the previous
@@ -821,7 +825,7 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
         let previous = self.inner.cfg().disable_block_gas_limit;
         self.disable_block_gas_limit();
         let mut new = f(self);
-        new.inner.cfg_mut().disable_block_gas_limit = previous;
+        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = previous);
         new
     }
 
@@ -831,7 +835,7 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
     #[cfg(feature = "optional_eip3607")]
     pub fn disable_eip3607(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = true)
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = true);
     }
 
     /// Enable [EIP-3607]. See [`Self::disable_eip3607`].
@@ -839,7 +843,7 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
     #[cfg(feature = "optional_eip3607")]
     pub fn enable_eip3607(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = false)
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = false);
     }
 
     /// Run a closure with [EIP-3607] disabled, then restore the previous
@@ -853,9 +857,7 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
         self.disable_eip3607();
 
         let mut new = f(self);
-        if !previous {
-            new.enable_eip3607();
-        }
+        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = previous);
         new
     }
 
@@ -1193,7 +1195,7 @@ impl<Db: Database, Insp, TrevmState: HasTx> Trevm<Db, Insp, TrevmState> {
     /// Get a reference to the transaction input data, which will be used as
     /// calldata or initcode during EVM execution.
     pub fn input(&self) -> &Bytes {
-        &self.tx().input()
+        self.tx().input()
     }
 
     /// Read the target of the transaction.
@@ -1468,7 +1470,7 @@ impl<Db: Database, Insp> EvmReady<Db, Insp> {
     pub fn run(mut self) -> Result<EvmTransacted<Db, Insp>, EvmErrored<Db, Insp>> {
         let result = self.inner.replay();
 
-        let Trevm { inner, .. } = self;
+        let Self { inner, .. } = self;
 
         match result {
             Ok(result) => Ok(Trevm { inner, state: TransactedState { result } }),
@@ -1745,7 +1747,7 @@ impl<Db: Database, Insp, E> EvmErrored<Db, Insp, E> {
     /// Reset the EVM, returning the error and the EVM ready for the next
     /// transaction.
     pub fn take_err(self) -> (E, EvmNeedsTx<Db, Insp>) {
-        let Trevm { inner, state: ErroredState { error } } = self;
+        let Self { inner, state: ErroredState { error } } = self;
         (error, Trevm { inner, state: NeedsTx::new() })
     }
 
@@ -1884,14 +1886,14 @@ impl<Db: Database, Insp> EvmTransacted<Db, Insp> {
 
     /// Take the [`ResultAndState`] and return the EVM.
     pub fn take_result_and_state(self) -> (ResultAndState, EvmNeedsTx<Db, Insp>) {
-        let Trevm { inner, state: TransactedState { result } } = self;
+        let Self { inner, state: TransactedState { result } } = self;
         (result, Trevm { inner, state: NeedsTx::new() })
     }
 
     /// Take the [`ExecutionResult`], discard the [`EvmState`] and return the
     /// EVM.
     pub fn take_result(self) -> (ExecutionResult, EvmNeedsTx<Db, Insp>) {
-        let Trevm { inner, state: TransactedState { result } } = self;
+        let Self { inner, state: TransactedState { result } } = self;
         (result.result, Trevm { inner, state: NeedsTx::new() })
     }
 
@@ -1901,7 +1903,7 @@ impl<Db: Database, Insp> EvmTransacted<Db, Insp> {
     where
         Db: DatabaseCommit,
     {
-        let Trevm { mut inner, state: TransactedState { result } } = self;
+        let Self { mut inner, state: TransactedState { result } } = self;
 
         inner.db().commit(result.state);
 
@@ -1924,7 +1926,7 @@ impl<Db: Database, Insp> EvmTransacted<Db, Insp> {
     where
         Db: TryDatabaseCommit,
     {
-        let Trevm { mut inner, state: TransactedState { result } } = self;
+        let Self { mut inner, state: TransactedState { result } } = self;
 
         trevm_try!(inner.db().try_commit(result.state), Trevm { inner, state: NeedsTx::new() });
         Ok((result.result, Trevm { inner, state: NeedsTx::new() }))

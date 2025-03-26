@@ -23,7 +23,7 @@ pub trait BlockDriver<Insp> {
     fn block(&self) -> &Self::Block;
 
     /// Run the transactions for the block.
-    fn run_txns<'a, Db: Database + DatabaseCommit>(
+    fn run_txns<Db: Database + DatabaseCommit>(
         &mut self,
         trevm: EvmNeedsTx<Db, Insp>,
     ) -> RunTxResult<Db, Insp, Self>;

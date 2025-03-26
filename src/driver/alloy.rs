@@ -1,5 +1,3 @@
-use std::u64;
-
 use crate::{
     system::{MAX_BLOB_GAS_PER_BLOCK_CANCUN, MAX_BLOB_GAS_PER_BLOCK_PRAGUE},
     trevm_bail, trevm_ensure, trevm_try, Block, BundleDriver, DriveBundleResult,
