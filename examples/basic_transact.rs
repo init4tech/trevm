@@ -11,7 +11,7 @@ use trevm::{
         state::AccountInfo,
     },
     test_utils::test_trevm_tracing,
-    trevm_aliases, NoopBlock, NoopCfg, Tx,
+    trevm_aliases, NoopBlock, NoopCfg, TrevmBuilder, Tx,
 };
 
 /// Foundry's default Counter.sol contract bytecode.
@@ -40,7 +40,7 @@ impl Tx for SampleTx {
 // Produce aliases for the Trevm type
 trevm_aliases!(TracerEip3155, InMemoryDB);
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut db = revm::database::InMemoryDB::default();
 
     let bytecode = Bytecode::new_raw(hex::decode(CONTRACT_BYTECODE).unwrap().into());
@@ -50,7 +50,8 @@ fn main() {
     db.insert_contract(&mut acc_info.clone());
     db.insert_account_info(CONTRACT_ADDR, acc_info);
 
-    let trevm = test_trevm_tracing().fill_cfg(&NoopCfg).fill_block(&NoopBlock);
+    let trevm =
+        TrevmBuilder::new().with_db(db).build_trevm()?.fill_cfg(&NoopCfg).fill_block(&NoopBlock);
 
     let account = trevm.read_account_ref(CONTRACT_ADDR).unwrap();
     println!("account: {account:?}");
@@ -66,4 +67,6 @@ fn main() {
             println!("Execution error: {e:?}");
         }
     };
+
+    Ok(())
 }
