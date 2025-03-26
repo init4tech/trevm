@@ -6,8 +6,8 @@ use revm::{
     Database, DatabaseCommit,
 };
 
-/// Extension trait for [`revm::Evm`] with convenience functions for reading
-/// and modifying state.
+/// Extension trait for [`revm::context::Evm`] with convenience functions for
+/// reading and modifying state.
 pub trait EvmExtUnchecked<Db: Database> {
     /// Get a mutable reference to the database.
     fn db_mut_ext(&mut self) -> &mut Db;

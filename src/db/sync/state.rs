@@ -21,7 +21,7 @@ pub type Child<Db> = ConcurrentState<Arc<ConcurrentState<Db>>>;
 
 /// State of the blockchain.
 ///
-/// A version of [`revm::db::State`] that can be shared between threads.
+/// A version of [`revm::database::State`] that can be shared between threads.
 #[derive(Debug)]
 pub struct ConcurrentState<Db> {
     database: Db,
@@ -104,7 +104,6 @@ impl<Db> ConcurrentState<Db> {
         }
     }
 
-    // TODO make cache aware of transitions dropping by having global transition counter.
     /// Takes the [`BundleState`] changeset from the [`ConcurrentState`],
     /// replacing it
     /// with an empty one.
@@ -112,9 +111,9 @@ impl<Db> ConcurrentState<Db> {
     /// This will not apply any pending [`TransitionState`]. It is recommended
     /// to call [`ConcurrentState::merge_transitions`] before taking the bundle.
     ///
-    /// If the `State` has been built with the
-    /// [`revm::StateBuilder::with_bundle_prestate`] option, the pre-state will be
-    /// taken along with any changes made by
+    /// If the [`State`] has been built with the
+    /// [`revm::database::StateBuilder::with_bundle_prestate`] option, the
+    /// pre-state will be taken along with any changes made by
     /// [`ConcurrentState::merge_transitions`].
     pub fn take_bundle(&mut self) -> BundleState {
         core::mem::take(&mut self.info.bundle_state)

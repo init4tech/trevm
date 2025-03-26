@@ -46,9 +46,9 @@
 //! # }
 //! ```
 //!
-//! [`StateBuilder::with_bundle_update`]: revm::db::StateBuilder::with_bundle_update
-//! [`State<Db>`]: revm::db::State
-//! [`BundleState`]: revm::db::BundleState
+//! [`StateBuilder::with_bundle_update`]: revm::database::StateBuilder::with_bundle_update
+//! [`State<Db>`]: revm::database::State
+//! [`BundleState`]: revm::database::BundleState
 //! [reth]: https://github.com/paradigmxyz/reth
 
 mod coder;

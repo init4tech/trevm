@@ -20,9 +20,8 @@
 //!
 //! ## Quickstart
 //!
-//! To get started, use a [`revm::EvmBuilder`] to configure the EVM, then call
-//! [`TrevmBuilder::build_trevm`] to construct the [`Trevm`] instance. From
-//! there, you should do the following:
+//! To get started, use [`TrevmBuilder`] to configure and construct the EVM.
+//! From there, you should do the following:
 //!
 //! - Fill a Cfg by calling [`Trevm::fill_cfg`] with a [`Cfg`].
 //! - Open a block by calling [`Trevm::fill_block`] with a [`Block`].
@@ -61,14 +60,18 @@
 //! ## Writing an application
 //!
 //! When writing your code, we strongly recommend using the `Evm____` type
-//! aliases to simplify your code.
+//! aliases to simplify your code. These types come with 2 generics: `Db` and
+//! `Insp`. `Db` is the database type, and `Insp` is the inspector type. Most
+//! users will want to use `()` for `Insp`, unless specifically using an
+//! inspector or a customized EVM.
 //!
-//! We also recommend defining concrete types for `Ext` and `Db` whenever
+//! We also recommend defining concrete types for `Insp` and `Db` whenever
 //! possible, to simplify your code and remove bounds. Most users will want
-//! `()` for `Ext`, unless specifically using an inspector or a customized EVM.
+//! `()` for `Insp`, unless specifically using an inspector or a customized EVM.
 //!
 //! To help you use concrete types, we provide the [`trevm_aliases`] macro. This
-//! macro generates type aliases for the Trevm states with concrete `Ext` and `Db` types.
+//! macro generates type aliases for the Trevm states with concrete `Insp` and
+//! `Db` types.
 //!
 //! ```
 //! use trevm::trevm_aliases;
@@ -127,8 +130,8 @@
 //! ```
 //!
 //! [`BlockDriver`] and [`ChainDriver`] implementations are generic over the
-//! `Ext` type. This means that you can use customized revm extensions and
-//! inspectors in your driver logic.
+//! `Insp` type. This means that you can use customized revm inspectors in your
+//! driver logic.
 //!
 //! ### Handling execution errors
 //!
@@ -165,7 +168,8 @@
 //!
 //! Trevm has a few extension points:
 //!
-//! - Build the [`revm::Evm`] with a [`revm::Inspector`] and use it in trevm.
+//! - Build trevm  with a [`revm::Inspector`] and use it in your
+//!   [`BlockDriver`] implementation.
 //! - Implement the [`PostTx`] trait to apply post-transaction logic/changes.
 //! - Implement your own [`Cfg`], [`Block`], and
 //!   [`Tx`] to fill the EVM from your own data structures.
@@ -334,7 +338,7 @@
 //! let (bundle, outputs) = evm.close_block(block, post_block_logic).finish();
 //! ```
 //!
-//! [`EVMError<Db>`]: revm::context::EVMError<Db>
+//! [`EVMError<Db>`]: revm::context::result::EVMError<Db>
 //! [typestate pattern]: https://cliffle.com/blog/rust-typestate/
 //! [crate readme]: https://github.com/init4tech/trevm
 //! [EIP-2537]: https://eips.ethereum.org/EIPS/eip-2537

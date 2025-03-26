@@ -10,7 +10,7 @@ use revm::{
     state::{Account, AccountInfo, Bytecode, EvmState},
 };
 
-/// A concurrent version of [`revm::db::CacheState`].
+/// A concurrent version of [`revm::database::CacheState`].
 ///
 /// Most of the code for this has been reproduced from revm.
 #[derive(Debug, Clone)]

@@ -53,13 +53,17 @@ impl<Db: Database, Insp> From<Evm<Db, Insp>> for EvmNeedsCfg<Db, Insp> {
 
 impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
     /// Get a reference to the current [`Evm`].
+    ///
+    /// [`Evm`]: revm::context::Evm
     pub fn inner(&self) -> &Evm<Db, Insp> {
         self.as_ref()
     }
 
     /// Get a mutable reference to the current [`Evm`]. This should be used with
-    /// caution, as modifying the EVM may lead to inconsistent Trevmstate or invalid
-    /// execution.
+    /// caution, as modifying the EVM may lead to inconsistent Trevmstate or
+    /// invalid execution.
+    ///
+    /// [`Evm`]: revm::context::Evm
     pub fn inner_mut_unchecked(&mut self) -> &mut Evm<Db, Insp> {
         &mut self.inner
     }
@@ -69,21 +73,12 @@ impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
         self.inner
     }
 
-    /// Deconstruct the [`Trevm`] into the backing DB, dropping the EVM handler
-    /// table and any `Ext` type.
-    ///
-    /// This is a wrapper for [`Evm::into_db_and_env_with_handler_cfg`], and
-    /// then dropping the [`EnvWithHandlerCfg`]. If you need to retain the
-    /// [`EnvWithHandlerCfg`], use [`Self::into_inner`] and then call
-    /// [`Evm::into_db_and_env_with_handler_cfg`] on the inner EVM.
-    ///
-    /// [`EnvWithHandlerCfg`]: revm::primitives::EnvWithHandlerCfg
+    /// Deconstruct the [`Trevm`] into the backing DB, dropping all other types.
     pub fn into_db(self) -> Db {
         self.inner.data.ctx.journaled_state.database
     }
 
-    /// Get the id of the currently running hardfork spec. Convenience function
-    /// calling [`Evm::spec_id`].
+    /// Get the id of the currently running hardfork spec.
     pub fn spec_id(&self) -> SpecId {
         self.inner.data.ctx.cfg().spec().into()
     }
@@ -759,19 +754,6 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
         }
     }
 
-    /// Set the KZG settings used for point evaluation precompiles. By default
-    /// this is set to the settings used in the Ethereum mainnet.
-    ///
-    /// This is a low-level API, and is not intended for general use.
-    #[cfg(feature = "c-kzg")]
-    pub fn set_kzg_settings(
-        &mut self,
-        settings: revm::primitives::EnvKzgSettings,
-    ) -> revm::primitives::EnvKzgSettings {
-        let cfg = self.inner.cfg_mut();
-        core::mem::replace(&mut cfg.kzg_settings, settings)
-    }
-
     /// Set a limit beyond which a callframe's memory cannot be resized.
     /// Attempting to resize beyond this limit will result in a
     /// [OutOfGasError::Memory] error.
@@ -780,7 +762,7 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
     /// recommended to set this to a sane value to prevent memory allocation
     /// panics. Defaults to `2^32 - 1` bytes per EIP-1985.
     ///
-    /// [OutOfGasError::Memory]: revm::primitives::OutOfGasError::Memory
+    /// [OutOfGasError::Memory]: revm::context::result::OutOfGasError::Memory
     #[cfg(feature = "memory_limit")]
     pub fn set_memory_limit(&mut self, new_limit: u64) -> u64 {
         let cfg = self.inner.cfg_mut();
@@ -1059,13 +1041,13 @@ impl<Db: Database + StateAcc, Insp> EvmNeedsBlock<Db, Insp> {
     /// Finish execution and return the outputs.
     ///
     /// If the State has not been built with
-    /// [revm::StateBuilder::with_bundle_update] then the returned
+    /// [revm::database::StateBuilder::with_bundle_update] then the returned
     /// [`BundleState`] will be meaningless.
     ///
     /// See [`State::merge_transitions`] and [`State::take_bundle`].
     ///
-    /// [`State::merge_transitions`]: revm::db::State::merge_transitions
-    /// [`State::take_bundle`]: revm::db::State::take_bundle
+    /// [`State::merge_transitions`]: revm::database::State::merge_transitions
+    /// [`State::take_bundle`]: revm::database::State::take_bundle
     pub fn finish(self) -> BundleState {
         let Self { inner: mut evm, .. } = self;
         evm.db().merge_transitions(BundleRetention::Reverts);
@@ -1081,13 +1063,13 @@ impl<Db: Database + TryStateAcc, Insp> EvmNeedsBlock<Db, Insp> {
     /// g. an `Arc<Db>`. Prefer [`Self::finish`] when available.
     ///
     /// If the State has not been built with
-    /// [revm::StateBuilder::with_bundle_update] then the returned
+    /// [revm::database::StateBuilder::with_bundle_update] then the returned
     /// [`BundleState`] will be meaningless.
     ///
     /// See [`State::merge_transitions`] and [`State::take_bundle`].
     ///
-    /// [`State::merge_transitions`]: revm::db::State::merge_transitions
-    /// [`State::take_bundle`]: revm::db::State::take_bundle
+    /// [`State::merge_transitions`]: revm::database::State::merge_transitions
+    /// [`State::take_bundle`]: revm::database::State::take_bundle
     pub fn try_finish(
         mut self,
     ) -> Result<BundleState, EvmErrored<Db, Insp, <Db as TryStateAcc>::Error>> {
@@ -1389,7 +1371,7 @@ where
     /// important that you have access to the pre-change state, you should wrap
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
-    /// [`State`]: revm::db::State
+    /// [`State`]: revm::database::State
     pub fn apply_block_overrides(mut self, overrides: &BlockOverrides) -> Self {
         overrides.fill_block(&mut self.inner);
 
@@ -1407,7 +1389,7 @@ where
     /// important that you have access to the pre-change state, you should wrap
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
-    /// [`State`]: revm::db::State
+    /// [`State`]: revm::database::State
     pub fn maybe_apply_block_overrides(self, overrides: Option<&BlockOverrides>) -> Self {
         if let Some(overrides) = overrides {
             self.apply_block_overrides(overrides)
@@ -1431,7 +1413,7 @@ where
     /// important that you have access to the pre-change state, you should wrap
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
-    /// [`State`]: revm::db::State
+    /// [`State`]: revm::database::State
     pub fn try_apply_block_overrides(
         mut self,
         overrides: &BlockOverrides,
@@ -1455,7 +1437,7 @@ where
     /// important that you have access to the pre-change state, you should wrap
     /// the existing DB in a new [`State`] and apply the overrides to that.
     ///
-    /// [`State`]: revm::db::State
+    /// [`State`]: revm::database::State
     pub fn try_maybe_apply_block_overrides(
         self,
         overrides: Option<&BlockOverrides>,
@@ -1523,8 +1505,8 @@ impl<Db: Database, Insp> EvmReady<Db, Insp> {
 
     /// Calculate the minimum gas required to start EVM execution.
     ///
-    /// This uses [`calculate_initial_tx_gas`] to calculate the initial gas.
-    /// Its output is dependent on
+    /// This uses [`calculate_initial_tx_gas_for_tx`] to calculate the initial
+    /// gas. Its output is dependent on
     /// - the EVM spec
     /// - the input data
     /// - whether the transaction is a contract creation or a call

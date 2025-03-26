@@ -1,4 +1,4 @@
-/// Concurrent version of [`revm::db::State`]
+/// Concurrent version of [`revm::database::State`]
 #[cfg(feature = "concurrent-db")]
 pub mod sync;
 
