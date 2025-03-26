@@ -37,7 +37,7 @@ impl<Db, Insp> TrevmBuilder<Db, Insp> {
         TrevmBuilder { db: Some(db), insp: self.insp, spec: self.spec }
     }
 
-    /// Set the extension for the EVM.
+    /// Set the inspector for the EVM.
     pub fn with_insp<OInsp>(self, insp: OInsp) -> TrevmBuilder<Db, OInsp> {
         TrevmBuilder { db: self.db, insp, spec: self.spec }
     }

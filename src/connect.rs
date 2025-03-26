@@ -44,8 +44,8 @@ where
 
 /// Trait for types that can create EVM instances.
 ///
-/// Factories should contain configuration information like chain `EXT` types,
-/// and database connections. They are intended to enable parallel instantiation
+/// Factories should contain configuration information like `Insp` types, and
+/// database connections. They are intended to enable parallel instantiation
 /// of multiple EVMs in multiple threads sharing some configuration or backing
 /// store.
 ///
