@@ -10,7 +10,6 @@ use trevm::{
         primitives::{hex, Address, U256},
         state::AccountInfo,
     },
-    test_utils::test_trevm_tracing,
     trevm_aliases, NoopBlock, NoopCfg, TrevmBuilder, Tx,
 };
 
@@ -50,8 +49,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     db.insert_contract(&mut acc_info.clone());
     db.insert_account_info(CONTRACT_ADDR, acc_info);
 
-    let trevm =
-        TrevmBuilder::new().with_db(db).build_trevm()?.fill_cfg(&NoopCfg).fill_block(&NoopBlock);
+    let insp = TracerEip3155::new(Box::new(std::io::stdout()));
+
+    let trevm = TrevmBuilder::new()
+        .with_db(db)
+        .with_insp(insp)
+        .build_trevm()?
+        .fill_cfg(&NoopCfg)
+        .fill_block(&NoopBlock);
 
     let account = trevm.read_account_ref(CONTRACT_ADDR).unwrap();
     println!("account: {account:?}");

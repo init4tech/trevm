@@ -3,14 +3,16 @@
 
 //! This example is currently disabled while waiting for revm @ 14.0.4
 
-use alloy::{eips::BlockId, providers::ProviderBuilder};
-use alloy_primitives::{address, Address, TxKind, U256};
-use alloy_sol_types::{sol, SolCall};
+use alloy::{
+    eips::BlockId,
+    primitives::{address, Address, TxKind, U256},
+    providers::ProviderBuilder,
+    sol,
+    sol_types::SolCall,
+};
+use revm::{context::TxEnv, database::WrapDatabaseAsync};
 use trevm::{
-    revm::{
-        db::{AlloyDB, CacheDB},
-        Evm,
-    },
+    revm::database::{AlloyDB, CacheDB},
     NoopBlock, NoopCfg, TrevmBuilder, Tx,
 };
 
@@ -22,10 +24,10 @@ sol! {
 struct GetReservesFiller;
 
 impl Tx for GetReservesFiller {
-    fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         tx_env.caller = Address::with_last_byte(0);
         // ETH/USDT pair on Uniswap V2
-        tx_env.transact_to = TxKind::Call(POOL_ADDRESS);
+        tx_env.kind = TxKind::Call(POOL_ADDRESS);
         // calldata formed via alloy's abi encoder
         tx_env.data = getReservesCall::new(()).abi_encode().into();
         // transaction value in wei
@@ -55,15 +57,15 @@ async fn main() -> eyre::Result<()> {
     // =========================================================== //
 
     // initialize new AlloyDB
-    let alloydb = AlloyDB::new(client, BlockId::default()).unwrap();
+    let alloydb = WrapDatabaseAsync::new(AlloyDB::new(client, BlockId::default())).unwrap();
 
     // initialise empty in-memory-db
     let cache_db = CacheDB::new(alloydb);
 
     // initialise an empty (default) EVM
-    let evm = Evm::builder()
+    let evm = TrevmBuilder::new()
         .with_db(cache_db)
-        .build_trevm()
+        .build_trevm()?
         .fill_cfg(&NoopCfg)
         .fill_block(&NoopBlock)
         .fill_tx(&GetReservesFiller)
