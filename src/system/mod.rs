@@ -131,13 +131,12 @@ where
     syscall.fill_tx(evm);
 
     let limit = evm.tx().gas_limit();
-    let old_gas_limit = core::mem::replace(&mut evm.block().gas_limit(), limit);
-    let old_base_fee = core::mem::take(&mut evm.block().basefee());
 
-    let mut previous_nonce_check = false;
-    evm.data.ctx.modify_cfg(|cfg| {
-        previous_nonce_check = std::mem::replace(&mut cfg.disable_nonce_check, true)
-    });
+    let block = &mut evm.data.ctx.block;
+    let old_gas_limit = core::mem::replace(&mut block.gas_limit, limit);
+    let old_base_fee = core::mem::take(&mut block.basefee);
+
+    let previous_nonce_check = std::mem::replace(&mut evm.data.ctx.cfg.disable_nonce_check, true);
 
     let mut result = evm.replay()?;
 
