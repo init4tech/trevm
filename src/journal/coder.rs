@@ -370,8 +370,6 @@ impl JournalEncode for Bytecode {
         }
 
         let raw = self.original_bytes();
-        dbg!(raw.len());
-        dbg!(&raw);
         buf.put_u32(raw.len() as u32);
         buf.put_slice(raw.as_ref());
     }
