@@ -1,5 +1,5 @@
 use crate::fill::traits::{Cfg, Tx};
-use revm::context::{BlockEnv, CfgEnv, TxEnv};
+use revm::context::{BlockEnv, Cfg, CfgEnv, TxEnv};
 
 /// A [`Cfg`] that disables gas-related checks and payment of the
 /// beneficiary reward, while leaving other cfg options unchanged.
@@ -68,6 +68,19 @@ impl Cfg for GasEstimationFiller {
         cfg_env.disable_eip3607 = true;
         DisableNonceCheck.fill_cfg_env(cfg_env);
     }
+
+    fn fill_cfg<Db: revm::Database, Insp, Inst, Prec>(
+        &self,
+        evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec>,
+    ) {
+        evm.data.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
+
+        let chain_id = evm.data.ctx.cfg.chain_id;
+
+        evm.data.ctx.modify_tx(|tx_env| {
+            tx_env.chain_id = Some(chain_id);
+        });
+    }
 }
 
 #[cfg(feature = "estimate_gas")]
@@ -88,6 +101,19 @@ impl Cfg for CallFiller {
         cfg_env.disable_base_fee = true;
         cfg_env.disable_eip3607 = true;
         DisableNonceCheck.fill_cfg_env(cfg_env);
+    }
+
+    fn fill_cfg<Db: revm::Database, Insp, Inst, Prec>(
+        &self,
+        evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec>,
+    ) {
+        evm.data.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
+
+        let chain_id = evm.data.ctx.cfg.chain_id;
+
+        evm.data.ctx.modify_tx(|tx_env| {
+            tx_env.chain_id = Some(chain_id);
+        });
     }
 }
 
