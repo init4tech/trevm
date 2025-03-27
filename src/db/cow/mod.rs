@@ -15,8 +15,8 @@ use revm::{
 /// This saves memory when wrapping some other caching database, like [`State`]
 /// or [`ConcurrentState`].
 ///
-/// [`CacheDB`]: revm::db::in_memory_db::CacheDB
-/// [`State`]: revm::db::State
+/// [`CacheDB`]: revm::database::in_memory_db::CacheDB
+/// [`State`]: revm::database::State
 /// [`ConcurrentState`]: crate::db::sync::ConcurrentState
 #[derive(Debug)]
 pub struct CacheOnWrite<Db> {
