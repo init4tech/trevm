@@ -1562,7 +1562,7 @@ where
     }
 
     /// Execute the loaded transaction. This is a wrapper around
-    /// [`Evm::transact`] and produces either [`EvmTransacted`] or
+    /// [`InspectEvm::inspect_replay`] and produces either [`EvmTransacted`] or
     /// [`EvmErrored`].
     pub fn run(mut self) -> Result<EvmTransacted<Db, Insp>, EvmErrored<Db, Insp>> {
         let result = self.inner.inspect_replay();
