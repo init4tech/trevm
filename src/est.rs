@@ -1,4 +1,7 @@
-use revm::primitives::{Bytes, ExecutionResult, HaltReason, Output};
+use revm::{
+    context::result::{ExecutionResult, HaltReason, Output},
+    primitives::Bytes,
+};
 use std::ops::Range;
 
 /// Simple wrapper around a range of u64 values, with convenience methods for

@@ -1,4 +1,4 @@
-use revm::primitives::{BlockEnv, CfgEnv};
+use revm::context::{BlockEnv, CfgEnv};
 
 use crate::{Block, Cfg};
 

@@ -4,10 +4,13 @@ use alloy::{
     rlp::{Buf, BufMut},
 };
 use revm::{
-    db::{states::StorageSlot, BundleState},
-    primitives::{
-        eof::EofDecodeError, AccountInfo, Bytecode, Eip7702Bytecode, Eip7702DecodeError, Eof,
+    bytecode::{
+        eip7702::{Eip7702Bytecode, Eip7702DecodeError},
+        eof::EofDecodeError,
+        Eof,
     },
+    database::{states::StorageSlot, BundleState},
+    state::{AccountInfo, Bytecode},
 };
 use std::{
     borrow::{Cow, ToOwned},
@@ -356,17 +359,19 @@ impl JournalEncode for AcctDiff<'_> {
 impl JournalEncode for Bytecode {
     fn serialized_size(&self) -> usize {
         // tag + u32 for len + len of raw
-        1 + 4 + self.bytes().len()
+        1 + 4 + self.original_bytes().len()
     }
 
     fn encode(&self, buf: &mut dyn BufMut) {
         match self {
-            Self::LegacyRaw(_) | Self::LegacyAnalyzed(_) => buf.put_u8(TAG_BYTECODE_RAW),
+            Self::LegacyAnalyzed(_) => buf.put_u8(TAG_BYTECODE_RAW),
             Self::Eof(_) => buf.put_u8(TAG_BYTECODE_EOF),
             Self::Eip7702(_) => buf.put_u8(TAG_BYTECODE_7702),
         }
 
-        let raw = self.bytes();
+        let raw = self.original_bytes();
+        dbg!(raw.len());
+        dbg!(&raw);
         buf.put_u32(raw.len() as u32);
         buf.put_slice(raw.as_ref());
     }
@@ -574,7 +579,7 @@ impl JournalDecode for AcctDiff<'static> {
 
 impl JournalDecode for Bytecode {
     fn decode(buf: &mut &[u8]) -> Result<Self> {
-        let tag = JournalDecode::decode(buf)?;
+        let tag: u8 = JournalDecode::decode(buf)?;
         let len: u32 = JournalDecode::decode(buf)?;
         check_len!(buf, "BytecodeBody", len as usize);
 
@@ -624,11 +629,13 @@ impl JournalDecode for BundleState {
 mod test {
     use super::*;
 
+    #[track_caller]
     fn roundtrip<T: JournalDecode + JournalEncode + PartialEq>(expected: &T) {
         let enc = JournalEncode::encoded(expected);
-        assert_eq!(enc.len(), expected.serialized_size(), "{}", core::any::type_name::<T>());
+        let ty_name = core::any::type_name::<T>();
+        assert_eq!(enc.len(), expected.serialized_size(), "{ty_name}");
         let dec = T::decode(&mut enc.as_slice()).expect("decoding failed");
-        assert_eq!(&dec, expected);
+        assert_eq!(&dec, expected, "{ty_name}");
     }
 
     #[test]

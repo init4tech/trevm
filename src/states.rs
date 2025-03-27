@@ -1,5 +1,5 @@
 use crate::{driver::BundleDriver, BlockDriver, ChainDriver, Trevm};
-use revm::{primitives::EVMError, Database};
+use revm::{context::result::EVMError, Database};
 use sealed::*;
 
 /// A [`Trevm`] that requires a [`Cfg`].
@@ -8,7 +8,7 @@ use sealed::*;
 /// - [`EvmNeedsCfg::fill_cfg`]
 ///
 /// [`Cfg`]: crate::Cfg
-pub type EvmNeedsCfg<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsCfg>;
+pub type EvmNeedsCfg<Db, Insp> = Trevm<Db, Insp, NeedsCfg>;
 
 /// A [`Trevm`] that requires a [`Block`] and contains no
 /// outputs. This EVM has not yet executed any transactions or state changes.
@@ -19,7 +19,7 @@ pub type EvmNeedsCfg<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsCfg>;
 /// - [`EvmNeedsBlock::drive_chain`]
 ///
 /// [`Block`]: crate::Block
-pub type EvmNeedsBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsBlock>;
+pub type EvmNeedsBlock<Db, Insp> = Trevm<Db, Insp, NeedsBlock>;
 
 /// A [`Trevm`] that requires a [`Tx`].
 ///
@@ -29,13 +29,13 @@ pub type EvmNeedsBlock<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsBlock>;
 /// - [`EvmNeedsTx::finish`]
 ///
 /// [`Tx`]: crate::Tx
-pub type EvmNeedsTx<'a, Ext, Db> = Trevm<'a, Ext, Db, NeedsTx>;
+pub type EvmNeedsTx<Db, Insp> = Trevm<Db, Insp, NeedsTx>;
 
 /// A [`Trevm`] that is ready to execute a transaction.
 ///
 /// The transaction may be executed with [`EvmReady::run`] or cleared
 /// with [`EvmReady::clear_tx`]
-pub type EvmReady<'a, Ext, Db> = Trevm<'a, Ext, Db, Ready>;
+pub type EvmReady<Db, Insp> = Trevm<Db, Insp, Ready>;
 
 /// A [`Trevm`] that run a transaction, and contains the resulting execution
 /// details and state.
@@ -43,37 +43,37 @@ pub type EvmReady<'a, Ext, Db> = Trevm<'a, Ext, Db, Ready>;
 /// Expected continuations include:
 /// - [`EvmTransacted::reject`]
 /// - [`EvmTransacted::accept`]
-pub type EvmTransacted<'a, Ext, Db> = Trevm<'a, Ext, Db, TransactedState>;
+pub type EvmTransacted<Db, Insp> = Trevm<Db, Insp, TransactedState>;
 
 /// A [`Trevm`] that encountered an error during transaction execution.
 ///
 /// Expected continuations include:
 /// - [`EvmErrored::discard_error`]
 /// - [`EvmErrored::into_error`]
-pub type EvmErrored<'a, Ext, Db, E = EVMError<<Db as Database>::Error>> =
-    Trevm<'a, Ext, Db, ErroredState<E>>;
+pub type EvmErrored<Db, Insp, E = EVMError<<Db as Database>::Error>> =
+    Trevm<Db, Insp, ErroredState<E>>;
 
 /// A [`Trevm`] that encountered an error during [`BlockDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
-pub type EvmBlockDriverErrored<'a, Ext, Db, T> =
-    EvmErrored<'a, Ext, Db, <T as BlockDriver<Ext>>::Error<Db>>;
+pub type EvmBlockDriverErrored<Db, Insp, T> =
+    EvmErrored<Db, Insp, <T as BlockDriver<Insp>>::Error<Db>>;
 
 /// A [`Trevm`] that encountered an error during [`ChainDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
-pub type EvmChainDriverErrored<'a, Ext, Db, T> =
-    EvmErrored<'a, Ext, Db, <T as ChainDriver<Ext>>::Error<Db>>;
+pub type EvmChainDriverErrored<Db, Insp, T> =
+    EvmErrored<Db, Insp, <T as ChainDriver<Insp>>::Error<Db>>;
 
 /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
-pub type EvmBundleDriverErrored<'a, Ext, Db, T> =
-    EvmErrored<'a, Ext, Db, <T as BundleDriver<Ext>>::Error<Db>>;
+pub type EvmBundleDriverErrored<Db, Insp, T> =
+    EvmErrored<Db, Insp, <T as BundleDriver<Insp>>::Error<Db>>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]
 pub(crate) mod sealed {
-    use revm::primitives::ResultAndState;
+    use revm::context::result::ResultAndState;
 
     macro_rules! states {
         ($($name:ident),+) => {
@@ -157,11 +157,11 @@ pub(crate) mod sealed {
 ///
 /// ```
 /// use trevm::trevm_aliases;
-/// use revm::db::InMemoryDB;
+/// use revm::database::in_memory_db::InMemoryDB;
 ///
 /// // produces types that look like this:
-/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<'static, (), InMemoryDB>;
-/// trevm_aliases!(revm::db::InMemoryDB);
+/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<InMemoryDB, ()>
+/// trevm_aliases!(revm::database::in_memory_db::InMemoryDB);
 /// ```
 ///
 /// Invoking with an ext and DB type will use the provided ext type and the
@@ -170,24 +170,11 @@ pub(crate) mod sealed {
 /// ```
 /// # mod t {
 /// # use trevm::trevm_aliases;
-/// # use revm::db::InMemoryDB;
+/// # use revm::database::in_memory_db::InMemoryDB;
 /// # pub struct SomeExtType;
 /// // produces types that look like this:
-/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<'static, SomeExtType, InMemoryDB>;
-/// trevm_aliases!(SomeExtType, InMemoryDB);
-/// # }
-/// ```
-///
-/// To add a lifetime to the ext type, add the word lifetime:
-///
-/// ```
-/// # mod t {
-/// # use trevm::trevm_aliases;
-/// # use revm::db::InMemoryDB;
-/// # pub struct SomeExtType;
-/// // produces types that look like this:
-/// // type EvmNeedsCfg<'a> = trevm::EvmNeedsCfg<'a, SomeExtType, InMemoryDB>;
-/// trevm_aliases!(lifetime: SomeExtType, InMemoryDB);
+/// // type EvmNeedsCfg = trevm::EvmNeedsCfg<InMemoryDb, SomeExtType>
+/// trevm_aliases!(revm::database::in_memory_db::InMemoryDB, SomeExtType);
 /// # }
 /// ```
 macro_rules! trevm_aliases {
@@ -195,7 +182,7 @@ macro_rules! trevm_aliases {
         trevm_aliases!((), $db);
     };
 
-    (lifetime: $ext:ty, $db:ty) => {
+    ($db:ty, $insp:ty) => {
         #[allow(unused_imports, unreachable_pub, dead_code)]
         pub use __aliases::*;
 
@@ -212,89 +199,7 @@ macro_rules! trevm_aliases {
             ///
             /// [`Cfg`]: crate::Cfg
             /// [`Trevm`]: crate::Trevm
-            pub type EvmNeedsCfg<'a> = $crate::EvmNeedsCfg<'a, $ext, $db>;
-
-            /// A [`Trevm`] that requires a [`Block`] and contains no
-            /// outputs. This EVM has not yet executed any transactions or state changes.
-            ///
-            /// Expected continuations include:
-            /// - [`EvmNeedsBlock::open_block`]
-            /// - [`EvmNeedsBlock::drive_block`]
-            /// - [`EvmNeedsBlock::drive_chain`]
-            ///
-            /// [`Block`]: crate::Block
-            pub type EvmNeedsBlock<'a> = $crate::EvmNeedsBlock<'a, $ext, $db>;
-
-            /// A [`Trevm`] that requires a [`Tx`].
-            ///
-            /// Expected continuations include:
-            /// - [`EvmNeedsTx::fill_tx`]
-            /// - [`EvmNeedsTx::execute_tx`]
-            /// - [`EvmNeedsTx::apply_tx`]
-            /// - [`EvmNeedsTx::finish`]
-            ///
-            /// [`Tx`]: crate::Tx
-            pub type EvmNeedsTx<'a> = $crate::EvmNeedsTx<'a, $ext, $db>;
-
-            /// A [`Trevm`] that is ready to execute a transaction.
-            ///
-            /// The transaction may be executed with [`Trevm::execute_tx`] or
-            /// cleared with [`Trevm::clear_tx`]
-            pub type EvmReady<'a> = $crate::EvmReady<'a, $ext, $db>;
-
-            /// A [`Trevm`] that encountered an error during transaction execution.
-            ///
-            /// Expected continuations include:
-            /// - [`EvmTransacted::reject`]
-            /// - [`EvmTransacted::accept`]
-            pub type EvmTransacted<'a> = $crate::EvmTransacted<'a, $ext, $db>;
-
-            /// A [`Trevm`] that encountered an error during transaction execution.
-            ///
-            /// Expected continuations include:
-            /// - [`EvmErrored::discard_error`]
-            /// - [`EvmErrored::into_error`]
-            pub type EvmErrored<
-                'a,
-                E = $crate::revm::primitives::EVMError<<$db as $crate::revm::Database>::Error>,
-            > = $crate::EvmErrored<'a, $ext, $db, E>;
-
-            /// A [`Trevm`] that encountered an error during [`BlockDriver`] execution.
-            ///
-            /// This is an [`EvmErrored`] parameterized with the driver's error type.
-            pub type EvmBlockDriverErrored<'a, T> = $crate::EvmBlockDriverErrored<'a, $ext, $db, T>;
-
-            /// A [`Trevm`] that encountered an error during [`ChainDriver`] execution.
-            ///
-            /// This is an [`EvmErrored`] parameterized with the driver's error type.
-            pub type EvmChainDriverErrored<'a, T> = $crate::EvmChainDriverErrored<'a, $ext, $db, T>;
-
-            /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
-            ///
-            /// This is an [`EvmErrored`] parameterized with the driver's error type.
-            pub type EvmBundleDriverErrored<'a, T> =
-                $crate::EvmBundleDriverErrored<'a, $ext, $db, T>;
-        }
-    };
-
-    ($ext:ty, $db:ty) => {
-        #[allow(unused_imports, unreachable_pub, dead_code)]
-        pub use __aliases::*;
-
-        #[allow(unused_imports, unreachable_pub, dead_code)]
-        mod __aliases {
-            use super::*;
-            // bring these in scope so that doclinks work in generated docs
-            use $crate::{Block, BlockDriver, ChainDriver, Trevm, Tx};
-
-            /// A [`Trevm`] that requires a [`Cfg`].
-            ///
-            /// Expected continuations include:
-            /// - [`Trevm::fill_cfg`]
-            ///
-            /// [`Cfg`]: crate::Cfg
-            /// [`Trevm`]: crate::Trevm
-            pub type EvmNeedsCfg = $crate::EvmNeedsCfg<'static, $ext, $db>;
+            pub type EvmNeedsCfg = $crate::EvmNeedsCfg<$db, $insp>;
 
             /// A [`Trevm`] that requires a [`Block`].
             ///
@@ -302,7 +207,7 @@ macro_rules! trevm_aliases {
             /// - [`EvmNeedsBlock::open_block`]
             ///
             /// [`Block`]: crate::Block
-            pub type EvmNeedsBlock = $crate::EvmNeedsBlock<'static, $ext, $db>;
+            pub type EvmNeedsBlock = $crate::EvmNeedsBlock<$db, $insp>;
 
             /// A [`Trevm`] that requires a [`Tx`].
             //
@@ -313,45 +218,42 @@ macro_rules! trevm_aliases {
             /// - [`EvmNeedsTx::finish`]
             ///
             /// [`Tx`]: crate::Tx
-            pub type EvmNeedsTx = $crate::EvmNeedsTx<'static, $ext, $db>;
+            pub type EvmNeedsTx = $crate::EvmNeedsTx<$db, $insp>;
 
             /// A [`Trevm`] that is ready to execute a transaction.
             ///
             /// The transaction may be executed with [`Trevm::execute_tx`] or
             /// cleared with [`Trevm::clear_tx`]
-            pub type EvmReady = $crate::EvmReady<'static, $ext, $db>;
+            pub type EvmReady = $crate::EvmReady<$db, $insp>;
 
             /// A [`Trevm`] that encountered an error during transaction execution.
             ///
             /// Expected continuations include:
             /// - [`EvmTransacted::reject`]
             /// - [`EvmTransacted::accept`]
-            pub type EvmTransacted = $crate::EvmTransacted<'static, $ext, $db>;
+            pub type EvmTransacted = $crate::EvmTransacted<$db, $insp>;
 
             /// A [`Trevm`] that encountered an error during transaction execution.
             ///
             /// Expected continuations include:
             /// - [`EvmErrored::discard_error`]
             /// - [`EvmErrored::into_error`]
-            pub type EvmErrored<E> = $crate::EvmErrored<'static, $ext, $db, E>;
+            pub type EvmErrored<E> = $crate::EvmErrored<$db, $insp, E>;
 
             /// A [`Trevm`] that encountered an error during [`BlockDriver`] execution.
             ///
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
-            pub type EvmBlockDriverErrored<'a, T> =
-                $crate::EvmBlockDriverErrored<'static, $ext, $db, T>;
+            pub type EvmBlockDriverErrored<T> = $crate::EvmBlockDriverErrored<$db, $insp, T>;
 
             /// A [`Trevm`] that encountered an error during [`ChainDriver`] execution.
             ///
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
-            pub type EvmChainDriverErrored<'a, T> =
-                $crate::EvmChainDriverErrored<'static, $ext, $db, T>;
+            pub type EvmChainDriverErrored<T> = $crate::EvmChainDriverErrored<$db, $insp, T>;
 
             /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
             ///
             /// This is an [`EvmErrored`] parameterized with the driver's error type.
-            pub type EvmBundleDriverErrored<'a, T> =
-                $crate::EvmBundleDriverErrored<'static, $ext, $db, T>;
+            pub type EvmBundleDriverErrored<T> = $crate::EvmBundleDriverErrored<$db, $insp, T>;
         }
     };
 }

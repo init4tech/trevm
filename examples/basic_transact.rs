@@ -1,12 +1,14 @@
 //! Simple TREVM example that demonstrates how to execute a transaction on a contract.
 //! It simply loads the contract bytecode and executes a transaction.
 
+use revm::context::TransactTo;
 use trevm::{
     revm::{
-        inspector_handle_register,
-        inspectors::TracerEip3155,
-        primitives::{hex, AccountInfo, Address, Bytecode, TransactTo, U256},
-        EvmBuilder, InMemoryDB,
+        bytecode::Bytecode,
+        database::InMemoryDB,
+        inspector::inspectors::TracerEip3155,
+        primitives::{hex, Address, U256},
+        state::AccountInfo,
     },
     trevm_aliases, NoopBlock, NoopCfg, TrevmBuilder, Tx,
 };
@@ -27,9 +29,9 @@ const CALLER_ADDR: Address = Address::with_last_byte(1);
 struct SampleTx;
 
 impl Tx for SampleTx {
-    fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
+    fn fill_tx_env(&self, tx_env: &mut revm::context::TxEnv) {
         tx_env.caller = CALLER_ADDR;
-        tx_env.transact_to = TransactTo::Call(CONTRACT_ADDR);
+        tx_env.kind = TransactTo::Call(CONTRACT_ADDR);
         tx_env.data = hex::decode(PROGRAM_INPUT).unwrap().into();
     }
 }
@@ -37,8 +39,8 @@ impl Tx for SampleTx {
 // Produce aliases for the Trevm type
 trevm_aliases!(TracerEip3155, InMemoryDB);
 
-fn main() {
-    let mut db = revm::InMemoryDB::default();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut db = revm::database::InMemoryDB::default();
 
     let bytecode = Bytecode::new_raw(hex::decode(CONTRACT_BYTECODE).unwrap().into());
     let acc_info = AccountInfo::new(U256::ZERO, 1, bytecode.hash_slow(), bytecode);
@@ -47,18 +49,19 @@ fn main() {
     db.insert_contract(&mut acc_info.clone());
     db.insert_account_info(CONTRACT_ADDR, acc_info);
 
-    let evm = EvmBuilder::default()
+    let insp = TracerEip3155::new(Box::new(std::io::stdout()));
+
+    let trevm = TrevmBuilder::new()
         .with_db(db)
-        .with_external_context(TracerEip3155::new(Box::new(std::io::stdout())))
-        .append_handler_register(inspector_handle_register)
-        .build_trevm()
+        .with_insp(insp)
+        .build_trevm()?
         .fill_cfg(&NoopCfg)
         .fill_block(&NoopBlock);
 
-    let account = evm.read_account_ref(CONTRACT_ADDR).unwrap();
+    let account = trevm.read_account_ref(CONTRACT_ADDR).unwrap();
     println!("account: {account:?}");
 
-    let evm = evm.fill_tx(&SampleTx).run();
+    let evm = trevm.fill_tx(&SampleTx).run();
 
     match evm {
         Ok(res) => {
@@ -69,4 +72,6 @@ fn main() {
             println!("Execution error: {e:?}");
         }
     };
+
+    Ok(())
 }

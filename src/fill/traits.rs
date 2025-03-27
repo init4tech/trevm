@@ -1,6 +1,7 @@
+use crate::helpers::Ctx;
 use revm::{
-    primitives::{BlockEnv, CfgEnv, TxEnv},
-    Database, Evm,
+    context::{BlockEnv, CfgEnv, Evm, TxEnv},
+    Database,
 };
 
 /// Types that can fill the EVM transaction environment [`TxEnv`].
@@ -17,9 +18,8 @@ pub trait Tx: Send + Sync {
     fn fill_tx_env(&self, tx_env: &mut TxEnv);
 
     /// Fill the transaction environment on the EVM.
-    fn fill_tx<Ext, Db: Database>(&self, evm: &mut Evm<'_, Ext, Db>) {
-        let tx_env: &mut TxEnv = evm.tx_mut();
-        self.fill_tx_env(tx_env);
+    fn fill_tx<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>) {
+        evm.data.ctx.modify_tx(|tx_env| self.fill_tx_env(tx_env));
     }
 }
 
@@ -45,9 +45,8 @@ pub trait Block: Send + Sync {
     fn fill_block_env(&self, block_env: &mut BlockEnv);
 
     /// Fill the block environment on the EVM.
-    fn fill_block<Ext, Db: Database>(&self, evm: &mut Evm<'_, Ext, Db>) {
-        let block_env: &mut BlockEnv = evm.block_mut();
-        self.fill_block_env(block_env);
+    fn fill_block<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>) {
+        evm.data.ctx.modify_block(|block_env| self.fill_block_env(block_env));
     }
 
     /// Get the transaction count hint from the filler. This can be used for
@@ -88,9 +87,8 @@ pub trait Cfg: Send + Sync {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv);
 
     /// Fill the configuration environment on the EVM.
-    fn fill_cfg<Ext, Db: Database>(&self, evm: &mut Evm<'_, Ext, Db>) {
-        let cfg_env: &mut CfgEnv = evm.cfg_mut();
-        self.fill_cfg_env(cfg_env);
+    fn fill_cfg<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>) {
+        evm.data.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
     }
 }
 
@@ -109,7 +107,10 @@ mod test {
         consensus::constants::GWEI_TO_WEI,
         primitives::{B256, U256},
     };
-    use revm::primitives::{BlobExcessGasAndPrice, BlockEnv, CfgEnv};
+    use revm::{
+        context::{BlockEnv, CfgEnv},
+        context_interface::block::BlobExcessGasAndPrice,
+    };
 
     use super::*;
 
@@ -117,7 +118,7 @@ mod test {
         fn fill_block_env(&self, block_env: &mut BlockEnv) {
             let BlockEnv {
                 number,
-                coinbase,
+                beneficiary,
                 timestamp,
                 gas_limit,
                 basefee,
@@ -125,11 +126,11 @@ mod test {
                 prevrandao,
                 blob_excess_gas_and_price,
             } = block_env;
-            *number = U256::from(1);
-            *coinbase = Default::default();
-            *timestamp = U256::from(1720450148); // Time when I was writing the test code
-            *gas_limit = U256::from(30_000_000);
-            *basefee = U256::from(5 * GWEI_TO_WEI);
+            *number = 1;
+            *beneficiary = Default::default();
+            *timestamp = 1720450148; // Time when I was writing the test code
+            *gas_limit = 30_000_000;
+            *basefee = 5 * GWEI_TO_WEI;
 
             let diff = B256::repeat_byte(0xab);
             *prevrandao = Some(diff);

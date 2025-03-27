@@ -23,7 +23,7 @@
 //! # Usage Example
 //!
 //! ```
-//! # use revm::db::BundleState;
+//! # use revm::database::BundleState;
 //! # use trevm::journal::{BundleStateIndex, JournalEncode, JournalDecode, JournalDecodeError};
 //! # fn make_index(bundle_state: &BundleState) -> Result<(), JournalDecodeError> {
 //! // Make an index over a bundle state.
@@ -46,9 +46,9 @@
 //! # }
 //! ```
 //!
-//! [`StateBuilder::with_bundle_update`]: revm::db::StateBuilder::with_bundle_update
-//! [`State<Db>`]: revm::db::State
-//! [`BundleState`]: revm::db::BundleState
+//! [`StateBuilder::with_bundle_update`]: revm::database::StateBuilder::with_bundle_update
+//! [`State<Db>`]: revm::database::State
+//! [`BundleState`]: revm::database::BundleState
 //! [reth]: https://github.com/paradigmxyz/reth
 
 mod coder;

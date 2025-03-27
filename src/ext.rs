@@ -1,11 +1,13 @@
 use alloy::primitives::{Address, B256, U256};
 use revm::{
-    primitives::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot, HashMap},
+    context::{ContextTr, Evm},
+    primitives::HashMap,
+    state::{Account, AccountInfo, Bytecode, EvmState, EvmStorageSlot},
     Database, DatabaseCommit,
 };
 
-/// Extension trait for [`revm::Evm`] with convenience functions for reading
-/// and modifying state.
+/// Extension trait for [`revm::context::Evm`] with convenience functions for
+/// reading and modifying state.
 pub trait EvmExtUnchecked<Db: Database> {
     /// Get a mutable reference to the database.
     fn db_mut_ext(&mut self) -> &mut Db;
@@ -169,8 +171,11 @@ pub trait EvmExtUnchecked<Db: Database> {
     }
 }
 
-impl<Ext, Db: Database> EvmExtUnchecked<Db> for revm::Evm<'_, Ext, Db> {
-    fn db_mut_ext(&mut self) -> &mut Db {
-        self.db_mut()
+impl<Ctx, Insp, Inst, Prec> EvmExtUnchecked<Ctx::Db> for Evm<Ctx, Insp, Inst, Prec>
+where
+    Ctx: ContextTr,
+{
+    fn db_mut_ext(&mut self) -> &mut Ctx::Db {
+        self.data.ctx.db()
     }
 }

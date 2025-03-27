@@ -3,7 +3,7 @@ use crate::{
 };
 use core::convert::Infallible;
 use revm::{
-    primitives::{EVMError, ResultAndState},
+    context::result::{EVMError, ResultAndState},
     Database,
 };
 use std::format;
@@ -18,7 +18,7 @@ use std::format;
 /// connector. E.g. the connector may contain some `Db` and the resulting Db may
 /// contain `&Db`. This allows for (e.g.) shared caches between DBs on multiple
 /// threads.
-pub trait DbConnect<'a>: Sync {
+pub trait DbConnect: Sync {
     /// The database type returned when connecting.
     type Database: Database;
 
@@ -26,10 +26,10 @@ pub trait DbConnect<'a>: Sync {
     type Error: core::error::Error;
 
     /// Connect to the database.
-    fn connect(&'a self) -> Result<Self::Database, Self::Error>;
+    fn connect(&self) -> Result<Self::Database, Self::Error>;
 }
 
-impl<Db> DbConnect<'_> for Db
+impl<Db> DbConnect for Db
 where
     Db: Database + Clone + Sync,
 {
@@ -44,8 +44,8 @@ where
 
 /// Trait for types that can create EVM instances.
 ///
-/// Factories should contain configuration information like chain `EXT` types,
-/// and database connections. They are intended to enable parallel instantiation
+/// Factories should contain configuration information like `Insp` types, and
+/// database connections. They are intended to enable parallel instantiation
 /// of multiple EVMs in multiple threads sharing some configuration or backing
 /// store.
 ///
@@ -53,19 +53,19 @@ where
 /// connector. E.g. the connector may contain some `Db` and the resulting EVM
 /// may contain `&Db`. This allows for (e.g.) shared caches between EVMs on
 /// multiple threads.
-pub trait EvmFactory<'a>: DbConnect<'a> {
-    /// The `Ext` type used in the resulting EVM.
-    type Ext: Sync;
+pub trait EvmFactory: DbConnect {
+    /// The `Insp` type used in the resulting EVM.
+    type Insp: Sync;
 
     /// Create a new EVM instance with the given database connection and
     /// extension.
-    fn create(&'a self) -> Result<EvmNeedsCfg<'a, Self::Ext, Self::Database>, Self::Error>;
+    fn create(&self) -> Result<EvmNeedsCfg<Self::Database, Self::Insp>, Self::Error>;
 
     /// Create a new EVM instance and parameterize it with a [`Cfg`].
     fn create_with_cfg<C>(
-        &'a self,
+        &self,
         cfg: &C,
-    ) -> Result<EvmNeedsBlock<'a, Self::Ext, Self::Database>, Self::Error>
+    ) -> Result<EvmNeedsBlock<Self::Database, Self::Insp>, Self::Error>
     where
         C: Cfg,
     {
@@ -75,10 +75,10 @@ pub trait EvmFactory<'a>: DbConnect<'a> {
     /// Create a new EVM instance and parameterize it with a [`Cfg`] and a
     /// [`Block`].
     fn create_with_block<C, B>(
-        &'a self,
+        &self,
         cfg: &C,
         block: &B,
-    ) -> Result<EvmNeedsTx<'a, Self::Ext, Self::Database>, Self::Error>
+    ) -> Result<EvmNeedsTx<Self::Database, Self::Insp>, Self::Error>
     where
         C: Cfg,
         B: Block,
@@ -89,11 +89,11 @@ pub trait EvmFactory<'a>: DbConnect<'a> {
     /// Create a new EVM instance, and parameterize it with a [`Cfg`], a
     /// [`Block`], and a [`Tx`], yielding an [`EvmReady`].
     fn create_with_tx<C, B, T>(
-        &'a self,
+        &self,
         cfg: &C,
         block: &B,
         tx: &T,
-    ) -> Result<EvmReady<'a, Self::Ext, Self::Database>, Self::Error>
+    ) -> Result<EvmReady<Self::Database, Self::Insp>, Self::Error>
     where
         C: Cfg,
         B: Block,
@@ -107,15 +107,12 @@ pub trait EvmFactory<'a>: DbConnect<'a> {
     /// [`EvmTransacted`] or [`EvmErrored`].
     #[allow(clippy::type_complexity)]
     fn transact<C, B, T>(
-        &'a self,
+        &self,
         cfg: &C,
         block: &B,
         tx: &T,
     ) -> Result<
-        Result<
-            EvmTransacted<'a, Self::Ext, Self::Database>,
-            EvmErrored<'a, Self::Ext, Self::Database>,
-        >,
+        Result<EvmTransacted<Self::Database, Self::Insp>, EvmErrored<Self::Database, Self::Insp>>,
         Self::Error,
     >
     where
@@ -130,7 +127,7 @@ pub trait EvmFactory<'a>: DbConnect<'a> {
     /// Run a transaction, take the [`ResultAndState`], and discard the Evm.
     /// This is a high-level shortcut function.
     fn run<C, B, T>(
-        &'a self,
+        &self,
         cfg: &C,
         block: &B,
         tx: &T,

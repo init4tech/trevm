@@ -1,4 +1,4 @@
-use revm::primitives::ResultAndState;
+use revm::context::result::ResultAndState;
 
 /// Control flow for transaction execution.
 ///

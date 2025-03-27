@@ -1,7 +1,9 @@
 use alloy::primitives::{Address, Sign, B256, I256, U256};
 use revm::{
-    db::{states::StorageSlot, AccountStatus, BundleAccount, BundleState},
-    primitives::{AccountInfo, Bytecode, HashMap},
+    bytecode::Bytecode,
+    database::{states::StorageSlot, AccountStatus, BundleAccount, BundleState},
+    primitives::HashMap,
+    state::AccountInfo,
 };
 use std::{borrow::Cow, collections::BTreeMap};
 
@@ -151,7 +153,7 @@ impl From<AcctDiff<'_>> for BundleAccount {
 /// # Example
 ///
 /// ```
-/// # use revm::db::BundleState;
+/// # use revm::database::BundleState;
 /// # use trevm::journal::{BundleStateIndex, JournalEncode, JournalDecode, JournalDecodeError};
 /// # fn make_index(bundle_state: &BundleState) -> Result<(), JournalDecodeError> {
 /// let index = BundleStateIndex::from(bundle_state);

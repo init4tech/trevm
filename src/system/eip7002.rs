@@ -2,10 +2,7 @@ use super::{checked_insert_code, execute_system_tx};
 use crate::{system::SystemTx, EvmNeedsTx};
 use alloy::eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_CODE;
 use alloy::primitives::{Address, Bytes};
-use revm::{
-    primitives::{EVMError, SpecId},
-    Database, DatabaseCommit,
-};
+use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
 
 /// The address for the [EIP-7002] withdrawal requests contract.
 ///
@@ -42,7 +39,7 @@ impl SystemTx {
     }
 }
 
-impl<Ext, Db: Database + DatabaseCommit> EvmNeedsTx<'_, Ext, Db> {
+impl<Db: Database + DatabaseCommit, Insp> EvmNeedsTx<Db, Insp> {
     /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
     /// post-block action was introduced in Prague, and calls the withdrawal
     /// request contract to accumulate withdrawal requests.
@@ -86,6 +83,7 @@ mod test {
         consensus::constants::ETH_TO_WEI,
         primitives::{fixed_bytes, FixedBytes, TxKind, U256},
     };
+    use revm::context::TxEnv;
 
     use crate::{NoopBlock, NoopCfg, Tx};
 
@@ -96,13 +94,13 @@ mod test {
     struct WithdrawalTx;
 
     impl Tx for WithdrawalTx {
-        fn fill_tx_env(&self, tx_env: &mut revm::primitives::TxEnv) {
+        fn fill_tx_env(&self, tx_env: &mut TxEnv) {
             // https://github.com/lightclient/7002asm/blob/e0d68e04d15f25057af7b6d180423d94b6b3bdb3/test/Contract.t.sol.in#L49-L64
             let input: Bytes = [&VALIDATOR_PUBKEY[..], &WITHDRAWAL_AMOUNT[..]].concat().into();
 
             tx_env.caller = WITHDRAWAL_ADDR;
             tx_env.data = input;
-            tx_env.transact_to = TxKind::Call(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS);
+            tx_env.kind = TxKind::Call(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS);
             // `MIN_WITHDRAWAL_REQUEST_FEE`
             tx_env.value = U256::from(1);
         }

@@ -1,18 +1,18 @@
 use crate::{Block, EvmBlockDriverErrored, EvmNeedsBlock, EvmNeedsTx};
-use revm::{primitives::EVMError, Database, DatabaseCommit};
+use revm::{context::result::EVMError, Database, DatabaseCommit};
 
 /// The result of running transactions for a block driver.
-pub type RunTxResult<'a, Ext, Db, T> =
-    Result<EvmNeedsTx<'a, Ext, Db>, EvmBlockDriverErrored<'a, Ext, Db, T>>;
+pub type RunTxResult<Db, Insp, T> =
+    Result<EvmNeedsTx<Db, Insp>, EvmBlockDriverErrored<Db, Insp, T>>;
 
 /// The result of driving a block to completion.
-pub type DriveBlockResult<'a, Ext, Db, T> =
-    Result<EvmNeedsBlock<'a, Ext, Db>, EvmBlockDriverErrored<'a, Ext, Db, T>>;
+pub type DriveBlockResult<Db, Insp, T> =
+    Result<EvmNeedsBlock<Db, Insp>, EvmBlockDriverErrored<Db, Insp, T>>;
 
 /// Driver for a single trevm block. This trait allows a type to specify the
 /// entire lifecycle of a trevm block, from opening the block to driving the
 /// trevm to completion.
-pub trait BlockDriver<Ext> {
+pub trait BlockDriver<Insp> {
     /// The [`Block`] filler for this driver.
     type Block: Block;
 
@@ -23,14 +23,14 @@ pub trait BlockDriver<Ext> {
     fn block(&self) -> &Self::Block;
 
     /// Run the transactions for the block.
-    fn run_txns<'a, Db: Database + DatabaseCommit>(
+    fn run_txns<Db: Database + DatabaseCommit>(
         &mut self,
-        trevm: EvmNeedsTx<'a, Ext, Db>,
-    ) -> RunTxResult<'a, Ext, Db, Self>;
+        trevm: EvmNeedsTx<Db, Insp>,
+    ) -> RunTxResult<Db, Insp, Self>;
 
     /// Run post
     fn post_block<Db: Database + DatabaseCommit>(
         &mut self,
-        trevm: &EvmNeedsBlock<'_, Ext, Db>,
+        trevm: &EvmNeedsBlock<Db, Insp>,
     ) -> Result<(), Self::Error<Db>>;
 }

@@ -1,5 +1,5 @@
 use crate::fill::traits::{Cfg, Tx};
-use revm::primitives::{CfgEnv, TxEnv};
+use revm::context::{BlockEnv, CfgEnv, TxEnv};
 
 /// A [`Cfg`] that disables gas-related checks and payment of the
 /// beneficiary reward, while leaving other cfg options unchanged.
@@ -24,14 +24,6 @@ impl Cfg for DisableGasChecks {
         {
             cfg_env.disable_balance_check = true;
         }
-        #[cfg(feature = "optional_beneficiary_reward")]
-        {
-            cfg_env.disable_beneficiary_reward = true;
-        }
-        #[cfg(feature = "optional_gas_refund")]
-        {
-            cfg_env.disable_gas_refund = true;
-        }
         #[cfg(feature = "optional_no_base_fee")]
         {
             cfg_env.disable_base_fee = true;
@@ -39,15 +31,15 @@ impl Cfg for DisableGasChecks {
     }
 }
 
-/// A [`Tx`] that disables the nonce check, while leaving other [`TxEnv`]
+/// A [`Cfg`] that disables the nonce check, while leaving other [`CfgEnv`]
 /// attributes untouched.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DisableNonceCheck;
 
-impl Tx for DisableNonceCheck {
+impl Cfg for DisableNonceCheck {
     #[allow(unused_variables)]
-    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
-        tx_env.nonce = None;
+    fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
+        cfg_env.disable_nonce_check = true;
     }
 }
 
@@ -74,13 +66,13 @@ impl Cfg for GasEstimationFiller {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
         cfg_env.disable_base_fee = true;
         cfg_env.disable_eip3607 = true;
+        DisableNonceCheck.fill_cfg_env(cfg_env);
     }
 }
 
 #[cfg(feature = "estimate_gas")]
 impl Tx for GasEstimationFiller {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
-        DisableNonceCheck.fill_tx_env(tx_env);
         tx_env.gas_limit = self.gas_limit;
     }
 }
@@ -95,19 +87,13 @@ impl Cfg for CallFiller {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
         cfg_env.disable_base_fee = true;
         cfg_env.disable_eip3607 = true;
+        DisableNonceCheck.fill_cfg_env(cfg_env);
     }
 }
 
 #[cfg(feature = "call")]
 impl crate::Block for CallFiller {
-    fn fill_block_env(&self, block_env: &mut revm::primitives::BlockEnv) {
-        block_env.gas_limit = alloy::primitives::U256::from(self.gas_limit);
-    }
-}
-
-#[cfg(feature = "call")]
-impl Tx for CallFiller {
-    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
-        DisableNonceCheck.fill_tx_env(tx_env);
+    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+        block_env.gas_limit = self.gas_limit;
     }
 }
