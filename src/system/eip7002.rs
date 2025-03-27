@@ -1,7 +1,9 @@
 use super::{checked_insert_code, execute_system_tx};
+use crate::helpers::Ctx;
 use crate::{system::SystemTx, EvmNeedsTx};
 use alloy::eips::eip7002::WITHDRAWAL_REQUEST_PREDEPLOY_CODE;
 use alloy::primitives::{Address, Bytes};
+use revm::Inspector;
 use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
 
 /// The address for the [EIP-7002] withdrawal requests contract.
@@ -39,16 +41,17 @@ impl SystemTx {
     }
 }
 
-impl<Db: Database + DatabaseCommit, Insp> EvmNeedsTx<Db, Insp> {
+impl<Db, Insp> EvmNeedsTx<Db, Insp>
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Apply a system transaction as specified in [EIP-7002]. The EIP-7002
     /// post-block action was introduced in Prague, and calls the withdrawal
     /// request contract to accumulate withdrawal requests.
     ///
     /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
-    pub fn apply_eip7002(&mut self) -> Result<Bytes, EVMError<Db::Error>>
-    where
-        Db: Database + DatabaseCommit,
-    {
+    pub fn apply_eip7002(&mut self) -> Result<Bytes, EVMError<Db::Error>> {
         if self.spec_id() < SpecId::PRAGUE {
             return Ok(Bytes::new());
         }

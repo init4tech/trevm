@@ -1,10 +1,12 @@
 use super::{checked_insert_code, execute_system_tx};
-use crate::{system::SystemTx, EvmNeedsTx};
+use crate::{helpers::Ctx, system::SystemTx, EvmNeedsTx};
 use alloy::{
     eips::eip7251::CONSOLIDATION_REQUEST_PREDEPLOY_CODE,
     primitives::{Address, Bytes},
 };
-use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
+use revm::{
+    context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit, Inspector,
+};
 
 /// The address for the [EIP-7251] consolidation requests contract
 ///
@@ -44,6 +46,7 @@ impl SystemTx {
 impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where
     Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Apply a system transaction as specified in [EIP-7251]. The EIP-7251
     /// post-block action calls the consolidation request contract to process

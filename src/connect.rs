@@ -1,10 +1,11 @@
 use crate::{
-    Block, Cfg, EvmErrored, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted, Tx,
+    helpers::Ctx, Block, Cfg, EvmErrored, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
+    EvmTransacted, Tx,
 };
 use core::convert::Infallible;
 use revm::{
     context::result::{EVMError, ResultAndState},
-    Database,
+    Database, Inspector,
 };
 use std::format;
 
@@ -55,7 +56,11 @@ where
 /// multiple threads.
 pub trait EvmFactory: DbConnect {
     /// The `Insp` type used in the resulting EVM.
-    type Insp: Sync;
+    ///
+    /// Recommend using [`NoOpInspector`] for most use cases.
+    ///
+    /// [`NoOpInspector`]: revm::inspector::NoOpInspector
+    type Insp: Sync + Inspector<Ctx<Self::Database>>;
 
     /// Create a new EVM instance with the given database connection and
     /// extension.

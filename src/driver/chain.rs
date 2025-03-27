@@ -1,5 +1,7 @@
-use crate::{BlockDriver, EvmChainDriverErrored, EvmNeedsBlock};
-use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
+use crate::{helpers::Ctx, BlockDriver, EvmChainDriverErrored, EvmNeedsBlock};
+use revm::{
+    context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit, Inspector,
+};
 
 /// The result of driving a chain to completion.
 pub type DriveChainResult<Db, Insp, D> =
@@ -26,9 +28,12 @@ pub trait ChainDriver<Insp> {
     /// or parent-child relationships.
     ///
     /// The `idx` parameter is the index of the block in the chain.
-    fn interblock<Db: Database + DatabaseCommit>(
+    fn interblock<Db>(
         &mut self,
         trevm: &EvmNeedsBlock<Db, Insp>,
         idx: usize,
-    ) -> Result<(), Self::Error<Db>>;
+    ) -> Result<(), Self::Error<Db>>
+    where
+        Db: Database + DatabaseCommit,
+        Insp: Inspector<Ctx<Db>>;
 }

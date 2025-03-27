@@ -1,7 +1,7 @@
 use crate::{
     db::{StateAcc, TryDatabaseCommit, TryStateAcc},
     driver::DriveBlockResult,
-    helpers::Evm,
+    helpers::{Ctx, Evm},
     Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
     ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
     EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
@@ -17,33 +17,50 @@ use revm::{
         Block as _, BlockEnv, Cfg as _, ContextSetters, ContextTr, Transaction as _, TxEnv,
     },
     database::{states::bundle_state::BundleRetention, BundleState},
+    inspector::NoOpInspector,
     interpreter::gas::calculate_initial_tx_gas_for_tx,
     primitives::{hardfork::SpecId, TxKind},
     state::{AccountInfo, Bytecode, EvmState},
-    Database, DatabaseCommit, DatabaseRef, ExecuteEvm,
+    Database, DatabaseCommit, DatabaseRef, InspectEvm, Inspector,
 };
 
 /// Trevm provides a type-safe interface to the EVM, using the typestate pattern.
 ///
 /// See the [crate-level documentation](crate) for more information.
-pub struct Trevm<Db: Database, Insp, TrevmState> {
+pub struct Trevm<Db, Insp = NoOpInspector, TrevmState = NeedsCfg>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     pub(crate) inner: Box<Evm<Db, Insp>>,
     pub(crate) state: TrevmState,
 }
 
-impl<Db: Database, Insp, TrevmState> fmt::Debug for Trevm<Db, Insp, TrevmState> {
+impl<Db, Insp, TrevmState> fmt::Debug for Trevm<Db, Insp, TrevmState>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Trevm").finish_non_exhaustive()
     }
 }
 
-impl<Db: Database, Insp, TrevmState> AsRef<Evm<Db, Insp>> for Trevm<Db, Insp, TrevmState> {
+impl<Db, Insp, TrevmState> AsRef<Evm<Db, Insp>> for Trevm<Db, Insp, TrevmState>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     fn as_ref(&self) -> &Evm<Db, Insp> {
         &self.inner
     }
 }
 
-impl<Db: Database, Insp> From<Evm<Db, Insp>> for EvmNeedsCfg<Db, Insp> {
+impl<Db, Insp> From<Evm<Db, Insp>> for EvmNeedsCfg<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     fn from(inner: Evm<Db, Insp>) -> Self {
         Self { inner: Box::new(inner), state: NeedsCfg::new() }
     }
@@ -51,7 +68,11 @@ impl<Db: Database, Insp> From<Evm<Db, Insp>> for EvmNeedsCfg<Db, Insp> {
 
 // --- ALL STATES
 
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Get a reference to the current [`Evm`].
     ///
     /// [`Evm`]: revm::context::Evm
@@ -165,7 +186,11 @@ impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
 }
 
 // Fallible DB Reads with &mut self
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Get the current account info for a specific address.
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
@@ -234,6 +259,7 @@ impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
 impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
     Db: Database + DatabaseRef,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Get the current account info for a specific address.
     pub fn try_read_account_ref(
@@ -297,9 +323,10 @@ where
 }
 
 // Infallible DB Reads with &mut self
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
     Db: Database<Error = Infallible>,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Get the current account info for a specific address.
     ///
@@ -339,9 +366,10 @@ where
 }
 
 // Infalible DB Reads with &self
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Db: DatabaseRef,
+    Db: Database + DatabaseRef,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Get the current account info for a specific address.
     ///
@@ -376,7 +404,11 @@ where
     }
 }
 
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Commit a set of state changes to the database. This is a low-level API,
     /// and is not intended for general use. Regular users should prefer
     /// executing a transaction.
@@ -515,9 +547,10 @@ impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState> {
     }
 }
 
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
     Db: Database<Error = Infallible>,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Modify an account with a closure and commit the modified account. This
     /// is a low-level API, and is not intended for general use.
@@ -617,9 +650,10 @@ where
 
 // --- ALL STATES, WITH State<Db>
 
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Db: StateAcc,
+    Db: Database + StateAcc,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
@@ -628,9 +662,10 @@ where
     }
 }
 
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
-    Db: TryStateAcc,
+    Db: Database + TryStateAcc,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Fallibly set the [EIP-161] state clear flag, activated in the Spurious
     /// Dragon hardfork. This function is intended to be used by shared states,
@@ -647,7 +682,11 @@ where
 
 // --- NEEDS CFG
 
-impl<Db: Database, Insp> EvmNeedsCfg<Db, Insp> {
+impl<Db, Insp> EvmNeedsCfg<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Fill the configuration environment.
     pub fn fill_cfg<T: Cfg>(mut self, filler: &T) -> EvmNeedsBlock<Db, Insp> {
         filler.fill_cfg(&mut self.inner);
@@ -658,7 +697,12 @@ impl<Db: Database, Insp> EvmNeedsCfg<Db, Insp> {
 
 // --- HAS CFG
 
-impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+    TrevmState: HasCfg,
+{
     /// Set the [EIP-170] contract code size limit. By default this is set to
     /// 0x6000 bytes (~25KiB). Contracts whose bytecode is larger than this
     /// limit cannot be deployed and will produce a [`CreateInitCodeSizeLimit`]
@@ -924,7 +968,11 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
 
 // --- NEEDS BLOCK
 
-impl<Db: Database, Insp> EvmNeedsBlock<Db, Insp> {
+impl<Db, Insp> EvmNeedsBlock<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Open a block, apply some logic, and return the EVM ready for the next
     /// block.
     pub fn drive_block<D>(self, driver: &mut D) -> DriveBlockResult<Db, Insp, D>
@@ -990,8 +1038,10 @@ impl<Db: Database, Insp> EvmNeedsBlock<Db, Insp> {
 
 // --- HAS BLOCK
 
-impl<Db: Database, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
 where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
     TrevmState: HasBlock,
 {
     /// Get a reference to the current block environment.
@@ -1063,7 +1113,11 @@ where
 
 // --- Needs Block with State<Db>
 
-impl<Db: Database + StateAcc, Insp> EvmNeedsBlock<Db, Insp> {
+impl<Db, Insp> EvmNeedsBlock<Db, Insp>
+where
+    Db: Database + StateAcc,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Finish execution and return the outputs.
     ///
     /// If the State has not been built with
@@ -1083,7 +1137,11 @@ impl<Db: Database + StateAcc, Insp> EvmNeedsBlock<Db, Insp> {
     }
 }
 
-impl<Db: Database + TryStateAcc, Insp> EvmNeedsBlock<Db, Insp> {
+impl<Db, Insp> EvmNeedsBlock<Db, Insp>
+where
+    Db: Database + TryStateAcc,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Fallibly finish execution and return the outputs. This function is
     /// intended to be used by shared states, where mutable access may fail, e.
     /// g. an `Arc<Db>`. Prefer [`Self::finish`] when available.
@@ -1111,7 +1169,11 @@ impl<Db: Database + TryStateAcc, Insp> EvmNeedsBlock<Db, Insp> {
 
 // --- NEEDS TX
 
-impl<Db: Database, Insp> EvmNeedsTx<Db, Insp> {
+impl<Db, Insp> EvmNeedsTx<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Close the current block, returning the EVM ready for the next block.
     pub fn close_block(self) -> EvmNeedsBlock<Db, Insp> {
         // SAFETY: Same size and repr. Only phantomdata type changes
@@ -1180,7 +1242,12 @@ impl<Db: Database, Insp> EvmNeedsTx<Db, Insp> {
 
 // --- HAS TX
 
-impl<Db: Database, Insp, TrevmState: HasTx> Trevm<Db, Insp, TrevmState> {
+impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+    TrevmState: HasTx,
+{
     #[cfg(feature = "call")]
     fn try_with_call_filler<NewState: HasCfg + HasBlock>(
         self,
@@ -1389,6 +1456,7 @@ impl<Db: Database, Insp, TrevmState: HasTx> Trevm<Db, Insp, TrevmState> {
 impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where
     Db: Database + StateAcc,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Apply block overrides to the current block.
     ///
@@ -1428,6 +1496,7 @@ where
 impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where
     Db: Database + TryStateAcc,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Apply block overrides to the current block. This function is
     /// intended to be used by shared states, where mutable access may fail, e.
@@ -1478,7 +1547,11 @@ where
 
 // --- READY
 
-impl<Db: Database, Insp> EvmReady<Db, Insp> {
+impl<Db, Insp> EvmReady<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Clear the current transaction environment.
     pub fn clear_tx(self) -> EvmNeedsTx<Db, Insp> {
         // NB: we do not clear the tx env here, as we may read it during post-tx
@@ -1492,7 +1565,7 @@ impl<Db: Database, Insp> EvmReady<Db, Insp> {
     /// [`Evm::transact`] and produces either [`EvmTransacted`] or
     /// [`EvmErrored`].
     pub fn run(mut self) -> Result<EvmTransacted<Db, Insp>, EvmErrored<Db, Insp>> {
-        let result = self.inner.replay();
+        let result = self.inner.inspect_replay();
 
         let Self { inner, .. } = self;
 
@@ -1744,7 +1817,11 @@ impl<Db: Database, Insp> EvmReady<Db, Insp> {
 
 // --- ERRORED
 
-impl<Db: Database, Insp, E> EvmErrored<Db, Insp, E> {
+impl<Db, Insp, E> EvmErrored<Db, Insp, E>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Get a reference to the error.
     pub const fn error(&self) -> &E {
         &self.state.error
@@ -1789,7 +1866,11 @@ impl<Db: Database, Insp, E> EvmErrored<Db, Insp, E> {
     }
 }
 
-impl<Db: Database, Insp> EvmErrored<Db, Insp> {
+impl<Db, Insp> EvmErrored<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Check if the error is a transaction error. This is provided as a
     /// convenience function for common cases, as Transaction errors should
     /// usually be discarded.
@@ -1818,19 +1899,31 @@ impl<Db: Database, Insp> EvmErrored<Db, Insp> {
 
 // --- TRANSACTED
 
-impl<Db: Database, Insp> AsRef<ResultAndState> for EvmTransacted<Db, Insp> {
+impl<Db, Insp> AsRef<ResultAndState> for EvmTransacted<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     fn as_ref(&self) -> &ResultAndState {
         &self.state.result
     }
 }
 
-impl<Db: Database, Insp> AsRef<ExecutionResult> for EvmTransacted<Db, Insp> {
+impl<Db, Insp> AsRef<ExecutionResult> for EvmTransacted<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     fn as_ref(&self) -> &ExecutionResult {
         &self.state.result.result
     }
 }
 
-impl<Db: Database, Insp> EvmTransacted<Db, Insp> {
+impl<Db, Insp> EvmTransacted<Db, Insp>
+where
+    Db: Database,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Get a reference to the result.
     pub fn result(&self) -> &ExecutionResult {
         self.as_ref()
