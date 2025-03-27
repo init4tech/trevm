@@ -3,47 +3,12 @@ use alloy::{
     primitives::{Address, B256, U256},
 };
 use revm::{
-    db::{AccountState, DbAccount},
-    primitives::{Account, AccountInfo, Bytecode, HashMap},
+    bytecode::Bytecode,
+    database::{in_memory_db::Cache, AccountState, DbAccount},
+    primitives::HashMap,
+    state::{Account, AccountInfo},
     Database, DatabaseCommit, DatabaseRef,
 };
-
-/// Cache for [`CacheOnWrite`].
-#[derive(Debug, Default, Clone)]
-pub struct Cache {
-    accounts: HashMap<Address, DbAccount>,
-    contracts: HashMap<B256, Bytecode>,
-    block_hashes: HashMap<U256, B256>,
-}
-
-impl Cache {
-    /// Inserts the account's code into the cache.
-    ///
-    /// Accounts objects and code are stored separately in the cache, this will take the code from the account and instead map it to the code hash.
-    ///
-    /// Note: This will not insert into the underlying external database.
-    fn insert_contract(&mut self, account: &mut AccountInfo) {
-        if let Some(code) = &account.code {
-            if !code.is_empty() {
-                if account.code_hash == KECCAK_EMPTY {
-                    account.code_hash = code.hash_slow();
-                }
-                self.contracts.entry(account.code_hash).or_insert_with(|| code.clone());
-            }
-        }
-
-        if account.code_hash.is_zero() {
-            account.code_hash = KECCAK_EMPTY;
-        }
-    }
-
-    /// Absorb another cache into this cache, overwriting any existing entries
-    fn absorb(&mut self, other: Self) {
-        self.accounts.extend(other.accounts);
-        self.contracts.extend(other.contracts);
-        self.block_hashes.extend(other.block_hashes);
-    }
-}
 
 /// A version of [`CacheDB`] that caches only on write, not on read.
 ///
@@ -103,6 +68,25 @@ impl<Db> CacheOnWrite<Db> {
     pub fn nest(self) -> CacheOnWrite<Self> {
         CacheOnWrite::new(self)
     }
+
+    /// Inserts the account's code into the cache.
+    ///
+    /// Accounts objects and code are stored separately in the cache, this will take the code from the account and instead map it to the code hash.
+    ///
+    /// Note: This will not insert into the underlying external database.
+    fn insert_contract(&mut self, account: &mut AccountInfo) {
+        if let Some(code) = &account.code {
+            if !code.is_empty() {
+                if account.code_hash == KECCAK_EMPTY {
+                    account.code_hash = code.hash_slow();
+                }
+                self.cache.contracts.entry(account.code_hash).or_insert_with(|| code.clone());
+            }
+        }
+        if account.code_hash.is_zero() {
+            account.code_hash = KECCAK_EMPTY;
+        }
+    }
 }
 
 impl<Db> CacheOnWrite<CacheOnWrite<Db>> {
@@ -118,9 +102,13 @@ impl<Db> CacheOnWrite<CacheOnWrite<Db>> {
     /// - Contracts are overridden with outer contracts
     /// - Block hashes are overridden with outer block hashes
     pub fn flatten(self) -> CacheOnWrite<Db> {
-        let (mut this, outer) = self.into_parts();
-        this.cache.absorb(outer);
-        this
+        let Self { cache: Cache { accounts, contracts, logs, block_hashes }, mut inner } = self;
+
+        inner.cache.accounts.extend(accounts);
+        inner.cache.contracts.extend(contracts);
+        inner.cache.logs.extend(logs);
+        inner.cache.block_hashes.extend(block_hashes);
+        inner
     }
 }
 
@@ -208,7 +196,7 @@ impl<Db> DatabaseCommit for CacheOnWrite<Db> {
             }
 
             let is_newly_created = account.is_created();
-            self.cache.insert_contract(&mut account.info);
+            self.insert_contract(&mut account.info);
 
             let db_account = self.cache.accounts.entry(address).or_default();
             db_account.info = account.info;
