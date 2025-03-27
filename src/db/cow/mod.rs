@@ -75,6 +75,8 @@ impl<Db> CacheOnWrite<Db> {
     ///
     /// Note: This will not insert into the underlying external database.
     fn insert_contract(&mut self, account: &mut AccountInfo) {
+        // Reproduced from
+        // revm/crates/database/src/in_memory_db.rs
         if let Some(code) = &account.code {
             if !code.is_empty() {
                 if account.code_hash == KECCAK_EMPTY {
@@ -182,6 +184,8 @@ impl<Db: DatabaseRef> DatabaseRef for CacheOnWrite<Db> {
 
 impl<Db> DatabaseCommit for CacheOnWrite<Db> {
     fn commit(&mut self, changes: HashMap<Address, Account>) {
+        // Reproduced from
+        // revm/crates/database/src/in_memory_db.rs
         for (address, mut account) in changes {
             if !account.is_touched() {
                 continue;
@@ -217,3 +221,28 @@ impl<Db> DatabaseCommit for CacheOnWrite<Db> {
         }
     }
 }
+
+// Some code above and documentation is adapted from the revm crate, and is
+// reproduced here under the terms of the MIT license.
+//
+// MIT License
+//
+// Copyright (c) 2021-2024 draganrakita
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
