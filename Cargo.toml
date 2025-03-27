@@ -43,7 +43,7 @@ revm = { version = "20.0.0", features = [
 ] }
 trevm = { path = ".", features = ["test-utils"] }
 
-alloy = { version = "*", features = ["providers"]}
+alloy = { version = "0.12.6", features = ["providers"]}
 
 # misc
 eyre = "0.6"
