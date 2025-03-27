@@ -891,9 +891,33 @@ impl<Db: Database, Insp, TrevmState: HasCfg> Trevm<Db, Insp, TrevmState> {
         self.disable_base_fee();
 
         let mut new = f(self);
-        if !previous {
-            new.enable_base_fee();
-        }
+        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_base_fee = previous);
+        new
+    }
+
+    /// Disable nonce checks. This allows transactions to be sent with
+    /// incorrect nonces, and is useful for things like system transactions.
+    pub fn disable_nonce_check(&mut self) {
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = true)
+    }
+
+    /// Enable nonce checks. See [`Self::disable_nonce_check`].
+    pub fn enable_nonce_check(&mut self) {
+        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = false)
+    }
+
+    /// Run a closure with nonce checks disabled, then restore the previous
+    /// setting. This will not affect the block and tx, if those have been
+    /// filled.
+    pub fn without_nonce_check<F, NewState: HasCfg>(mut self, f: F) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        let previous = self.inner.cfg().disable_nonce_check;
+        self.disable_nonce_check();
+
+        let mut new = f(self);
+        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = previous);
         new
     }
 }
