@@ -12,7 +12,7 @@ pub enum TrevmBuilderError {
     DatabaseNotSet,
 }
 
-/// A bulider for [`Trevm`] that allows configuring the EVM.
+/// A builder for [`Trevm`] that allows configuring the EVM.
 #[derive(Debug, Clone)]
 pub struct TrevmBuilder<Db, Insp> {
     pub(crate) db: Option<Db>,
