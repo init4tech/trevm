@@ -1,5 +1,5 @@
-use crate::{Block, EvmBlockDriverErrored, EvmNeedsBlock, EvmNeedsTx};
-use revm::{context::result::EVMError, Database, DatabaseCommit};
+use crate::{helpers::Ctx, Block, EvmBlockDriverErrored, EvmNeedsBlock, EvmNeedsTx};
+use revm::{context::result::EVMError, Database, DatabaseCommit, Inspector};
 
 /// The result of running transactions for a block driver.
 pub type RunTxResult<Db, Insp, T> =
@@ -23,14 +23,14 @@ pub trait BlockDriver<Insp> {
     fn block(&self) -> &Self::Block;
 
     /// Run the transactions for the block.
-    fn run_txns<Db: Database + DatabaseCommit>(
-        &mut self,
-        trevm: EvmNeedsTx<Db, Insp>,
-    ) -> RunTxResult<Db, Insp, Self>;
+    fn run_txns<Db>(&mut self, trevm: EvmNeedsTx<Db, Insp>) -> RunTxResult<Db, Insp, Self>
+    where
+        Db: Database + DatabaseCommit,
+        Insp: Inspector<Ctx<Db>>;
 
     /// Run post
-    fn post_block<Db: Database + DatabaseCommit>(
-        &mut self,
-        trevm: &EvmNeedsBlock<Db, Insp>,
-    ) -> Result<(), Self::Error<Db>>;
+    fn post_block<Db>(&mut self, trevm: &EvmNeedsBlock<Db, Insp>) -> Result<(), Self::Error<Db>>
+    where
+        Db: Database + DatabaseCommit,
+        Insp: Inspector<Ctx<Db>>;
 }

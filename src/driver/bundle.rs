@@ -1,5 +1,5 @@
-use crate::{states::EvmBundleDriverErrored, EvmNeedsTx};
-use revm::{context::result::EVMError, Database, DatabaseCommit};
+use crate::{helpers::Ctx, states::EvmBundleDriverErrored, EvmNeedsTx};
+use revm::{context::result::EVMError, Database, DatabaseCommit, Inspector};
 
 /// The result of driving a bundle to completion.
 pub type DriveBundleResult<Db, Insp, T> =
@@ -14,10 +14,12 @@ pub trait BundleDriver<Insp> {
     /// Run the transactions contained in the bundle.
     fn run_bundle<Db>(&mut self, trevm: EvmNeedsTx<Db, Insp>) -> DriveBundleResult<Db, Insp, Self>
     where
-        Db: Database + DatabaseCommit;
+        Db: Database + DatabaseCommit,
+        Insp: Inspector<Ctx<Db>>;
 
     /// Run post
     fn post_bundle<Db>(&mut self, trevm: &EvmNeedsTx<Db, Insp>) -> Result<(), Self::Error<Db>>
     where
-        Db: Database + DatabaseCommit;
+        Db: Database + DatabaseCommit,
+        Insp: Inspector<Ctx<Db>>;
 }

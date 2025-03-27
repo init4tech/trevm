@@ -1,13 +1,14 @@
-use crate::{EvmExtUnchecked, EvmNeedsTx};
+use crate::{helpers::Ctx, EvmExtUnchecked, EvmNeedsTx};
 use alloy::{
     eips::eip4895::Withdrawal,
     primitives::{map::HashMap, U256},
 };
-use revm::{context::result::EVMError, Database, DatabaseCommit};
+use revm::{context::result::EVMError, Database, DatabaseCommit, Inspector};
 
 impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where
     Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
 {
     /// Apply the withdrawals to the EVM state.
     pub fn apply_withdrawals<'b>(

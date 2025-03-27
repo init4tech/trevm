@@ -1,9 +1,9 @@
-use crate::EvmNeedsTx;
+use crate::{helpers::Ctx, EvmNeedsTx};
 use alloy::primitives::U256;
 use revm::{
     context::{result::EVMError, ContextTr},
     primitives::hardfork::SpecId,
-    Database, DatabaseCommit,
+    Database, DatabaseCommit, Inspector,
 };
 
 pub use alloy::eips::eip2935::{
@@ -19,7 +19,11 @@ pub fn eip2935_slot(block_num: u64) -> U256 {
     U256::from(block_num % HISTORY_SERVE_WINDOW as u64)
 }
 
-impl<Db: Database + DatabaseCommit, Insp> EvmNeedsTx<Db, Insp> {
+impl<Db, Insp> EvmNeedsTx<Db, Insp>
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Apply the pre-block logic for [EIP-2935]. This logic was introduced in
     /// Prague and updates historical block hashes in a special system
     /// contract. Unlike other system actions, this is NOT modeled as a

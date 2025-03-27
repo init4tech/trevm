@@ -1,7 +1,9 @@
 use super::{checked_insert_code, execute_system_tx};
-use crate::{system::SystemTx, EvmNeedsTx};
+use crate::{helpers::Ctx, system::SystemTx, EvmNeedsTx};
 use alloy::primitives::{Address, Bytes, B256, U256};
-use revm::{context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit};
+use revm::{
+    context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit, Inspector,
+};
 
 /// The number of beacon roots to store in the beacon roots contract.
 pub const HISTORY_BUFFER_LENGTH: u64 = 8191;
@@ -52,7 +54,11 @@ pub fn eip4788_root_slot(timestamp: u64) -> U256 {
     eip4788_timestamp_slot(timestamp) + U256::from(HISTORY_BUFFER_LENGTH)
 }
 
-impl<Db: Database + DatabaseCommit, Insp> EvmNeedsTx<Db, Insp> {
+impl<Db, Insp> EvmNeedsTx<Db, Insp>
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// Apply a system transaction as specified in [EIP-4788]. The EIP-4788
     /// pre-block action was introduced in Cancun, and calls the beacon root
     /// contract to update the historical beacon root.

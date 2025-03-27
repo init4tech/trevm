@@ -1,15 +1,18 @@
-use crate::{EvmNeedsCfg, Trevm};
+use crate::{helpers::Ctx, EvmNeedsCfg, Trevm};
 use alloy::primitives::{Address, U256};
 use revm::{
     bytecode::Bytecode,
     database::{CacheDB, EmptyDB, InMemoryDB, State},
-    inspector::inspectors::TracerEip3155,
+    inspector::{inspectors::TracerEip3155, NoOpInspector},
     primitives::hardfork::SpecId,
     state::AccountInfo,
-    Context, MainBuilder,
+    Context, Inspector, MainBuilder,
 };
 
-impl<Insp, State> Trevm<InMemoryDB, Insp, State> {
+impl<Insp, State> Trevm<InMemoryDB, Insp, State>
+where
+    Insp: Inspector<Ctx<InMemoryDB>>,
+{
     /// Modify an account with the provide closure. Returns the original
     /// account info
     pub fn test_modify_account<F>(&mut self, address: Address, f: F) -> AccountInfo
@@ -75,7 +78,7 @@ impl<Insp, State> Trevm<InMemoryDB, Insp, State> {
 
 /// Make a new [`Trevm`], funding the provided accounts with the given
 /// amounts.
-pub fn test_trevm_with_funds<'b, I>(i: I) -> EvmNeedsCfg<InMemoryDB, ()>
+pub fn test_trevm_with_funds<'b, I>(i: I) -> EvmNeedsCfg<InMemoryDB, NoOpInspector>
 where
     I: IntoIterator<Item = &'b (Address, U256)>,
 {
@@ -89,20 +92,24 @@ where
 }
 
 /// Make a new [`Trevm`] with an in-memory database.
-pub fn test_trevm() -> EvmNeedsCfg<CacheDB<EmptyDB>, ()> {
-    Trevm::from(Context::new(CacheDB::new(EmptyDB::default()), SpecId::PRAGUE).build_mainnet())
+pub fn test_trevm() -> EvmNeedsCfg<InMemoryDB, NoOpInspector> {
+    Trevm::from(
+        Context::new(CacheDB::new(EmptyDB::default()), SpecId::PRAGUE)
+            .build_mainnet_with_inspector(NoOpInspector),
+    )
 }
 
 /// Make a new [`Trevm`] with an in-memory database wrapped in a [`State`].
-pub fn test_state_trevm() -> EvmNeedsCfg<State<EmptyDB>, ()> {
+pub fn test_state_trevm() -> EvmNeedsCfg<State<EmptyDB>, NoOpInspector> {
     Trevm::from(
-        Context::new(State::builder().with_bundle_update().build(), SpecId::PRAGUE).build_mainnet(),
+        Context::new(State::builder().with_bundle_update().build(), SpecId::PRAGUE)
+            .build_mainnet_with_inspector(NoOpInspector),
     )
 }
 
 /// Make a new [`Trevm`] with an in-memory database and a tracer inspector.
 /// The tracer will print all EVM instructions to stdout.
-pub fn test_trevm_tracing() -> EvmNeedsCfg<CacheDB<EmptyDB>, TracerEip3155> {
+pub fn test_trevm_tracing() -> EvmNeedsCfg<InMemoryDB, TracerEip3155> {
     Trevm::from(
         Context::new(CacheDB::new(EmptyDB::default()), SpecId::PRAGUE)
             .build_mainnet_with_inspector(TracerEip3155::new(Box::new(std::io::stdout()))),
