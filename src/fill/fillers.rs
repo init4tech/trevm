@@ -1,5 +1,5 @@
 use crate::fill::traits::{Cfg, Tx};
-use revm::context::{BlockEnv, Cfg, CfgEnv, TxEnv};
+use revm::context::{BlockEnv, CfgEnv, TxEnv};
 
 /// A [`Cfg`] that disables gas-related checks and payment of the
 /// beneficiary reward, while leaving other cfg options unchanged.
