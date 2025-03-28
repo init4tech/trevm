@@ -49,7 +49,7 @@ impl<Db> CacheOnWrite<Db> {
         &self.inner
     }
 
-    /// Get a refernce to the [`Cache`].
+    /// Get a reference to the [`Cache`].
     pub const fn cache(&self) -> &Cache {
         &self.cache
     }
