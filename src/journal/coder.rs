@@ -615,7 +615,7 @@ impl JournalDecode for BundleStateIndex<'static> {
 }
 
 impl JournalDecode for BundleState {
-    // TODO(perf): we can manually implemnt the decoding here in order to avoid
+    // TODO(perf): we can manually implement the decoding here in order to avoid
     // allocating the btrees in the index
 
     fn decode(buf: &mut &[u8]) -> Result<Self> {
