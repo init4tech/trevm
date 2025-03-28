@@ -2,7 +2,7 @@
 //! [EIP-7251].
 //!
 //! System actions are special state changes or smart contract calls made
-//! before or after transaction exection. These actions are introduced via
+//! before or after transaction execution. These actions are introduced via
 //! hardfork. System actions are sometimes modeled as transactions with special
 //! properties (as in [EIP-4788], [EIP-7002] and [EIP-7251]) or as special state
 //! changes outside of the transaction lifecycle (as in [EIP-6110]).
