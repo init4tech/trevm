@@ -59,7 +59,7 @@ impl core::fmt::Debug for SpanningInspector {
 impl SpanningInspector {
     /// Create a new `SpanningInspector` with the given tracing level.
     /// Spans will be created at this level.
-    pub fn new(level: Level) -> Self {
+    pub const fn new(level: Level) -> Self {
         Self { active: Vec::new(), level }
     }
 
