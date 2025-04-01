@@ -400,6 +400,9 @@ pub use fill::{fillers, Block, Cfg, NoopBlock, NoopCfg, Tx};
 /// Type aliases for constraining revm context.
 pub mod helpers;
 
+/// Utility inspectors.
+pub mod inspectors;
+
 pub mod journal;
 
 mod lifecycle;
