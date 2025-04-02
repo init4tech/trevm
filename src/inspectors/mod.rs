@@ -8,7 +8,7 @@ mod spanning;
 pub use spanning::SpanningInspector;
 
 mod layer;
-pub use layer::Layered;
+pub use layer::{InspectorExt, Layered};
 
 #[cfg(test)]
 mod test {
