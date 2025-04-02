@@ -1,5 +1,4 @@
 use revm::{
-    inspector::NoOpInspector,
     interpreter::{
         CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
         InterpreterTypes,
@@ -7,40 +6,6 @@ use revm::{
     primitives::{Address, Log, U256},
     Inspector,
 };
-
-/// Extension trait for [`Inspector`] to add convenience methods for
-/// layering inspectors into [`Layered`].
-pub trait InspectorExt<Ctx, Int>: Inspector<Ctx, Int>
-where
-    Int: InterpreterTypes,
-{
-    /// Create a new [`Layered`] inspector with the current inspector as the
-    /// inner inspector, `other` as the outer inspector.
-    fn wrap_in<Other>(self, other: Other) -> Layered<Other, Self>
-    where
-        Self: Sized,
-        Other: Inspector<Ctx, Int>,
-    {
-        Layered::new(other, self)
-    }
-
-    /// Create a new [`Layered`] inspector with the current inspector as the
-    /// outer inspector, `other` as the inner inspector.
-    fn wrap_around<Other>(self, other: Other) -> Layered<Self, Other>
-    where
-        Self: Sized,
-        Other: Inspector<Ctx, Int>,
-    {
-        Layered::new(self, other)
-    }
-}
-
-impl<T, Ctx, Int> InspectorExt<Ctx, Int> for T
-where
-    T: Inspector<Ctx, Int>,
-    Int: InterpreterTypes,
-{
-}
 
 /// A layer in a stack of inspectors. Contains its own inspector and an
 /// inner inspector. This is used to create a stack of inspectors that can
@@ -53,7 +18,7 @@ where
 /// For functions that may return values (e.g. [`Inspector::call`]), if the
 /// current inspector returns a value, the inner inspector will not be invoked.
 #[derive(Clone, Debug)]
-pub struct Layered<Outer, Inner = NoOpInspector> {
+pub struct Layered<Outer, Inner> {
     outer: Outer,
     inner: Inner,
 }
@@ -61,22 +26,34 @@ pub struct Layered<Outer, Inner = NoOpInspector> {
 impl<Outer, Inner> Layered<Outer, Inner> {
     /// Create a new [`Layered`] inspector with the given current and inner
     /// inspectors.
-    pub fn new(current: Outer, inner: Inner) -> Self {
-        Self { outer: current, inner }
+    pub const fn new(outer: Outer, inner: Inner) -> Self {
+        Self { outer, inner }
+    }
+
+    /// Wrap this inspector in another, creating a new [`Layered`] inspector.
+    /// with this as the inner inspector.
+    pub fn wrap_in<Other>(self, outer: Other) -> Layered<Other, Self> {
+        Layered { outer, inner: self }
+    }
+
+    /// Wrap this inspector around another, creating a new [`Layered`] inspector
+    /// with this as the outer inspector.
+    pub fn wrap_around<Other>(self, inner: Other) -> Layered<Self, Other> {
+        Layered { outer: self, inner }
     }
 
     /// Get a reference to the current inspector.
-    pub fn current(&self) -> &Outer {
+    pub const fn outer(&self) -> &Outer {
         &self.outer
     }
 
     /// Get a mutable reference to the current inspector.
-    pub fn current_mut(&mut self) -> &mut Outer {
+    pub fn outer_mut(&mut self) -> &mut Outer {
         &mut self.outer
     }
 
     /// Get a reference to the inner inspector.
-    pub fn inner(&self) -> &Inner {
+    pub const fn inner(&self) -> &Inner {
         &self.inner
     }
 

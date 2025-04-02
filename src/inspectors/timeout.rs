@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 const CALL_TIMEOUT: CallOutcome = CallOutcome {
     result: InterpreterResult {
-        result: InstructionResult::FatalExternalError,
+        result: InstructionResult::CallTooDeep,
         output: Bytes::new(),
         gas: Gas::new_spent(0),
     },
@@ -19,7 +19,7 @@ const CALL_TIMEOUT: CallOutcome = CallOutcome {
 
 const CREATE_TIMEOUT: CreateOutcome = CreateOutcome {
     result: InterpreterResult {
-        result: InstructionResult::FatalExternalError,
+        result: InstructionResult::CallTooDeep,
         output: Bytes::new(),
         gas: Gas::new_spent(0),
     },
@@ -41,7 +41,7 @@ const CREATE_TIMEOUT: CreateOutcome = CreateOutcome {
 ///     - any invalid opcode
 ///
 /// When execution is terminated by the timer, it will result in a
-/// [`InstructionResult::FatalExternalError`].
+/// [`InstructionResult::CallTooDeep`].
 ///
 /// ## Usage Note
 ///
