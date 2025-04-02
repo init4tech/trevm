@@ -63,6 +63,21 @@ impl SpanningInspector {
         Self { active: Vec::new(), level }
     }
 
+    /// Create a new `SpanningInspector` producing spans at [`Level::TRACE`].
+    pub const fn at_trace() -> Self {
+        Self::new(Level::TRACE)
+    }
+
+    /// Create a new `SpanningInspector` producing spans at [`Level::DEBUG`].
+    pub const fn at_debug() -> Self {
+        Self::new(Level::DEBUG)
+    }
+
+    /// Create a new `SpanningInspector` producing spans at [`Level::WARN`].
+    pub const fn at_info() -> Self {
+        Self::new(Level::INFO)
+    }
+
     /// Create a root span
     fn root_span<Ctx, Int>(&mut self, _interp: &mut Interpreter<Int>, _context: &mut Ctx) -> Span
     where

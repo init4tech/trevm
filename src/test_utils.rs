@@ -4,7 +4,11 @@ use revm::{
     bytecode::Bytecode,
     database::{CacheDB, EmptyDB, InMemoryDB, State},
     inspector::{inspectors::TracerEip3155, NoOpInspector},
-    primitives::hardfork::SpecId,
+    interpreter::{
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
+        InterpreterTypes,
+    },
+    primitives::{hardfork::SpecId, Log},
     state::AccountInfo,
     Context, Inspector, MainBuilder,
 };
@@ -114,4 +118,119 @@ pub fn test_trevm_tracing() -> EvmNeedsCfg<InMemoryDB, TracerEip3155> {
         Context::new(CacheDB::new(EmptyDB::default()), SpecId::PRAGUE)
             .build_mainnet_with_inspector(TracerEip3155::new(Box::new(std::io::stdout()))),
     )
+}
+
+/// Inspector that tracks whether the various inspector methods were
+/// called. This is useful for testing the inspector stack.
+///
+/// It is not a real inspector, and does not do anything with the
+/// information it collects.
+#[derive(Default, Debug, Clone, Copy)]
+pub struct TestInspector {
+    /// Whether initialize_interp was called.
+    pub init_interp: bool,
+    /// Whether step was called.
+    pub step: bool,
+    /// Whether step_end was called.
+    pub step_end: bool,
+    /// Whether log was called.
+    pub log: bool,
+    /// Whether call was called.
+    pub call: bool,
+    /// Whether call_end was called.
+    pub call_end: bool,
+    /// Whether create was called.
+    pub create: bool,
+    /// Whether create_end was called.
+    pub create_end: bool,
+    /// Whether eofcreate was called.
+    pub eofcreate: bool,
+    /// Whether eofcreate_end was called.
+    pub eofcreate_end: bool,
+    /// Whether selfdestruct was called.
+    pub selfdestruct: bool,
+}
+
+impl TestInspector {
+    /// Reset the inspector to its default state.
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
+impl<Ctx, Int> Inspector<Ctx, Int> for TestInspector
+where
+    Int: InterpreterTypes,
+{
+    fn initialize_interp(&mut self, _interp: &mut Interpreter<Int>, _context: &mut Ctx) {
+        tracing::info!("initialize_interp");
+        self.init_interp = true;
+    }
+
+    fn step(&mut self, _interp: &mut Interpreter<Int>, _context: &mut Ctx) {
+        tracing::info!("step");
+        self.step = true;
+    }
+
+    fn step_end(&mut self, _interp: &mut Interpreter<Int>, _context: &mut Ctx) {
+        tracing::info!("step_end");
+        self.step_end = true;
+    }
+
+    fn log(&mut self, _interp: &mut Interpreter<Int>, _context: &mut Ctx, log: Log) {
+        tracing::info!(?log, "log");
+        self.log = true;
+    }
+
+    fn call(&mut self, _context: &mut Ctx, inputs: &mut CallInputs) -> Option<CallOutcome> {
+        tracing::info!(?inputs, "call");
+        self.call = true;
+        None
+    }
+
+    fn call_end(&mut self, _context: &mut Ctx, inputs: &CallInputs, outcome: &mut CallOutcome) {
+        tracing::info!(?inputs, ?outcome, "call_end");
+        self.call_end = true;
+    }
+
+    fn create(&mut self, _context: &mut Ctx, inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        tracing::info!(?inputs, "create");
+        self.create = true;
+        None
+    }
+
+    fn create_end(
+        &mut self,
+        _context: &mut Ctx,
+        _inputs: &CreateInputs,
+        _outcome: &mut CreateOutcome,
+    ) {
+        tracing::info!("create_end");
+        self.create_end = true;
+    }
+
+    fn eofcreate(
+        &mut self,
+        _context: &mut Ctx,
+        _inputs: &mut EOFCreateInputs,
+    ) -> Option<CreateOutcome> {
+        tracing::info!("eofcreate");
+        self.eofcreate = true;
+        None
+    }
+
+    fn eofcreate_end(
+        &mut self,
+        _context: &mut Ctx,
+        _inputs: &EOFCreateInputs,
+        _outcome: &mut CreateOutcome,
+    ) {
+        tracing::info!("eofcreate_end");
+        self.eofcreate_end = true;
+    }
+
+    fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {
+        tracing::info!(?contract, ?target, ?value, "selfdestruct");
+        self.selfdestruct = true;
+    }
 }

@@ -13,11 +13,11 @@ use revm::{
 ///
 /// This is a thin wrapper around a [`VecDeque`] of inspectors.
 #[derive(Default)]
-pub struct InspectorStack<Ctx, Int> {
+pub struct InspectorSet<Ctx, Int> {
     inspectors: VecDeque<Box<dyn Inspector<Ctx, Int>>>,
 }
 
-impl<Ctx, Int> core::ops::Deref for InspectorStack<Ctx, Int> {
+impl<Ctx, Int> core::ops::Deref for InspectorSet<Ctx, Int> {
     type Target = VecDeque<Box<dyn Inspector<Ctx, Int>>>;
 
     fn deref(&self) -> &Self::Target {
@@ -25,19 +25,22 @@ impl<Ctx, Int> core::ops::Deref for InspectorStack<Ctx, Int> {
     }
 }
 
-impl<Ctx, Int> core::ops::DerefMut for InspectorStack<Ctx, Int> {
+impl<Ctx, Int> core::ops::DerefMut for InspectorSet<Ctx, Int> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inspectors
     }
 }
 
-impl<Ctx, Int> core::fmt::Debug for InspectorStack<Ctx, Int> {
+impl<Ctx, Int> core::fmt::Debug for InspectorSet<Ctx, Int> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InspectorStack").field("inspectors", &self.inspectors.len()).finish()
     }
 }
 
-impl<Ctx, Int> InspectorStack<Ctx, Int> {
+impl<Ctx, Int> InspectorSet<Ctx, Int>
+where
+    Int: InterpreterTypes,
+{
     /// Instantiate a new empty inspector stack.
     pub fn new() -> Self {
         Self { inspectors: Default::default() }
@@ -47,9 +50,29 @@ impl<Ctx, Int> InspectorStack<Ctx, Int> {
     pub fn with_capacity(cap: usize) -> Self {
         Self { inspectors: VecDeque::with_capacity(cap) }
     }
+
+    /// Push an inspector to the back of the stack.
+    pub fn push_back<I: Inspector<Ctx, Int> + 'static>(&mut self, inspector: I) {
+        self.inspectors.push_back(Box::new(inspector));
+    }
+
+    /// Push an inspector to the front of the stack.
+    pub fn push_front<I: Inspector<Ctx, Int> + 'static>(&mut self, inspector: I) {
+        self.inspectors.push_front(Box::new(inspector));
+    }
+
+    /// Pop an inspector from the back of the stack.
+    pub fn pop_back(&mut self) -> Option<Box<dyn Inspector<Ctx, Int>>> {
+        self.inspectors.pop_back()
+    }
+
+    /// Pop an inspector from the front of the stack.
+    pub fn pop_front(&mut self) -> Option<Box<dyn Inspector<Ctx, Int>>> {
+        self.inspectors.pop_front()
+    }
 }
 
-impl<Ctx, Int> Inspector<Ctx, Int> for InspectorStack<Ctx, Int>
+impl<Ctx, Int> Inspector<Ctx, Int> for InspectorSet<Ctx, Int>
 where
     Int: InterpreterTypes,
 {
