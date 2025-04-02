@@ -32,13 +32,13 @@ impl<Outer, Inner> Layered<Outer, Inner> {
 
     /// Wrap this inspector in another, creating a new [`Layered`] inspector.
     /// with this as the inner inspector.
-    pub fn wrap_in<Other>(self, outer: Other) -> Layered<Other, Self> {
+    pub const fn wrap_in<Other>(self, outer: Other) -> Layered<Other, Self> {
         Layered { outer, inner: self }
     }
 
     /// Wrap this inspector around another, creating a new [`Layered`] inspector
     /// with this as the outer inspector.
-    pub fn wrap_around<Other>(self, inner: Other) -> Layered<Self, Other> {
+    pub const fn wrap_around<Other>(self, inner: Other) -> Layered<Self, Other> {
         Layered { outer: self, inner }
     }
 
