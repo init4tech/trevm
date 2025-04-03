@@ -18,7 +18,7 @@ use revm::{
 /// [`CacheDB`]: revm::database::in_memory_db::CacheDB
 /// [`State`]: revm::database::State
 /// [`ConcurrentState`]: crate::db::sync::ConcurrentState
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CacheOnWrite<Db> {
     cache: Cache,
     inner: Db,
