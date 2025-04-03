@@ -33,6 +33,7 @@ mod test {
 
         trevm.apply_eip4788(B256::repeat_byte(0xaa)).unwrap();
 
-        dbg!(trevm.inner_mut_unchecked().ctx_inspector().1);
+        assert!(trevm.inner_mut_unchecked().inspector().outer().outer().has_elapsed());
+        
     }
 }

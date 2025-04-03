@@ -41,7 +41,14 @@ const CREATE_TIMEOUT: CreateOutcome = CreateOutcome {
 ///     - any invalid opcode
 ///
 /// When execution is terminated by the timer, it will result in a
-/// [`InstructionResult::CallTooDeep`].
+/// [`InstructionResult::CallTooDeep`]. This is somewhat unintutive. `revm`
+/// uses the [`InstructionResult`] enum to represent possible outcomes of a
+/// opcode. It requires that the inspector's outcome is a valid
+/// [`InstructionResult`], but does not provide a way to represent a custom
+/// outcome. This means that the inspector must overload an existing outcome.
+/// `CallTooDeep` is used here because it is effectively unreachable in normal
+/// `evm` execution due to [EIP-150] call gas forwarding rules, and therefore
+/// overloading it is unlikely to cause issues.
 ///
 /// ## Usage Note
 ///
@@ -54,6 +61,8 @@ const CREATE_TIMEOUT: CreateOutcome = CreateOutcome {
 /// invalid data is not inspected, and that other inspectors do not consume
 /// memory or compute resources inspecting data that is guaranteed to be
 /// discarded.
+///
+/// [EIP-150]: https://eips.ethereum.org/EIPS/eip-150
 #[derive(Debug, Clone, Copy)]
 pub struct TimeLimit {
     duration: Duration,
