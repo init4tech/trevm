@@ -59,7 +59,10 @@ pub const MAX_BLOB_GAS_PER_BLOCK_CANCUN: u64 = 786_432;
 /// The maximum blob gas limit for a block in Prague.
 pub const MAX_BLOB_GAS_PER_BLOCK_PRAGUE: u64 = 1_179_648;
 
-use crate::{helpers::Evm, EvmExtUnchecked, Tx};
+use crate::{
+    helpers::{Ctx, Evm},
+    EvmExtUnchecked, Tx,
+};
 use alloy::primitives::{Address, Bytes};
 use revm::{
     bytecode::Bytecode,
@@ -68,7 +71,7 @@ use revm::{
         Block, ContextTr, Transaction,
     },
     primitives::KECCAK_EMPTY,
-    Database, DatabaseCommit, ExecuteEvm,
+    Database, DatabaseCommit, InspectEvm, Inspector,
 };
 
 fn checked_insert_code<Db, Insp>(
@@ -127,18 +130,19 @@ pub(crate) fn execute_system_tx<Db, Insp>(
 ) -> Result<ExecutionResult, EVMError<Db::Error>>
 where
     Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
 {
     syscall.fill_tx(evm);
 
     let limit = evm.tx().gas_limit();
 
     let block = &mut evm.data.ctx.block;
+
     let old_gas_limit = core::mem::replace(&mut block.gas_limit, limit);
     let old_base_fee = core::mem::take(&mut block.basefee);
-
     let previous_nonce_check = std::mem::replace(&mut evm.data.ctx.cfg.disable_nonce_check, true);
 
-    let mut result = evm.replay()?;
+    let mut result = evm.inspect_replay()?;
 
     // Cleanup the syscall.
     cleanup_syscall(evm, &mut result, syscall, old_gas_limit, old_base_fee, previous_nonce_check);
