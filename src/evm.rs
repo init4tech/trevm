@@ -1935,7 +1935,7 @@ where
     /// This is primarily intended for use in [`SystemTx`] execution.
     ///
     /// [`SystemTx`]: crate::system::SystemTx
-    pub fn result_mut_unchecked(&mut self) -> &mut ExecutionResult {
+    pub const fn result_mut_unchecked(&mut self) -> &mut ExecutionResult {
         &mut self.state.result.result
     }
 
@@ -1946,7 +1946,7 @@ where
 
     /// Get a mutable reference to the state. Modification of the state is
     /// discouraged, as it may lead to inconsistent state.
-    pub fn state_mut_unchecked(&mut self) -> &mut EvmState {
+    pub const fn state_mut_unchecked(&mut self) -> &mut EvmState {
         &mut self.state.result.state
     }
 
@@ -1961,7 +1961,7 @@ where
     /// This is primarily intended for use in [`SystemTx`] execution.
     ///
     /// [`SystemTx`]: crate::system::SystemTx
-    pub fn result_and_state_mut_unchecked(&mut self) -> &mut ResultAndState {
+    pub const fn result_and_state_mut_unchecked(&mut self) -> &mut ResultAndState {
         &mut self.state.result
     }
 

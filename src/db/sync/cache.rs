@@ -59,7 +59,7 @@ impl ConcurrentCacheState {
     }
 
     /// Set state clear flag. EIP-161.
-    pub fn set_state_clear_flag(&mut self, has_state_clear: bool) {
+    pub const fn set_state_clear_flag(&mut self, has_state_clear: bool) {
         self.has_state_clear = has_state_clear;
     }
 

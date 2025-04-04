@@ -48,7 +48,7 @@ impl<Outer, Inner> Layered<Outer, Inner> {
     }
 
     /// Get a mutable reference to the current inspector.
-    pub fn outer_mut(&mut self) -> &mut Outer {
+    pub const fn outer_mut(&mut self) -> &mut Outer {
         &mut self.outer
     }
 
@@ -58,7 +58,7 @@ impl<Outer, Inner> Layered<Outer, Inner> {
     }
 
     /// Get a mutable reference to the inner inspector.
-    pub fn inner_mut(&mut self) -> &mut Inner {
+    pub const fn inner_mut(&mut self) -> &mut Inner {
         &mut self.inner
     }
 }
