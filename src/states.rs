@@ -1,5 +1,5 @@
 use crate::{driver::BundleDriver, BlockDriver, ChainDriver, Trevm};
-use revm::{context::result::EVMError, Database};
+use revm::{context::result::EVMError, inspector::NoOpInspector, Database};
 use sealed::*;
 
 /// A [`Trevm`] that requires a [`Cfg`].
@@ -8,7 +8,7 @@ use sealed::*;
 /// - [`EvmNeedsCfg::fill_cfg`]
 ///
 /// [`Cfg`]: crate::Cfg
-pub type EvmNeedsCfg<Db, Insp> = Trevm<Db, Insp, NeedsCfg>;
+pub type EvmNeedsCfg<Db, Insp = NoOpInspector> = Trevm<Db, Insp, NeedsCfg>;
 
 /// A [`Trevm`] that requires a [`Block`] and contains no
 /// outputs. This EVM has not yet executed any transactions or state changes.
@@ -19,7 +19,7 @@ pub type EvmNeedsCfg<Db, Insp> = Trevm<Db, Insp, NeedsCfg>;
 /// - [`EvmNeedsBlock::drive_chain`]
 ///
 /// [`Block`]: crate::Block
-pub type EvmNeedsBlock<Db, Insp> = Trevm<Db, Insp, NeedsBlock>;
+pub type EvmNeedsBlock<Db, Insp = NoOpInspector> = Trevm<Db, Insp, NeedsBlock>;
 
 /// A [`Trevm`] that requires a [`Tx`].
 ///
@@ -29,13 +29,13 @@ pub type EvmNeedsBlock<Db, Insp> = Trevm<Db, Insp, NeedsBlock>;
 /// - [`EvmNeedsTx::finish`]
 ///
 /// [`Tx`]: crate::Tx
-pub type EvmNeedsTx<Db, Insp> = Trevm<Db, Insp, NeedsTx>;
+pub type EvmNeedsTx<Db, Insp = NoOpInspector> = Trevm<Db, Insp, NeedsTx>;
 
 /// A [`Trevm`] that is ready to execute a transaction.
 ///
 /// The transaction may be executed with [`EvmReady::run`] or cleared
 /// with [`EvmReady::clear_tx`]
-pub type EvmReady<Db, Insp> = Trevm<Db, Insp, Ready>;
+pub type EvmReady<Db, Insp = NoOpInspector> = Trevm<Db, Insp, Ready>;
 
 /// A [`Trevm`] that run a transaction, and contains the resulting execution
 /// details and state.
@@ -43,7 +43,7 @@ pub type EvmReady<Db, Insp> = Trevm<Db, Insp, Ready>;
 /// Expected continuations include:
 /// - [`EvmTransacted::reject`]
 /// - [`EvmTransacted::accept`]
-pub type EvmTransacted<Db, Insp> = Trevm<Db, Insp, TransactedState>;
+pub type EvmTransacted<Db, Insp = NoOpInspector> = Trevm<Db, Insp, TransactedState>;
 
 /// A [`Trevm`] that encountered an error during transaction execution.
 ///
