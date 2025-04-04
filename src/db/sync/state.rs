@@ -60,7 +60,7 @@ impl<Db> ConcurrentState<Db> {
     }
 
     /// State clear EIP-161 is enabled in Spurious Dragon hardfork.
-    pub fn set_state_clear_flag(&mut self, has_state_clear: bool) {
+    pub const fn set_state_clear_flag(&mut self, has_state_clear: bool) {
         self.info.cache.set_state_clear_flag(has_state_clear);
     }
 

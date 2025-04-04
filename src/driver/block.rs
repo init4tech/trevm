@@ -12,25 +12,22 @@ pub type DriveBlockResult<Db, Insp, T> =
 /// Driver for a single trevm block. This trait allows a type to specify the
 /// entire lifecycle of a trevm block, from opening the block to driving the
 /// trevm to completion.
-pub trait BlockDriver<Insp> {
+pub trait BlockDriver<Db, Insp>
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
     /// The [`Block`] filler for this driver.
     type Block: Block;
 
     /// An error type for this driver.
-    type Error<Db: Database + DatabaseCommit>: core::error::Error + From<EVMError<Db::Error>>;
+    type Error: core::error::Error + From<EVMError<Db::Error>>;
 
     /// Get a reference to the block filler for this driver.
     fn block(&self) -> &Self::Block;
 
     /// Run the transactions for the block.
-    fn run_txns<Db>(&mut self, trevm: EvmNeedsTx<Db, Insp>) -> RunTxResult<Db, Insp, Self>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>;
-
+    fn run_txns(&mut self, trevm: EvmNeedsTx<Db, Insp>) -> RunTxResult<Db, Insp, Self>;
     /// Run post
-    fn post_block<Db>(&mut self, trevm: &EvmNeedsBlock<Db, Insp>) -> Result<(), Self::Error<Db>>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>;
+    fn post_block(&mut self, trevm: &EvmNeedsBlock<Db, Insp>) -> Result<(), Self::Error>;
 }

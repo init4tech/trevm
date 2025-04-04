@@ -38,11 +38,13 @@ pub enum InfoOutcome<'a> {
 impl InfoOutcome<'_> {
     /// Get the original account info. This is `None` if the account was
     /// created.
-    pub fn original(&self) -> Option<Cow<'_, AccountInfo>> {
+    pub const fn original(&self) -> Option<Cow<'_, AccountInfo>> {
         match self {
             Self::Created(_) => None,
-            Self::Diff { old, .. } => Some(Cow::Borrowed(old)),
-            Self::Destroyed(info) => Some(Cow::Borrowed(info)),
+            Self::Diff { old: Cow::Owned(old), .. } => Some(Cow::Borrowed(old)),
+            Self::Diff { old: Cow::Borrowed(old), .. } => Some(Cow::Borrowed(*old)),
+            Self::Destroyed(Cow::Owned(old)) => Some(Cow::Borrowed(old)),
+            Self::Destroyed(Cow::Borrowed(old)) => Some(Cow::Borrowed(*old)),
         }
     }
 
@@ -96,7 +98,7 @@ pub struct AcctDiff<'a> {
 impl AcctDiff<'_> {
     /// Get the original account info. This is `None` if the account was
     /// created.
-    pub fn original(&self) -> Option<Cow<'_, AccountInfo>> {
+    pub const fn original(&self) -> Option<Cow<'_, AccountInfo>> {
         self.outcome.original()
     }
 

@@ -58,6 +58,7 @@ impl<T: TxReceipt<Log = alloy::primitives::Log>> BlockOutput<T> {
     }
 
     /// Get a reference to the receipts of the transactions in the block.
+    #[allow(clippy::missing_const_for_fn)] // false positive
     pub fn receipts(&self) -> &[T] {
         &self.receipts
     }
@@ -74,6 +75,7 @@ impl<T: TxReceipt<Log = alloy::primitives::Log>> BlockOutput<T> {
     }
 
     /// Get a reference the senders of the transactions in the block.
+    #[allow(clippy::missing_const_for_fn)] // false positive
     pub fn senders(&self) -> &[Address] {
         &self.senders
     }

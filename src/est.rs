@@ -240,7 +240,7 @@ impl EstimationResult {
     }
 
     /// Adjust the binary search range based on the estimation outcome.
-    pub(crate) fn adjust_binary_search_range(
+    pub(crate) const fn adjust_binary_search_range(
         &self,
         limit: u64,
         range: &mut SearchRange,

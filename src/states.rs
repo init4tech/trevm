@@ -57,19 +57,19 @@ pub type EvmErrored<Db, Insp, E = EVMError<<Db as Database>::Error>> =
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
 pub type EvmBlockDriverErrored<Db, Insp, T> =
-    EvmErrored<Db, Insp, <T as BlockDriver<Insp>>::Error<Db>>;
+    EvmErrored<Db, Insp, <T as BlockDriver<Db, Insp>>::Error>;
 
 /// A [`Trevm`] that encountered an error during [`ChainDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
 pub type EvmChainDriverErrored<Db, Insp, T> =
-    EvmErrored<Db, Insp, <T as ChainDriver<Insp>>::Error<Db>>;
+    EvmErrored<Db, Insp, <T as ChainDriver<Db, Insp>>::Error>;
 
 /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
 pub type EvmBundleDriverErrored<Db, Insp, T> =
-    EvmErrored<Db, Insp, <T as BundleDriver<Insp>>::Error<Db>>;
+    EvmErrored<Db, Insp, <T as BundleDriver<Db, Insp>>::Error>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]
 pub(crate) mod sealed {

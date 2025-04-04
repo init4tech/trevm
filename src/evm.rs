@@ -977,7 +977,7 @@ where
     /// block.
     pub fn drive_block<D>(self, driver: &mut D) -> DriveBlockResult<Db, Insp, D>
     where
-        D: BlockDriver<Insp>,
+        D: BlockDriver<Db, Insp>,
         Db: DatabaseCommit,
     {
         let trevm = self.fill_block(driver.block());
@@ -998,14 +998,14 @@ where
     /// If the driver contains no blocks.
     pub fn drive_chain<D>(self, driver: &mut D) -> DriveChainResult<Db, Insp, D>
     where
-        D: ChainDriver<Insp>,
+        D: ChainDriver<Db, Insp>,
         Db: DatabaseCommit,
     {
         let block_count = driver.blocks().len();
 
         let mut trevm = self
             .drive_block(&mut driver.blocks()[0])
-            .map_err(EvmErrored::err_into::<<D as ChainDriver<Insp>>::Error<Db>>)?;
+            .map_err(EvmErrored::err_into::<<D as ChainDriver<Db, Insp>>::Error>)?;
 
         if let Err(e) = driver.interblock(&trevm, 0) {
             return Err(trevm.errored(e));
@@ -1015,7 +1015,7 @@ where
             trevm = {
                 let trevm = trevm
                     .drive_block(&mut driver.blocks()[i])
-                    .map_err(EvmErrored::err_into::<<D as ChainDriver<Insp>>::Error<Db>>)?;
+                    .map_err(EvmErrored::err_into::<<D as ChainDriver<Db, Insp>>::Error>)?;
                 if let Err(e) = driver.interblock(&trevm, i) {
                     return Err(trevm.errored(e));
                 }
@@ -1184,7 +1184,7 @@ where
     /// EVM ready for the next bundle or tx.
     pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<Db, Insp, D>
     where
-        D: BundleDriver<Insp>,
+        D: BundleDriver<Db, Insp>,
         Db: DatabaseCommit,
     {
         let trevm = driver.run_bundle(self)?;
@@ -1935,7 +1935,7 @@ where
     /// This is primarily intended for use in [`SystemTx`] execution.
     ///
     /// [`SystemTx`]: crate::system::SystemTx
-    pub fn result_mut_unchecked(&mut self) -> &mut ExecutionResult {
+    pub const fn result_mut_unchecked(&mut self) -> &mut ExecutionResult {
         &mut self.state.result.result
     }
 
@@ -1946,7 +1946,7 @@ where
 
     /// Get a mutable reference to the state. Modification of the state is
     /// discouraged, as it may lead to inconsistent state.
-    pub fn state_mut_unchecked(&mut self) -> &mut EvmState {
+    pub const fn state_mut_unchecked(&mut self) -> &mut EvmState {
         &mut self.state.result.state
     }
 
@@ -1961,7 +1961,7 @@ where
     /// This is primarily intended for use in [`SystemTx`] execution.
     ///
     /// [`SystemTx`]: crate::system::SystemTx
-    pub fn result_and_state_mut_unchecked(&mut self) -> &mut ResultAndState {
+    pub const fn result_and_state_mut_unchecked(&mut self) -> &mut ResultAndState {
         &mut self.state.result
     }
 
