@@ -256,17 +256,17 @@ impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
     }
 }
 
-impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleResponse> {
-    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
+impl<Db, Insp> BundleDriver<Db, Insp> for BundleProcessor<EthCallBundle, EthCallBundleResponse>
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
+    type Error = BundleError<Db>;
 
-    fn run_bundle<Db>(
+    fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    ) -> DriveBundleResult<Db, Insp, Self> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
             trevm.inner().block.number == self.bundle.block_number,
@@ -388,29 +388,22 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthCallBundle, EthCallBundleRe
         }
     }
 
-    fn post_bundle<Db>(
-        &mut self,
-        _trevm: &crate::EvmNeedsTx<Db, Insp>,
-    ) -> Result<(), Self::Error<Db>>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    fn post_bundle(&mut self, _trevm: &crate::EvmNeedsTx<Db, Insp>) -> Result<(), Self::Error> {
         Ok(())
     }
 }
 
-impl<Insp> BundleDriver<Insp> for BundleProcessor<EthSendBundle, EthBundleHash> {
-    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
+impl<Db, Insp> BundleDriver<Db, Insp> for BundleProcessor<EthSendBundle, EthBundleHash>
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
+    type Error = BundleError<Db>;
 
-    fn run_bundle<Db>(
+    fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    ) -> DriveBundleResult<Db, Insp, Self> {
         {
             // Check if the block we're in is valid for this bundle. Both must match
             trevm_ensure!(
@@ -483,14 +476,7 @@ impl<Insp> BundleDriver<Insp> for BundleProcessor<EthSendBundle, EthBundleHash> 
         }
     }
 
-    fn post_bundle<Db>(
-        &mut self,
-        _trevm: &crate::EvmNeedsTx<Db, Insp>,
-    ) -> Result<(), Self::Error<Db>>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    fn post_bundle(&mut self, _trevm: &crate::EvmNeedsTx<Db, Insp>) -> Result<(), Self::Error> {
         Ok(())
     }
 }
@@ -551,17 +537,17 @@ impl From<EthCallBundle> for BundleBlockFiller {
     }
 }
 
-impl<Insp> BundleDriver<Insp> for EthCallBundle {
-    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
+impl<Db, Insp> BundleDriver<Db, Insp> for EthCallBundle
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
+    type Error = BundleError<Db>;
 
-    fn run_bundle<Db>(
+    fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    ) -> DriveBundleResult<Db, Insp, Self> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
             trevm.inner().block.number == self.block_number,
@@ -634,14 +620,7 @@ impl<Insp> BundleDriver<Insp> for EthCallBundle {
         }
     }
 
-    fn post_bundle<Db>(
-        &mut self,
-        _trevm: &crate::EvmNeedsTx<Db, Insp>,
-    ) -> Result<(), Self::Error<Db>>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    fn post_bundle(&mut self, _trevm: &crate::EvmNeedsTx<Db, Insp>) -> Result<(), Self::Error> {
         Ok(())
     }
 }
@@ -649,17 +628,17 @@ impl<Insp> BundleDriver<Insp> for EthCallBundle {
 /// An implementation of [BundleDriver] for [EthSendBundle].
 /// This allows us to drive a bundle of transactions and accumulate the resulting state in the EVM.
 /// Allows to simply take an [EthSendBundle] and get the resulting EVM state.
-impl<Insp> BundleDriver<Insp> for EthSendBundle {
-    type Error<Db: Database + DatabaseCommit> = BundleError<Db>;
+impl<Db, Insp> BundleDriver<Db, Insp> for EthSendBundle
+where
+    Db: Database + DatabaseCommit,
+    Insp: Inspector<Ctx<Db>>,
+{
+    type Error = BundleError<Db>;
 
-    fn run_bundle<Db>(
+    fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    ) -> DriveBundleResult<Db, Insp, Self> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
             trevm.inner().block.number == self.block_number,
@@ -747,14 +726,7 @@ impl<Insp> BundleDriver<Insp> for EthSendBundle {
         Ok(t)
     }
 
-    fn post_bundle<Db>(
-        &mut self,
-        _trevm: &crate::EvmNeedsTx<Db, Insp>,
-    ) -> Result<(), Self::Error<Db>>
-    where
-        Db: Database + DatabaseCommit,
-        Insp: Inspector<Ctx<Db>>,
-    {
+    fn post_bundle(&mut self, _trevm: &crate::EvmNeedsTx<Db, Insp>) -> Result<(), Self::Error> {
         Ok(())
     }
 }
