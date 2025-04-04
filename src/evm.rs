@@ -975,7 +975,7 @@ where
 {
     /// Open a block, apply some logic, and return the EVM ready for the next
     /// block.
-    pub fn drive_block<D>(self, driver: &mut D) -> DriveBlockResult<Db, Insp, D>
+    pub fn drive_block<D>(self, driver: &mut D) -> DriveBlockResult<D, Db, Insp>
     where
         D: BlockDriver<Db, Insp>,
         Db: DatabaseCommit,
@@ -996,7 +996,7 @@ where
     /// # Panics
     ///
     /// If the driver contains no blocks.
-    pub fn drive_chain<D>(self, driver: &mut D) -> DriveChainResult<Db, Insp, D>
+    pub fn drive_chain<D>(self, driver: &mut D) -> DriveChainResult<D, Db, Insp>
     where
         D: ChainDriver<Db, Insp>,
         Db: DatabaseCommit,
@@ -1182,7 +1182,7 @@ where
 
     /// Drive a bundle to completion, apply some post-bundle logic, and return the
     /// EVM ready for the next bundle or tx.
-    pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<Db, Insp, D>
+    pub fn drive_bundle<D>(self, driver: &mut D) -> DriveBundleResult<D, Db, Insp>
     where
         D: BundleDriver<Db, Insp>,
         Db: DatabaseCommit,
