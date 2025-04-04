@@ -38,7 +38,6 @@ pub enum InfoOutcome<'a> {
 impl InfoOutcome<'_> {
     /// Get the original account info. This is `None` if the account was
     /// created.
-    // #[allow(clippy::missing_const_for_fn)] // false positive
     pub const fn original(&self) -> Option<Cow<'_, AccountInfo>> {
         match self {
             Self::Created(_) => None,
