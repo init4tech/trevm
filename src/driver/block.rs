@@ -1,5 +1,7 @@
 use crate::{helpers::Ctx, Block, EvmBlockDriverErrored, EvmNeedsBlock, EvmNeedsTx};
-use revm::{context::result::EVMError, Database, DatabaseCommit, Inspector};
+use revm::{
+    context::result::EVMError, inspector::NoOpInspector, Database, DatabaseCommit, Inspector,
+};
 
 /// The result of running transactions for a block driver.
 pub type RunTxResult<Db, Insp, T> =
@@ -12,7 +14,7 @@ pub type DriveBlockResult<Db, Insp, T> =
 /// Driver for a single trevm block. This trait allows a type to specify the
 /// entire lifecycle of a trevm block, from opening the block to driving the
 /// trevm to completion.
-pub trait BlockDriver<Db, Insp>
+pub trait BlockDriver<Db, Insp = NoOpInspector>
 where
     Db: Database + DatabaseCommit,
     Insp: Inspector<Ctx<Db>>,

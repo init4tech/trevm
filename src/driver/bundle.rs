@@ -1,5 +1,7 @@
 use crate::{helpers::Ctx, states::EvmBundleDriverErrored, EvmNeedsTx};
-use revm::{context::result::EVMError, Database, DatabaseCommit, Inspector};
+use revm::{
+    context::result::EVMError, inspector::NoOpInspector, Database, DatabaseCommit, Inspector,
+};
 
 /// The result of driving a bundle to completion.
 pub type DriveBundleResult<Db, Insp, T> =
@@ -7,7 +9,7 @@ pub type DriveBundleResult<Db, Insp, T> =
 
 /// Driver for a bundle of transactions. This trait allows a type to specify the
 /// entire lifecycle of a bundle, simulating the entire list of transactions.
-pub trait BundleDriver<Db, Insp>
+pub trait BundleDriver<Db, Insp = NoOpInspector>
 where
     Db: Database + DatabaseCommit,
     Insp: Inspector<Ctx<Db>>,

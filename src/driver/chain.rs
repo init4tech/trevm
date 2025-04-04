@@ -1,6 +1,7 @@
 use crate::{helpers::Ctx, BlockDriver, EvmChainDriverErrored, EvmNeedsBlock};
 use revm::{
-    context::result::EVMError, primitives::hardfork::SpecId, Database, DatabaseCommit, Inspector,
+    context::result::EVMError, inspector::NoOpInspector, primitives::hardfork::SpecId, Database,
+    DatabaseCommit, Inspector,
 };
 
 /// The result of driving a chain to completion.
@@ -8,7 +9,7 @@ pub type DriveChainResult<Db, Insp, D> =
     Result<EvmNeedsBlock<Db, Insp>, EvmChainDriverErrored<Db, Insp, D>>;
 
 /// Driver for a chain of blocks.
-pub trait ChainDriver<Db, Insp>
+pub trait ChainDriver<Db, Insp = NoOpInspector>
 where
     Db: Database + DatabaseCommit,
     Insp: Inspector<Ctx<Db>>,
