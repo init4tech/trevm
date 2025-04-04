@@ -50,25 +50,25 @@ pub type EvmTransacted<Db, Insp = NoOpInspector> = Trevm<Db, Insp, TransactedSta
 /// Expected continuations include:
 /// - [`EvmErrored::discard_error`]
 /// - [`EvmErrored::into_error`]
-pub type EvmErrored<Db, Insp, E = EVMError<<Db as Database>::Error>> =
+pub type EvmErrored<Db, Insp = NoOpInspector, E = EVMError<<Db as Database>::Error>> =
     Trevm<Db, Insp, ErroredState<E>>;
 
 /// A [`Trevm`] that encountered an error during [`BlockDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
-pub type EvmBlockDriverErrored<Db, Insp, T> =
+pub type EvmBlockDriverErrored<T, Db, Insp = NoOpInspector> =
     EvmErrored<Db, Insp, <T as BlockDriver<Db, Insp>>::Error>;
 
 /// A [`Trevm`] that encountered an error during [`ChainDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
-pub type EvmChainDriverErrored<Db, Insp, T> =
+pub type EvmChainDriverErrored<T, Db, Insp = NoOpInspector> =
     EvmErrored<Db, Insp, <T as ChainDriver<Db, Insp>>::Error>;
 
 /// A [`Trevm`] that encountered an error during [`BundleDriver`] execution.
 ///
 /// This is an [`EvmErrored`] parameterized with the driver's error type.
-pub type EvmBundleDriverErrored<Db, Insp, T> =
+pub type EvmBundleDriverErrored<T, Db, Insp = NoOpInspector> =
     EvmErrored<Db, Insp, <T as BundleDriver<Db, Insp>>::Error>;
 
 #[allow(unnameable_types, dead_code, unreachable_pub)]

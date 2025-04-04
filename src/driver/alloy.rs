@@ -266,7 +266,7 @@ where
     fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self> {
+    ) -> DriveBundleResult<Self, Db, Insp> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
             trevm.inner().block.number == self.bundle.block_number,
@@ -403,7 +403,7 @@ where
     fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self> {
+    ) -> DriveBundleResult<Self, Db, Insp> {
         {
             // Check if the block we're in is valid for this bundle. Both must match
             trevm_ensure!(
@@ -547,7 +547,7 @@ where
     fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self> {
+    ) -> DriveBundleResult<Self, Db, Insp> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
             trevm.inner().block.number == self.block_number,
@@ -638,7 +638,7 @@ where
     fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
-    ) -> DriveBundleResult<Db, Insp, Self> {
+    ) -> DriveBundleResult<Self, Db, Insp> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
             trevm.inner().block.number == self.block_number,
