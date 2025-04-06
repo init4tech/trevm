@@ -118,7 +118,7 @@
 //! # use revm::{database::in_memory_db::InMemoryDB, inspector::NoOpInspector};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, BlockDriver};
 //! # use alloy::primitives::B256;
-//! # fn t<C: Cfg, D: BlockDriver<NoOpInspector>>(cfg: &C, mut driver: D)
+//! # fn t<C: Cfg, D: BlockDriver<InMemoryDB, NoOpInspector>>(cfg: &C, mut driver: D)
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! let trevm = TrevmBuilder::new()
 //!     .with_db(InMemoryDB::default())
