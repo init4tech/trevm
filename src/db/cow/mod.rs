@@ -129,14 +129,9 @@ where
     /// - Contracts are overridden with outer contracts
     /// - Block hashes are overridden with outer block hashes
     pub fn flatten(self) -> Db {
-        let Self { cache: Cache { accounts, contracts, logs, block_hashes }, mut inner } = self;
+        let Self { cache, mut inner } = self;
 
-        let inner_cache = inner.cache_mut();
-
-        inner_cache.accounts.extend(accounts);
-        inner_cache.contracts.extend(contracts);
-        inner_cache.logs.extend(logs);
-        inner_cache.block_hashes.extend(block_hashes);
+        inner.extend(cache);
         inner
     }
 }
@@ -153,14 +148,9 @@ where
     /// - Contracts are overridden with outer contracts
     /// - Block hashes are overridden with outer block hashes
     pub fn try_flatten(self) -> Result<Db, Db::Error> {
-        let Self { cache: Cache { accounts, contracts, logs, block_hashes }, mut inner } = self;
+        let Self { cache, mut inner } = self;
 
-        let inner_cache = inner.try_cache_mut()?;
-
-        inner_cache.accounts.extend(accounts);
-        inner_cache.contracts.extend(contracts);
-        inner_cache.logs.extend(logs);
-        inner_cache.block_hashes.extend(block_hashes);
+        inner.try_extend(cache)?;
         Ok(inner)
     }
 }
