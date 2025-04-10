@@ -154,6 +154,36 @@ pub trait CachingDb {
 
     /// Deconstruct into the cache
     fn into_cache(self) -> Cache;
+
+    /// Extend the cache with the given cache by copying data.
+    ///
+    /// The behavior is as follows:
+    /// - Accounts are overridden with outer accounts
+    /// - Contracts are overridden with outer contracts
+    /// - Logs are appended
+    /// - Block hashes are overridden with outer block hashes
+    fn extend_ref(&mut self, cache: &Cache) {
+        self.cache_mut().accounts.extend(cache.accounts.iter().map(|(k, v)| (*k, v.clone())));
+        self.cache_mut().contracts.extend(cache.contracts.iter().map(|(k, v)| (*k, v.clone())));
+        self.cache_mut().logs.extend(cache.logs.iter().cloned());
+        self.cache_mut()
+            .block_hashes
+            .extend(cache.block_hashes.iter().map(|(k, v)| (*k, v.clone())));
+    }
+
+    /// Extend the cache with the given cache by moving data.
+    ///
+    /// The behavior is as follows:
+    /// - Accounts are overridden with outer accounts
+    /// - Contracts are overridden with outer contracts
+    /// - Logs are appended
+    /// - Block hashes are overridden with outer block hashes
+    fn extend(&mut self, cache: Cache) {
+        self.cache_mut().accounts.extend(cache.accounts);
+        self.cache_mut().contracts.extend(cache.contracts);
+        self.cache_mut().logs.extend(cache.logs);
+        self.cache_mut().block_hashes.extend(cache.block_hashes);
+    }
 }
 
 impl<Db> CachingDb for CacheDB<Db> {
@@ -184,6 +214,44 @@ pub trait TryCachingDb {
 
     /// Attempt to deconstruct into the cache
     fn try_into_cache(self) -> Result<Cache, Self::Error>;
+
+    /// Attempt to fold a cache into the database.
+    ///
+    /// The behavior is as follows:
+    /// - Accounts are overridden with outer accounts
+    /// - Contracts are overridden with outer contracts
+    /// - Logs are appended
+    /// - Block hashes are overridden with outer block hashes
+    fn try_extend_ref(&mut self, cache: &Cache) -> Result<(), Self::Error>
+    where
+        Self: Sized,
+    {
+        let inner_cache = self.try_cache_mut()?;
+        inner_cache.accounts.extend(cache.accounts.iter().map(|(k, v)| (*k, v.clone())));
+        inner_cache.contracts.extend(cache.contracts.iter().map(|(k, v)| (*k, v.clone())));
+        inner_cache.logs.extend(cache.logs.iter().cloned());
+        inner_cache.block_hashes.extend(cache.block_hashes.iter().map(|(k, v)| (*k, v.clone())));
+        Ok(())
+    }
+
+    /// Attempt to extend the cache with the given cache by moving data.
+    ///
+    /// The behavior is as follows:
+    /// - Accounts are overridden with outer accounts
+    /// - Contracts are overridden with outer contracts
+    /// - Logs are appended
+    /// - Block hashes are overridden with outer block hashes
+    fn try_extend(&mut self, cache: Cache) -> Result<(), Self::Error>
+    where
+        Self: Sized,
+    {
+        let inner_cache = self.try_cache_mut()?;
+        inner_cache.accounts.extend(cache.accounts);
+        inner_cache.contracts.extend(cache.contracts);
+        inner_cache.logs.extend(cache.logs);
+        inner_cache.block_hashes.extend(cache.block_hashes);
+        Ok(())
+    }
 }
 
 impl<Db> TryCachingDb for Arc<Db>
