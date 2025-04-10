@@ -1,3 +1,4 @@
+use crate::db::CachingDb;
 use alloy::{
     consensus::constants::KECCAK_EMPTY,
     primitives::{Address, B256, U256},
@@ -9,6 +10,8 @@ use revm::{
     state::{Account, AccountInfo},
     Database, DatabaseCommit, DatabaseRef,
 };
+
+use super::TryCachingDb;
 
 /// A version of [`CacheDB`] that caches only on write, not on read.
 ///
@@ -49,9 +52,19 @@ impl<Db> CacheOnWrite<Db> {
         &self.inner
     }
 
+    /// Get a mutable reference to the inner database.
+    pub const fn inner_mut(&mut self) -> &mut Db {
+        &mut self.inner
+    }
+
     /// Get a refernce to the [`Cache`].
     pub const fn cache(&self) -> &Cache {
         &self.cache
+    }
+
+    /// Get a mutable reference to the [`Cache`].
+    pub const fn cache_mut(&mut self) -> &mut Cache {
+        &mut self.cache
     }
 
     /// Deconstruct the `CacheOnWrite` into its parts.
@@ -91,26 +104,64 @@ impl<Db> CacheOnWrite<Db> {
     }
 }
 
-impl<Db> CacheOnWrite<CacheOnWrite<Db>> {
-    /// Discard the outer cache, returning the inner.
-    pub fn discard_outer(self) -> CacheOnWrite<Db> {
-        self.inner
+impl<Db> CachingDb for CacheOnWrite<Db> {
+    fn cache(&self) -> &Cache {
+        &self.cache
     }
 
+    fn cache_mut(&mut self) -> &mut Cache {
+        &mut self.cache
+    }
+
+    fn into_cache(self) -> Cache {
+        self.cache
+    }
+}
+
+impl<Db> CacheOnWrite<Db>
+where
+    Db: CachingDb,
+{
     /// Flattens a nested cache by applying the outer cache to the inner cache.
     ///
     /// The behavior is as follows:
     /// - Accounts are overridden with outer accounts
     /// - Contracts are overridden with outer contracts
     /// - Block hashes are overridden with outer block hashes
-    pub fn flatten(self) -> CacheOnWrite<Db> {
+    pub fn flatten(self) -> Db {
         let Self { cache: Cache { accounts, contracts, logs, block_hashes }, mut inner } = self;
 
-        inner.cache.accounts.extend(accounts);
-        inner.cache.contracts.extend(contracts);
-        inner.cache.logs.extend(logs);
-        inner.cache.block_hashes.extend(block_hashes);
+        let inner_cache = inner.cache_mut();
+
+        inner_cache.accounts.extend(accounts);
+        inner_cache.contracts.extend(contracts);
+        inner_cache.logs.extend(logs);
+        inner_cache.block_hashes.extend(block_hashes);
         inner
+    }
+}
+
+impl<Db> CacheOnWrite<Db>
+where
+    Db: TryCachingDb,
+{
+    /// Attempts to flatten a nested cache by applying the outer cache to the
+    /// inner cache. This is a fallible version of [`CacheOnWrite::flatten`].
+    ///
+    /// The behavior is as follows:
+    /// - Accounts are overridden with outer accounts
+    /// - Contracts are overridden with outer contracts
+    /// - Block hashes are overridden with outer block hashes
+    pub fn try_flatten(self) -> Result<Db, Db::Error> {
+        let Self { cache: Cache { accounts, contracts, logs, block_hashes }, mut inner } = self;
+
+        let inner_cache = inner.try_cache_mut()?;
+
+        inner_cache.accounts.extend(accounts);
+        inner_cache.contracts.extend(contracts);
+        inner_cache.logs.extend(logs);
+        inner_cache.block_hashes.extend(block_hashes);
+        Ok(inner)
     }
 }
 
