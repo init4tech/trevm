@@ -1,5 +1,5 @@
 use crate::{
-    db::{StateAcc, TryDatabaseCommit, TryStateAcc},
+    db::{StateAcc, TryStateAcc},
     driver::DriveBlockResult,
     helpers::{Ctx, Evm},
     Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
@@ -16,7 +16,7 @@ use revm::{
         result::{EVMError, ExecutionResult, InvalidTransaction, ResultAndState},
         Block as _, BlockEnv, Cfg as _, ContextSetters, ContextTr, Transaction as _, TxEnv,
     },
-    database::{states::bundle_state::BundleRetention, BundleState},
+    database::{states::bundle_state::BundleRetention, BundleState, TryDatabaseCommit},
     inspector::NoOpInspector,
     interpreter::gas::calculate_initial_tx_gas_for_tx,
     primitives::{hardfork::SpecId, TxKind},

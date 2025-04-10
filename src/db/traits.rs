@@ -1,8 +1,7 @@
 use revm::{
-    database::{states::bundle_state::BundleRetention, BundleState, State},
-    primitives::{Address, B256},
-    state::Account,
-    Database, DatabaseCommit,
+    database::{states::bundle_state::BundleRetention, BundleState, Cache, CacheDB, State},
+    primitives::B256,
+    Database,
 };
 use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
 
@@ -145,29 +144,63 @@ where
     }
 }
 
-/// A fallible version of [`DatabaseCommit`].
-pub trait TryDatabaseCommit {
-    /// Error type to be thrown when committing changes fails.
-    type Error: core::error::Error;
+/// Trait for Databases that have a [`Cache`].
+pub trait CachingDb {
+    /// Get the cache.
+    fn cache(&self) -> &Cache;
 
-    /// Attempt to commit changes to the database.
-    fn try_commit(
-        &mut self,
-        changes: revm::primitives::HashMap<Address, Account>,
-    ) -> Result<(), Self::Error>;
+    /// Get the cache mutably.
+    fn cache_mut(&mut self) -> &mut Cache;
+
+    /// Deconstruct into the cache
+    fn into_cache(self) -> Cache;
 }
 
-impl<Db> TryDatabaseCommit for Arc<Db>
+impl<Db> CachingDb for CacheDB<Db> {
+    fn cache(&self) -> &Cache {
+        &self.cache
+    }
+
+    fn cache_mut(&mut self) -> &mut Cache {
+        &mut self.cache
+    }
+
+    fn into_cache(self) -> Cache {
+        self.cache
+    }
+}
+
+/// Trait for Databases that have a [`Cache`] and can fail to mutably access
+/// it. E.g. `Arc<CacheDB<Db>>`
+pub trait TryCachingDb {
+    /// Error type to be thrown when cache access fails.
+    type Error: core::error::Error;
+
+    /// Attempt to get the cache.
+    fn cache(&self) -> &Cache;
+
+    /// Attempt to get the cache mutably.
+    fn try_cache_mut(&mut self) -> Result<&mut Cache, Self::Error>;
+
+    /// Attempt to deconstruct into the cache
+    fn try_into_cache(self) -> Result<Cache, Self::Error>;
+}
+
+impl<Db> TryCachingDb for Arc<Db>
 where
-    Db: DatabaseCommit,
+    Db: CachingDb,
 {
     type Error = ArcUpgradeError;
 
-    fn try_commit(
-        &mut self,
-        changes: revm::primitives::HashMap<Address, Account>,
-    ) -> Result<(), Self::Error> {
-        Self::get_mut(self).ok_or(ArcUpgradeError::NotUnique)?.commit(changes);
-        Ok(())
+    fn cache(&self) -> &Cache {
+        self.as_ref().cache()
+    }
+
+    fn try_cache_mut(&mut self) -> Result<&mut Cache, Self::Error> {
+        Arc::get_mut(self).ok_or(ArcUpgradeError::NotUnique).map(|db| db.cache_mut())
+    }
+
+    fn try_into_cache(self) -> Result<Cache, Self::Error> {
+        Arc::into_inner(self).ok_or(ArcUpgradeError::NotUnique).map(|db| db.into_cache())
     }
 }
