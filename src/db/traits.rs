@@ -168,7 +168,7 @@ pub trait CachingDb {
         self.cache_mut().logs.extend(cache.logs.iter().cloned());
         self.cache_mut()
             .block_hashes
-            .extend(cache.block_hashes.iter().map(|(k, v)| (*k, v.clone())));
+            .extend(cache.block_hashes.iter().map(|(k, v)| (*k, *v)));
     }
 
     /// Extend the cache with the given cache by moving data.
@@ -230,7 +230,7 @@ pub trait TryCachingDb {
         inner_cache.accounts.extend(cache.accounts.iter().map(|(k, v)| (*k, v.clone())));
         inner_cache.contracts.extend(cache.contracts.iter().map(|(k, v)| (*k, v.clone())));
         inner_cache.logs.extend(cache.logs.iter().cloned());
-        inner_cache.block_hashes.extend(cache.block_hashes.iter().map(|(k, v)| (*k, v.clone())));
+        inner_cache.block_hashes.extend(cache.block_hashes.iter().map(|(k, v)| (*k, *v)));
         Ok(())
     }
 
