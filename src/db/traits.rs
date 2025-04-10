@@ -197,10 +197,10 @@ where
     }
 
     fn try_cache_mut(&mut self) -> Result<&mut Cache, Self::Error> {
-        Arc::get_mut(self).ok_or(ArcUpgradeError::NotUnique).map(|db| db.cache_mut())
+        Self::get_mut(self).ok_or(ArcUpgradeError::NotUnique).map(|db| db.cache_mut())
     }
 
     fn try_into_cache(self) -> Result<Cache, Self::Error> {
-        Arc::into_inner(self).ok_or(ArcUpgradeError::NotUnique).map(|db| db.into_cache())
+        Self::into_inner(self).ok_or(ArcUpgradeError::NotUnique).map(|db| db.into_cache())
     }
 }
