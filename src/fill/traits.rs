@@ -3,6 +3,7 @@ use revm::{
     context::{BlockEnv, CfgEnv, Evm, TxEnv},
     Database,
 };
+use std::sync::Arc;
 
 /// Types that can fill the EVM transaction environment [`TxEnv`].
 pub trait Tx: Send + Sync {
@@ -18,8 +19,23 @@ pub trait Tx: Send + Sync {
     fn fill_tx_env(&self, tx_env: &mut TxEnv);
 
     /// Fill the transaction environment on the EVM.
-    fn fill_tx<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>) {
+    fn fill_tx<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>)
+    where
+        Self: Sized,
+    {
         evm.data.ctx.modify_tx(|tx_env| self.fill_tx_env(tx_env));
+    }
+}
+
+impl Tx for Arc<dyn Tx> {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        self.as_ref().fill_tx_env(tx_env);
+    }
+}
+
+impl Tx for Box<dyn Tx> {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        self.as_ref().fill_tx_env(tx_env);
     }
 }
 
@@ -45,7 +61,10 @@ pub trait Block: Send + Sync {
     fn fill_block_env(&self, block_env: &mut BlockEnv);
 
     /// Fill the block environment on the EVM.
-    fn fill_block<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>) {
+    fn fill_block<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>)
+    where
+        Self: Sized,
+    {
         evm.data.ctx.modify_block(|block_env| self.fill_block_env(block_env));
     }
 
@@ -62,6 +81,18 @@ where
 {
     fn fill_block_env(&self, block_env: &mut BlockEnv) {
         self(block_env);
+    }
+}
+
+impl Block for Arc<dyn Block> {
+    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+        self.as_ref().fill_block_env(block_env);
+    }
+}
+
+impl Block for Box<dyn Block> {
+    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+        self.as_ref().fill_block_env(block_env);
     }
 }
 
@@ -87,8 +118,23 @@ pub trait Cfg: Send + Sync {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv);
 
     /// Fill the configuration environment on the EVM.
-    fn fill_cfg<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>) {
+    fn fill_cfg<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>)
+    where
+        Self: Sized,
+    {
         evm.data.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
+    }
+}
+
+impl Cfg for Arc<dyn Cfg> {
+    fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
+        self.as_ref().fill_cfg_env(cfg_env);
+    }
+}
+
+impl Cfg for Box<dyn Cfg> {
+    fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
+        self.as_ref().fill_cfg_env(cfg_env);
     }
 }
 
@@ -113,6 +159,13 @@ mod test {
     };
 
     use super::*;
+
+    #[allow(dead_code)]
+    fn object_safety(cfg: Box<dyn Cfg>, block: Box<dyn Block>, tx: Box<dyn Tx>) {
+        crate::test_utils::test_trevm().fill_cfg(&cfg).fill_block(&block).fill_tx(&tx);
+
+        unimplemented!("compilation check only")
+    }
 
     impl Block for () {
         fn fill_block_env(&self, block_env: &mut BlockEnv) {
