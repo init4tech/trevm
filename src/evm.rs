@@ -1978,12 +1978,11 @@ where
     /// [`SolCall`]: alloy::sol_types::SolCall
     pub fn output_sol<T: alloy::sol_types::SolCall>(
         &self,
-        validate: bool,
     ) -> Option<alloy::sol_types::Result<T::Return>>
     where
         T::Return: alloy::sol_types::SolType,
     {
-        self.output().map(|output| T::abi_decode_returns(output, validate))
+        self.output().map(|output| T::abi_decode_returns(output))
     }
 
     /// Get the gas used by the transaction.
