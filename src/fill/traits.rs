@@ -27,6 +27,12 @@ pub trait Tx: Send + Sync {
     }
 }
 
+impl Tx for TxEnv {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        *tx_env = self.clone();
+    }
+}
+
 impl Tx for Arc<dyn Tx> {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         self.as_ref().fill_tx_env(tx_env);
@@ -84,6 +90,12 @@ where
     }
 }
 
+impl Block for BlockEnv {
+    fn fill_block_env(&self, block_env: &mut BlockEnv) {
+        *block_env = self.clone();
+    }
+}
+
 impl Block for Arc<dyn Block> {
     fn fill_block_env(&self, block_env: &mut BlockEnv) {
         self.as_ref().fill_block_env(block_env);
@@ -129,6 +141,12 @@ pub trait Cfg: Send + Sync {
 impl Cfg for Arc<dyn Cfg> {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
         self.as_ref().fill_cfg_env(cfg_env);
+    }
+}
+
+impl Cfg for CfgEnv {
+    fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
+        *cfg_env = self.clone();
     }
 }
 
