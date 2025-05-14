@@ -78,7 +78,7 @@ async fn main() -> eyre::Result<()> {
     let output = evm.output().expect("Execution halted");
 
     // decode bytes to reserves + ts via alloy's abi decode
-    let return_vals = getReservesCall::abi_decode_returns(output, true)?;
+    let return_vals = getReservesCall::abi_decode_returns(output)?;
 
     // Print emulated getReserves() call output
     println!("Reserve0: {:#?}", return_vals.reserve0);

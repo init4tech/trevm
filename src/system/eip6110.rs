@@ -60,7 +60,7 @@ where
     logs.into_iter().filter(|log| log.address == MAINNET_DEPOSIT_CONTRACT_ADDRESS).map(|log| {
         // We assume that the log is valid because it was emitted by the
         // deposit contract.
-        let decoded_log = DepositEvent::decode_log(log, false).expect("invalid log");
+        let decoded_log = DepositEvent::decode_log(log).expect("invalid log");
         parse_deposit_from_log(&decoded_log)
     })
 }
@@ -74,7 +74,7 @@ pub fn accumulate_deposits_from_logs<'a>(
         |log| {
             // We assume that the log is valid because it was emitted by the
             // deposit contract.
-            let decoded_log = DepositEvent::decode_log(log, false).expect("invalid log");
+            let decoded_log = DepositEvent::decode_log(log).expect("invalid log");
             accumulate_deposit_from_log(&decoded_log, out);
         },
     );
