@@ -1975,10 +1975,15 @@ where
     /// [`SolCall`]: alloy::sol_types::SolCall
     pub fn output_sol<T: alloy::sol_types::SolCall>(
         &self,
+        validate: bool,
     ) -> Option<alloy::sol_types::Result<T::Return>>
     where
         T::Return: alloy::sol_types::SolType,
     {
+        if validate {
+            return self.output().map(|output| T::abi_decode_returns_validate(output));
+        }
+
         self.output().map(|output| T::abi_decode_returns(output))
     }
 
