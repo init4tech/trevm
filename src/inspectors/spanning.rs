@@ -1,8 +1,8 @@
-use alloy::hex;
+use alloy::{consensus::constants::SELECTOR_LEN, hex};
 use revm::{
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
-        InterpreterTypes,
+        CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs,
+        Interpreter, InterpreterTypes,
     },
     Inspector,
 };
@@ -113,13 +113,17 @@ impl SpanningInspector {
 
     /// Create a span for a `CALL`-family opcode.
     fn span_call<Ctx>(&self, _context: &Ctx, inputs: &CallInputs) -> Span {
-        let mut selector = inputs.input.clone();
-        selector.truncate(4);
+        let selector = if let CallInput::Bytes(ref input) = inputs.input {
+            input[..SELECTOR_LEN].try_into().unwrap_or([0; 4])
+        } else {
+            [0; 4]
+        };
+
         runtime_level_span!(
             self.level,
             "call",
             input_len = inputs.input.len(),
-            selector = hex::encode(&selector),
+            selector = hex::encode(selector),
             gas_limit = inputs.gas_limit,
             bytecode_address = %inputs.bytecode_address,
             target_addrses = %inputs.target_address,

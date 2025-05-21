@@ -73,11 +73,11 @@ impl Cfg for GasEstimationFiller {
         &self,
         evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec>,
     ) {
-        evm.data.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
+        evm.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
 
-        let chain_id = evm.data.ctx.cfg.chain_id;
+        let chain_id = evm.ctx.cfg.chain_id;
 
-        evm.data.ctx.modify_tx(|tx_env| {
+        evm.ctx.modify_tx(|tx_env| {
             tx_env.chain_id = Some(chain_id);
         });
     }
@@ -107,11 +107,11 @@ impl Cfg for CallFiller {
         &self,
         evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec>,
     ) {
-        evm.data.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
+        evm.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
 
-        let chain_id = evm.data.ctx.cfg.chain_id;
+        let chain_id = evm.ctx.cfg.chain_id;
 
-        evm.data.ctx.modify_tx(|tx_env| {
+        evm.ctx.modify_tx(|tx_env| {
             tx_env.chain_id = Some(chain_id);
         });
     }

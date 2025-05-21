@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.20.10"
+version = "0.20.11"
 rust-version = "1.83.0"
 edition = "2021"
 authors = ["init4"]
@@ -27,23 +27,27 @@ option-if-let-else = "warn"
 redundant-clone = "warn"
 
 [dependencies]
-alloy = { version = "0.14.0", default-features = false, features = ["consensus", "rpc-types-mev", "eips", "k256", "std", "rlp", "sol-types"] }
+alloy = { version = "1.0.5", default-features = false, features = [
+    "consensus",
+    "rpc-types-mev",
+    "eips",
+    "k256",
+    "std",
+    "rlp",
+    "sol-types",
+] }
 
-revm = { version = "22.0.1", default-features = false }
+revm = { version = "23.1.0", default-features = false }
 
 dashmap = { version = "6.1.0", optional = true }
-tracing = { version = "0.1.41", optional = true}
+tracing = { version = "0.1.41", optional = true }
 thiserror = "2.0.11"
 
 [dev-dependencies]
-revm = { version = "22.0.1", features = [
-    "serde-json",
-    "std",
-    "alloydb",
-] }
+revm = { version = "23.1.0", features = ["serde-json", "std", "alloydb"] }
 trevm = { path = ".", features = ["test-utils"] }
 
-alloy = { version = "0.14.0", features = ["providers"]}
+alloy = { version = "1.0.5", features = ["providers"] }
 
 # misc
 eyre = "0.6"
