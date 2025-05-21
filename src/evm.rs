@@ -810,10 +810,7 @@ where
     #[cfg(feature = "memory_limit")]
     pub fn set_memory_limit(&mut self, new_limit: u64) -> u64 {
         let mut ml = 0;
-        self.inner
-            .data
-            .ctx
-            .modify_cfg(|cfg| ml = core::mem::replace(&mut cfg.memory_limit, new_limit));
+        self.inner.ctx.modify_cfg(|cfg| ml = core::mem::replace(&mut cfg.memory_limit, new_limit));
         ml
     }
 
@@ -822,13 +819,13 @@ where
     /// execution doesn't fail.
     #[cfg(feature = "optional_balance_check")]
     pub fn disable_balance_check(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = true)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_balance_check = true)
     }
 
     /// Enable balance checks. See [`Self::disable_balance_check`].
     #[cfg(feature = "optional_balance_check")]
     pub fn enable_balance_check(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = false)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_balance_check = false)
     }
 
     /// Run a closure with balance checks disabled, then restore the previous
@@ -841,7 +838,7 @@ where
         let previous = self.inner.cfg().disable_balance_check;
         self.disable_balance_check();
         let mut new = f(self);
-        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = previous);
+        new.inner.ctx.modify_cfg(|cfg| cfg.disable_balance_check = previous);
         new
     }
 
@@ -850,13 +847,13 @@ where
     /// simulating large transactions like forge scripts.
     #[cfg(feature = "optional_block_gas_limit")]
     pub fn disable_block_gas_limit(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = true);
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = true);
     }
 
     /// Enable block gas limits. See [`Self::disable_block_gas_limit`].
     #[cfg(feature = "optional_block_gas_limit")]
     pub fn enable_block_gas_limit(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = false);
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = false);
     }
 
     /// Run a closure with block gas limits disabled, then restore the previous
@@ -869,7 +866,7 @@ where
         let previous = self.inner.cfg().disable_block_gas_limit;
         self.disable_block_gas_limit();
         let mut new = f(self);
-        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = previous);
+        new.inner.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = previous);
         new
     }
 
