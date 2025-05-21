@@ -1,6 +1,5 @@
 use alloy::{
     consensus::{Signed, TxType},
-    eips::eip7702::{RecoveredAuthorization, SignedAuthorization},
     primitives::U256,
 };
 use revm::{
@@ -324,11 +323,6 @@ impl Tx for alloy::rpc::types::TransactionRequest {
 
         *caller = self.from.unwrap_or_default();
 
-        let auth_list = self.authorization_list.clone().unwrap_or_default();
-        let auth_list: Vec<
-            revm::context::either::Either<SignedAuthorization, RecoveredAuthorization>,
-        > = auth_list.into_iter().map(revm::context::either::Either::Left).collect();
-
         // NB: this is set to max if not provided, as users will typically
         // intend that to mean "as much as possible"
         *tx_type = self.transaction_type.unwrap_or(TxType::Eip1559 as u8);
@@ -343,7 +337,13 @@ impl Tx for alloy::rpc::types::TransactionRequest {
         *gas_priority_fee = self.max_priority_fee_per_gas;
         *blob_hashes = self.blob_versioned_hashes.clone().unwrap_or_default();
         *max_fee_per_blob_gas = self.max_fee_per_blob_gas.unwrap_or_default();
-        authorization_list.extend(auth_list);
+        *authorization_list = self
+            .authorization_list
+            .iter()
+            .flatten()
+            .cloned()
+            .map(revm::context::either::Either::Left)
+            .collect();
     }
 }
 
