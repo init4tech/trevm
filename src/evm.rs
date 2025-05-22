@@ -1,7 +1,7 @@
 use crate::{
     db::{StateAcc, TryStateAcc},
     driver::DriveBlockResult,
-    helpers::{Ctx, Evm},
+    helpers::{Ctx, Evm, Instruction},
     Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
     ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
     EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
@@ -188,33 +188,57 @@ where
         }
     }
 
+    /// Overide an opcode with a custom handler. Returns the previous
+    /// instruction handler for the opcode.
+    pub fn override_opcode(&mut self, opcode: u8, handler: Instruction<Db>) -> Instruction<Db> {
+        std::mem::replace(&mut self.inner.instruction.instruction_table[opcode as usize], handler)
+    }
+
+    /// Disable an opcode by replacing it with unknown opcode behavior. This is
+    /// a shortcut for [`Self::override_opcode`] with [`control::unknown`].
+    pub fn disable_opcode(&mut self, opcode: u8) -> Instruction<Db> {
+        self.override_opcode(opcode, control::unknown)
+    }
+
+    /// Run some closure with an opcode override, then restore the previous
+    /// setting.
+    pub fn with_opcode_override<F, NewState>(
+        mut self,
+        opcode: u8,
+        handler: Instruction<Db>,
+        f: F,
+    ) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        let old = self.override_opcode(opcode, handler);
+        self.inner.instruction.insert_instruction(opcode, handler);
+        let mut this = f(self);
+        this.override_opcode(opcode, old);
+        this
+    }
+
     /// Disable the prevrandao opcode, by replacing it with unknown opcode
     /// behavior. This is useful for block simulation, where the prevrandao
     /// opcode may produce incorrect results.
-    pub fn disable_prevrandao(&mut self) {
-        self.inner.instruction.insert_instruction(DIFFICULTY, control::unknown);
+    pub fn disable_prevrandao(&mut self) -> Instruction<Db> {
+        self.disable_opcode(DIFFICULTY)
     }
 
     /// Enable the prevrandao opcode. If the prevrandao opcode was not
     /// previously disabled or replaced, this will have no effect on behavior.
-    pub fn enable_prevrandao(&mut self) {
-        self.inner.instruction.insert_instruction(DIFFICULTY, block_info::difficulty);
+    pub fn enable_prevrandao(&mut self) -> Instruction<Db> {
+        self.override_opcode(DIFFICULTY, block_info::difficulty)
     }
 
     /// Run some code with the prevrandao opcode disabled, then restore the
     /// previous setting. This is useful for block simulation, where the
     /// prevrandao opcode may produce incorrect results.
-    pub fn without_prevrandao<F, NewState>(mut self, f: F) -> Trevm<Db, Insp, NewState>
+    pub fn without_prevrandao<F, NewState>(self, f: F) -> Trevm<Db, Insp, NewState>
     where
         F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
-        let handler = std::mem::replace(
-            &mut self.inner.instruction.instruction_table[DIFFICULTY as usize],
-            control::unknown,
-        );
-        let mut new = f(self);
-        new.inner.instruction.insert_instruction(DIFFICULTY, handler);
-        new
+        self.with_opcode_override(DIFFICULTY, control::unknown, f)
     }
 }
 
