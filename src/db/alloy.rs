@@ -20,7 +20,7 @@ use std::fmt::Display;
 /// the actual type to be an [`U256`] instead of a [`B256`].
 pub type StorageKey = U256;
 
-/// An error that can occur when using [AlloyDB].
+/// An error that can occur when using [`AlloyDb`].
 #[derive(Debug)]
 pub struct DBTransportError(pub TransportError);
 
@@ -40,7 +40,7 @@ impl From<TransportError> for DBTransportError {
     }
 }
 
-/// An alloy-powered REVM [Database][revm::database_interface::Database].
+/// An alloy-powered REVM [`Database`][revm::database_interface::Database].
 ///
 /// When accessing the database, it'll use the given provider to fetch the corresponding account's data.
 #[derive(Debug)]
@@ -53,7 +53,7 @@ pub struct AlloyDb<N: Network, P: Provider<N>> {
 }
 
 impl<N: Network, P: Provider<N>> AlloyDb<N, P> {
-    /// Creates a new AlloyDB instance, with a [Provider] and a block.
+    /// Creates a new AlloyDB instance, with a [`Provider`] and a block.
     pub fn new(provider: P, block_number: BlockId) -> Self {
         Self { provider, block_number, _marker: core::marker::PhantomData }
     }
