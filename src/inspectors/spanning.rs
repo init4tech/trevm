@@ -117,13 +117,13 @@ impl SpanningInspector {
     where
         Ctx: ContextTr,
     {
-        let selector = resolve_selector(inputs, context).unwrap_or_default();
+        let selector = resolve_selector(inputs, context).map(hex::encode);
 
         runtime_level_span!(
             self.level,
             "call",
             input_len = inputs.input.len(),
-            selector = hex::encode(selector),
+            selector,
             gas_limit = inputs.gas_limit,
             bytecode_address = %inputs.bytecode_address,
             target_addrses = %inputs.target_address,
