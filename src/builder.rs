@@ -56,6 +56,10 @@ impl<Db, Insp> TrevmBuilder<Db, Insp> {
     }
 
     /// Set the precompiles for the EVM.
+    ///
+    /// The precompiles must be a static reference to a precompiles instance.
+    /// If not using a built-in [`Precompiles`], it is generally recommended to
+    /// use a `OnceLock` to create this borrow.
     pub const fn with_precompiles(mut self, precompiles: &'static Precompiles) -> Self {
         self.precompiles = Some(precompiles);
         self
