@@ -16,8 +16,8 @@ use revm::{
 use std::fmt::Display;
 
 /// A type alias for the storage key used in the database.
-/// We use this instead of alloy's [alloy::primitives::StorageKey] as Revm requires
-/// the actual type to be an [U256] instead of a [B256].
+/// We use this instead of alloy's [`alloy::primitives::StorageKey`] as Revm requires
+/// the actual type to be an [`U256`] instead of a [`B256`].
 pub type StorageKey = U256;
 
 /// An error that can occur when using [AlloyDB].
