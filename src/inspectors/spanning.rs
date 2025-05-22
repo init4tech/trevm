@@ -113,11 +113,11 @@ impl SpanningInspector {
     }
 
     /// Create a span for a `CALL`-family opcode.
-    fn span_call<Ctx>(&self, _context: &mut Ctx, inputs: &CallInputs) -> Span
+    fn span_call<Ctx>(&self, context: &mut Ctx, inputs: &CallInputs) -> Span
     where
         Ctx: ContextTr,
     {
-        let selector = resolve_selector(inputs, _context).unwrap_or_default();
+        let selector = resolve_selector(inputs, context).unwrap_or_default();
 
         runtime_level_span!(
             self.level,
