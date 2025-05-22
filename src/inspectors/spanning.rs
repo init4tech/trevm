@@ -1,5 +1,6 @@
 use alloy::{consensus::constants::SELECTOR_LEN, hex};
 use revm::{
+    context::{ContextTr, LocalContextTr},
     interpreter::{
         CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs,
         Interpreter, InterpreterTypes,
@@ -112,12 +113,11 @@ impl SpanningInspector {
     }
 
     /// Create a span for a `CALL`-family opcode.
-    fn span_call<Ctx>(&self, _context: &Ctx, inputs: &CallInputs) -> Span {
-        let selector = if let CallInput::Bytes(ref input) = inputs.input {
-            input[..SELECTOR_LEN].try_into().unwrap_or([0; 4])
-        } else {
-            [0; 4]
-        };
+    fn span_call<Ctx>(&self, _context: &mut Ctx, inputs: &CallInputs) -> Span
+    where
+        Ctx: ContextTr,
+    {
+        let selector = resolve_selector(inputs, _context).unwrap_or_default();
 
         runtime_level_span!(
             self.level,
@@ -134,7 +134,10 @@ impl SpanningInspector {
     }
 
     /// Create, enter, and store a span for a `CALL`-family opcode.
-    fn enter_call<Ctx>(&mut self, context: &Ctx, inputs: &CallInputs) {
+    fn enter_call<Ctx>(&mut self, context: &mut Ctx, inputs: &CallInputs)
+    where
+        Ctx: ContextTr,
+    {
         self.active.push(self.span_call(context, inputs).entered())
     }
 
@@ -176,6 +179,7 @@ impl SpanningInspector {
 impl<Ctx, Int> Inspector<Ctx, Int> for SpanningInspector
 where
     Int: InterpreterTypes,
+    Ctx: ContextTr,
 {
     fn initialize_interp(&mut self, interp: &mut Interpreter<Int>, context: &mut Ctx) {
         self.init(interp, context);
@@ -220,5 +224,19 @@ where
         _outcome: &mut CreateOutcome,
     ) {
         self.exit_span();
+    }
+}
+
+/// Resolve a selector from the [CallInputs].
+fn resolve_selector(inputs: &CallInputs, ctx: &mut impl ContextTr) -> Option<[u8; SELECTOR_LEN]> {
+    match &inputs.input {
+        CallInput::SharedBuffer(range) => {
+            let raw = ctx.local().shared_memory_buffer_slice(range.clone());
+
+            raw?.get(..SELECTOR_LEN).map(TryInto::try_into).and_then(Result::ok)
+        }
+        CallInput::Bytes(bytes) => {
+            bytes.as_ref().get(..SELECTOR_LEN).map(TryInto::try_into).and_then(Result::ok)
+        }
     }
 }
