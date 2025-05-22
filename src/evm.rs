@@ -12,13 +12,17 @@ use alloy::{
 };
 use core::{convert::Infallible, fmt};
 use revm::{
+    bytecode::opcode::DIFFICULTY,
     context::{
         result::{EVMError, ExecutionResult, InvalidTransaction, ResultAndState},
         Block as _, BlockEnv, Cfg as _, ContextSetters, ContextTr, Transaction as _, TxEnv,
     },
     database::{states::bundle_state::BundleRetention, BundleState, TryDatabaseCommit},
     inspector::NoOpInspector,
-    interpreter::gas::calculate_initial_tx_gas_for_tx,
+    interpreter::{
+        gas::calculate_initial_tx_gas_for_tx,
+        instructions::{block_info, control},
+    },
     primitives::{hardfork::SpecId, TxKind},
     state::{AccountInfo, Bytecode, EvmState},
     Database, DatabaseCommit, DatabaseRef, InspectEvm, Inspector,
@@ -182,6 +186,33 @@ where
         } else {
             Ok(self)
         }
+    }
+
+    /// Disable the prevrandao opcode, by replacing it with unknown opcode
+    /// behavior. This is useful for block simulation, where the prevrandao
+    /// opcode may produce incorrect results.
+    pub fn disable_prevrandao(&mut self) {
+        self.inner.instruction.insert_instruction(DIFFICULTY, control::unknown);
+    }
+
+    /// Enable the prevrandao opcode.
+    pub fn enable_prevrandao(&mut self) {
+        self.inner.instruction.insert_instruction(DIFFICULTY, block_info::difficulty);
+    }
+
+    /// Run some code with the prevrandao opcode disabled, then restore the
+    /// previous setting.
+    pub fn without_prevrandao<F, NewState>(mut self, f: F) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        let handler = std::mem::replace(
+            &mut self.inner.instruction.instruction_table[DIFFICULTY as usize],
+            control::unknown,
+        );
+        let mut new = f(self);
+        new.inner.instruction.insert_instruction(DIFFICULTY, handler);
+        new
     }
 }
 
