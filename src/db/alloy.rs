@@ -85,10 +85,10 @@ impl<N: Network, P: Provider<N>> DatabaseAsyncRef for AlloyDb<N, P> {
     async fn block_hash_async_ref(&self, number: u64) -> Result<B256, Self::Error> {
         let block = self
             .provider
-            // SAFETY: We know number <= u64::MAX, so we can safely convert it to u64
+            // We know number <= u64::MAX, so we can safely convert it to u64
             .get_block_by_number(number.into())
             .await?;
-        // SAFETY: If the number is given, the block is supposed to be finalized, so unwrapping is safe.
+        // If the number is given, the block is supposed to be finalized, so unwrapping is safe.
         Ok(B256::new(*block.unwrap().header().hash()))
     }
 

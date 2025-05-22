@@ -1,5 +1,5 @@
 //! This example demonstrates how to query storage slots of a contract, using
-//! [`AlloyDB`].
+//! [`AlloyDb`].
 
 use alloy::{
     eips::BlockId,
