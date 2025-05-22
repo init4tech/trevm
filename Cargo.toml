@@ -76,7 +76,7 @@ default = [
     "revm/secp256k1",
 ]
 
-alloy-db = ["dep:tokio"]
+alloy-db = ["dep:tokio", "alloy/providers"]
 
 call = ["optional_eip3607", "optional_no_base_fee"]
 
@@ -87,6 +87,7 @@ estimate_gas = ["optional_eip3607", "optional_no_base_fee", "dep:tracing"]
 test-utils = ["revm/std", "revm/serde-json", "revm/alloydb"]
 
 secp256k1 = ["revm/secp256k1"]
+secp256r1 = ["revm/secp256r1"]
 c-kzg = ["revm/c-kzg"]
 blst = ["revm/blst"]
 
