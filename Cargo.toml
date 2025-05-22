@@ -26,6 +26,13 @@ use-self = "warn"
 option-if-let-else = "warn"
 redundant-clone = "warn"
 
+[[example]]
+name = "basic_transact"
+
+[[example]]
+name = "fork_ref_transact"
+required-features = ["alloydb"]
+
 [dependencies]
 alloy = { version = "1.0.5", default-features = false, features = [
     "consensus",
@@ -43,11 +50,13 @@ dashmap = { version = "6.1.0", optional = true }
 tracing = { version = "0.1.41", optional = true }
 thiserror = "2.0.11"
 
+tokio = { version = "1.44", optional = true }
+
 [dev-dependencies]
 revm = { version = "23.1.0", features = ["serde-json", "std", "alloydb"] }
 trevm = { path = ".", features = ["test-utils"] }
 
-alloy = { version = "1.0.5", features = ["providers"] }
+alloy = { version = "1.0.5", features = ["providers", "transports"] }
 
 # misc
 eyre = "0.6"
@@ -66,6 +75,9 @@ default = [
     "revm/portable",
     "revm/secp256k1",
 ]
+
+alloydb = ["dep:tokio"]
+
 
 call = ["optional_eip3607", "optional_no_base_fee"]
 

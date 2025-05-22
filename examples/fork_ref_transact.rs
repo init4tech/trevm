@@ -1,8 +1,6 @@
 //! This example demonstrates how to query storage slots of a contract, using
 //! [`AlloyDB`].
 
-//! This example is currently disabled while waiting for revm @ 14.0.4
-
 use alloy::{
     eips::BlockId,
     primitives::{address, Address, TxKind, U256},
@@ -12,7 +10,8 @@ use alloy::{
 };
 use revm::{context::TxEnv, database::WrapDatabaseAsync};
 use trevm::{
-    revm::database::{AlloyDB, CacheDB},
+    db::alloy::AlloyDB,
+    revm::database::CacheDB,
     NoopBlock, NoopCfg, TrevmBuilder, Tx,
 };
 
