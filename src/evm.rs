@@ -1,7 +1,7 @@
 use crate::{
     db::{StateAcc, TryStateAcc},
     driver::DriveBlockResult,
-    helpers::{Ctx, Evm},
+    helpers::{Ctx, Evm, Instruction},
     Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
     ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
     EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
@@ -12,13 +12,15 @@ use alloy::{
 };
 use core::{convert::Infallible, fmt};
 use revm::{
+    bytecode::opcode::DIFFICULTY,
     context::{
         result::{EVMError, ExecutionResult, InvalidTransaction, ResultAndState},
         Block as _, BlockEnv, Cfg as _, ContextSetters, ContextTr, Transaction as _, TxEnv,
     },
     database::{states::bundle_state::BundleRetention, BundleState, TryDatabaseCommit},
+    handler::EthPrecompiles,
     inspector::NoOpInspector,
-    interpreter::gas::calculate_initial_tx_gas_for_tx,
+    interpreter::{gas::calculate_initial_tx_gas_for_tx, instructions::block_info},
     primitives::{hardfork::SpecId, TxKind},
     state::{AccountInfo, Bytecode, EvmState},
     Database, DatabaseCommit, DatabaseRef, InspectEvm, Inspector,
@@ -182,6 +184,81 @@ where
         } else {
             Ok(self)
         }
+    }
+
+    /// Overide an opcode with a custom handler. Returns the previous
+    /// instruction handler for the opcode.
+    pub fn override_opcode(&mut self, opcode: u8, handler: Instruction<Db>) -> Instruction<Db> {
+        std::mem::replace(&mut self.inner.instruction.instruction_table[opcode as usize], handler)
+    }
+
+    /// Disable an opcode by replacing it with unknown opcode behavior. This is
+    /// a shortcut for [`Self::override_opcode`] with [`crate::helpers::forbidden`].
+    pub fn disable_opcode(&mut self, opcode: u8) -> Instruction<Db> {
+        self.override_opcode(opcode, crate::helpers::forbidden)
+    }
+
+    /// Run some closure with an opcode override, then restore the previous
+    /// setting.
+    pub fn with_opcode_override<F, NewState>(
+        mut self,
+        opcode: u8,
+        handler: Instruction<Db>,
+        f: F,
+    ) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        let old = self.override_opcode(opcode, handler);
+        self.inner.instruction.insert_instruction(opcode, handler);
+        let mut this = f(self);
+        this.override_opcode(opcode, old);
+        this
+    }
+
+    /// Disable the prevrandao opcode, by replacing it with unknown opcode
+    /// behavior. This is useful for block simulation, where the prevrandao
+    /// opcode may produce incorrect results.
+    pub fn disable_prevrandao(&mut self) -> Instruction<Db> {
+        self.disable_opcode(DIFFICULTY)
+    }
+
+    /// Enable the prevrandao opcode. If the prevrandao opcode was not
+    /// previously disabled or replaced, this will have no effect on behavior.
+    pub fn enable_prevrandao(&mut self) -> Instruction<Db> {
+        self.override_opcode(DIFFICULTY, block_info::difficulty)
+    }
+
+    /// Run some code with the prevrandao opcode disabled, then restore the
+    /// previous setting. This is useful for block simulation, where the
+    /// prevrandao opcode may produce incorrect results.
+    pub fn without_prevrandao<F, NewState>(self, f: F) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        self.with_opcode_override(DIFFICULTY, crate::helpers::forbidden, f)
+    }
+
+    /// Set the precompiles for the EVM. This will replace the current
+    /// precompiles with the provided ones.
+    pub fn override_precompiles(&mut self, precompiles: EthPrecompiles) -> EthPrecompiles {
+        std::mem::replace(&mut self.inner.precompiles, precompiles)
+    }
+
+    /// Run a closure with a different set of precompiles, then restore the
+    /// previous setting.
+    pub fn with_precompiles<F, NewState>(
+        mut self,
+        precompiles: EthPrecompiles,
+        f: F,
+    ) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        let old = self.override_precompiles(precompiles);
+        let mut this = f(self);
+        this.override_precompiles(old);
+        this
     }
 }
 
