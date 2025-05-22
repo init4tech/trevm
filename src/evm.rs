@@ -96,12 +96,12 @@ where
 
     /// Deconstruct the [`Trevm`] into the backing DB, dropping all other types.
     pub fn into_db(self) -> Db {
-        self.inner.data.ctx.journaled_state.database
+        self.inner.ctx.journaled_state.database
     }
 
     /// Get the id of the currently running hardfork spec.
     pub fn spec_id(&self) -> SpecId {
-        self.inner.data.ctx.cfg().spec()
+        self.inner.ctx.cfg().spec()
     }
 
     /// Set the [SpecId], modifying the EVM handlers accordingly. This function
@@ -712,7 +712,7 @@ where
     /// [`Eip-170`]: https://eips.ethereum.org/EIPS/eip-170
     pub fn set_code_size_limit(&mut self, limit: usize) -> Option<usize> {
         let mut csl = None;
-        self.inner.data.ctx.modify_cfg(|cfg| {
+        self.inner.ctx.modify_cfg(|cfg| {
             csl = cfg.limit_contract_code_size.replace(limit);
         });
         csl
@@ -724,7 +724,7 @@ where
     /// [`Eip-170`]: https://eips.ethereum.org/EIPS/eip-170
     pub fn disable_code_size_limit(&mut self) -> Option<usize> {
         let mut csl = None;
-        self.inner.data.ctx.modify_cfg(|cfg| csl = cfg.limit_contract_code_size.take());
+        self.inner.ctx.modify_cfg(|cfg| csl = cfg.limit_contract_code_size.take());
         csl
     }
 
@@ -766,7 +766,7 @@ where
         cfg.fill_cfg(&mut self.inner);
 
         let mut this = f(self);
-        this.inner.data.ctx.modify_cfg(|cfg| *cfg = previous);
+        this.inner.ctx.modify_cfg(|cfg| *cfg = previous);
         this
     }
 
@@ -810,10 +810,7 @@ where
     #[cfg(feature = "memory_limit")]
     pub fn set_memory_limit(&mut self, new_limit: u64) -> u64 {
         let mut ml = 0;
-        self.inner
-            .data
-            .ctx
-            .modify_cfg(|cfg| ml = core::mem::replace(&mut cfg.memory_limit, new_limit));
+        self.inner.ctx.modify_cfg(|cfg| ml = core::mem::replace(&mut cfg.memory_limit, new_limit));
         ml
     }
 
@@ -822,13 +819,13 @@ where
     /// execution doesn't fail.
     #[cfg(feature = "optional_balance_check")]
     pub fn disable_balance_check(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = true)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_balance_check = true)
     }
 
     /// Enable balance checks. See [`Self::disable_balance_check`].
     #[cfg(feature = "optional_balance_check")]
     pub fn enable_balance_check(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = false)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_balance_check = false)
     }
 
     /// Run a closure with balance checks disabled, then restore the previous
@@ -841,7 +838,7 @@ where
         let previous = self.inner.cfg().disable_balance_check;
         self.disable_balance_check();
         let mut new = f(self);
-        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_balance_check = previous);
+        new.inner.ctx.modify_cfg(|cfg| cfg.disable_balance_check = previous);
         new
     }
 
@@ -850,13 +847,13 @@ where
     /// simulating large transactions like forge scripts.
     #[cfg(feature = "optional_block_gas_limit")]
     pub fn disable_block_gas_limit(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = true);
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = true);
     }
 
     /// Enable block gas limits. See [`Self::disable_block_gas_limit`].
     #[cfg(feature = "optional_block_gas_limit")]
     pub fn enable_block_gas_limit(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = false);
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = false);
     }
 
     /// Run a closure with block gas limits disabled, then restore the previous
@@ -869,7 +866,7 @@ where
         let previous = self.inner.cfg().disable_block_gas_limit;
         self.disable_block_gas_limit();
         let mut new = f(self);
-        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = previous);
+        new.inner.ctx.modify_cfg(|cfg| cfg.disable_block_gas_limit = previous);
         new
     }
 
@@ -879,7 +876,7 @@ where
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
     #[cfg(feature = "optional_eip3607")]
     pub fn disable_eip3607(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = true);
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = true);
     }
 
     /// Enable [EIP-3607]. See [`Self::disable_eip3607`].
@@ -887,7 +884,7 @@ where
     /// [EIP-3607]: https://eips.ethereum.org/EIPS/eip-3607
     #[cfg(feature = "optional_eip3607")]
     pub fn enable_eip3607(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = false);
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = false);
     }
 
     /// Run a closure with [EIP-3607] disabled, then restore the previous
@@ -901,7 +898,7 @@ where
         self.disable_eip3607();
 
         let mut new = f(self);
-        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = previous);
+        new.inner.ctx.modify_cfg(|cfg| cfg.disable_eip3607 = previous);
         new
     }
 
@@ -911,7 +908,7 @@ where
     /// [EIP-1559]: https://eips.ethereum.org/EIPS/eip-1559
     #[cfg(feature = "optional_no_base_fee")]
     pub fn disable_base_fee(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_base_fee = true)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_base_fee = true)
     }
 
     /// Enable [EIP-1559] base fee checks. See [`Self::disable_base_fee`].
@@ -919,7 +916,7 @@ where
     /// [EIP-1559]: https://eips.ethereum.org/EIPS/eip-1559
     #[cfg(feature = "optional_no_base_fee")]
     pub fn enable_base_fee(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_base_fee = false)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_base_fee = false)
     }
 
     /// Run a closure with [EIP-1559] base fee checks disabled, then restore the
@@ -935,19 +932,19 @@ where
         self.disable_base_fee();
 
         let mut new = f(self);
-        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_base_fee = previous);
+        new.inner.ctx.modify_cfg(|cfg| cfg.disable_base_fee = previous);
         new
     }
 
     /// Disable nonce checks. This allows transactions to be sent with
     /// incorrect nonces, and is useful for things like system transactions.
     pub fn disable_nonce_check(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = true)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = true)
     }
 
     /// Enable nonce checks. See [`Self::disable_nonce_check`].
     pub fn enable_nonce_check(&mut self) {
-        self.inner.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = false)
+        self.inner.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = false)
     }
 
     /// Run a closure with nonce checks disabled, then restore the previous
@@ -961,7 +958,7 @@ where
         self.disable_nonce_check();
 
         let mut new = f(self);
-        new.inner.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = previous);
+        new.inner.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = previous);
         new
     }
 }
@@ -1080,7 +1077,7 @@ where
         b.fill_block(&mut self.inner);
 
         let mut this = f(self);
-        this.inner.data.ctx.set_block(previous);
+        this.inner.ctx.set_block(previous);
         this
     }
 
@@ -1100,11 +1097,11 @@ where
 
         match f(self) {
             Ok(mut evm) => {
-                evm.inner.data.ctx.set_block(previous);
+                evm.inner.ctx.set_block(previous);
                 Ok(evm)
             }
             Err(mut evm) => {
-                evm.inner.data.ctx.set_block(previous);
+                evm.inner.ctx.set_block(previous);
                 Err(evm)
             }
         }
@@ -1363,7 +1360,7 @@ where
         let previous = self.inner.tx().clone();
         t.fill_tx(&mut self.inner);
         let mut this = f(self);
-        this.inner.data.ctx.set_tx(previous);
+        this.inner.ctx.set_tx(previous);
         this
     }
 
@@ -1383,11 +1380,11 @@ where
         t.fill_tx(&mut self.inner);
         match f(self) {
             Ok(mut evm) => {
-                evm.inner.data.ctx.set_tx(previous);
+                evm.inner.ctx.set_tx(previous);
                 Ok(evm)
             }
             Err(mut evm) => {
-                evm.inner.data.ctx.set_tx(previous);
+                evm.inner.ctx.set_tx(previous);
                 Err(evm)
             }
         }
@@ -1983,7 +1980,11 @@ where
     where
         T::Return: alloy::sol_types::SolType,
     {
-        self.output().map(|output| T::abi_decode_returns(output, validate))
+        if validate {
+            return self.output().map(|output| T::abi_decode_returns_validate(output));
+        }
+
+        self.output().map(|output| T::abi_decode_returns(output))
     }
 
     /// Get the gas used by the transaction.

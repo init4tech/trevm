@@ -23,7 +23,7 @@ pub trait Tx: Send + Sync {
     where
         Self: Sized,
     {
-        evm.data.ctx.modify_tx(|tx_env| self.fill_tx_env(tx_env));
+        evm.ctx.modify_tx(|tx_env| self.fill_tx_env(tx_env));
     }
 }
 
@@ -71,7 +71,7 @@ pub trait Block: Send + Sync {
     where
         Self: Sized,
     {
-        evm.data.ctx.modify_block(|block_env| self.fill_block_env(block_env));
+        evm.ctx.modify_block(|block_env| self.fill_block_env(block_env));
     }
 
     /// Get the transaction count hint from the filler. This can be used for
@@ -134,7 +134,7 @@ pub trait Cfg: Send + Sync {
     where
         Self: Sized,
     {
-        evm.data.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
+        evm.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
     }
 }
 

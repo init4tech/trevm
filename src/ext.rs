@@ -176,6 +176,6 @@ where
     Ctx: ContextTr,
 {
     fn db_mut_ext(&mut self) -> &mut Ctx::Db {
-        self.data.ctx.db()
+        self.ctx.db()
     }
 }

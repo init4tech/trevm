@@ -108,7 +108,7 @@ fn cleanup_syscall<Db, Insp>(
     });
 
     // Restore the nonce check
-    evm.data.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = previous_nonce_check);
+    evm.ctx.modify_cfg(|cfg| cfg.disable_nonce_check = previous_nonce_check);
 
     // Remove the system caller and fees from the state
     let state = &mut result.state;
@@ -136,18 +136,18 @@ where
 
     let limit = evm.tx().gas_limit();
 
-    let block = &mut evm.data.ctx.block;
+    let block = &mut evm.ctx.block;
 
     let old_gas_limit = core::mem::replace(&mut block.gas_limit, limit);
     let old_base_fee = core::mem::take(&mut block.basefee);
-    let previous_nonce_check = std::mem::replace(&mut evm.data.ctx.cfg.disable_nonce_check, true);
+    let previous_nonce_check = std::mem::replace(&mut evm.ctx.cfg.disable_nonce_check, true);
 
     let mut result = evm.inspect_replay()?;
 
     // Cleanup the syscall.
     cleanup_syscall(evm, &mut result, syscall, old_gas_limit, old_base_fee, previous_nonce_check);
 
-    evm.data.ctx.db().commit(result.state);
+    evm.ctx.db().commit(result.state);
 
     // apply result, remove receipt from block outputs.
     Ok(result.result)

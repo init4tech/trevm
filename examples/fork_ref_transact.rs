@@ -1,7 +1,5 @@
 //! This example demonstrates how to query storage slots of a contract, using
-//! [`AlloyDB`].
-
-//! This example is currently disabled while waiting for revm @ 14.0.4
+//! [`AlloyDb`].
 
 use alloy::{
     eips::BlockId,
@@ -11,10 +9,7 @@ use alloy::{
     sol_types::SolCall,
 };
 use revm::{context::TxEnv, database::WrapDatabaseAsync};
-use trevm::{
-    revm::database::{AlloyDB, CacheDB},
-    NoopBlock, NoopCfg, TrevmBuilder, Tx,
-};
+use trevm::{db::alloy::AlloyDb, revm::database::CacheDB, NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 sol! {
     #[allow(missing_docs)]
@@ -42,7 +37,7 @@ async fn main() -> eyre::Result<()> {
     // create ethers client and wrap it in Arc<M>
     let rpc_url = "https://mainnet.infura.io/v3/c60b0bb42f8a4c6481ecd229eddaca27";
 
-    let client = ProviderBuilder::new().on_http(rpc_url.parse()?);
+    let client = ProviderBuilder::new().connect_http(rpc_url.parse()?);
 
     // ----------------------------------------------------------- //
     //             Storage slots of UniV2Pair contract             //
@@ -57,7 +52,7 @@ async fn main() -> eyre::Result<()> {
     // =========================================================== //
 
     // initialize new AlloyDB
-    let alloydb = WrapDatabaseAsync::new(AlloyDB::new(client, BlockId::default())).unwrap();
+    let alloydb = WrapDatabaseAsync::new(AlloyDb::new(client, BlockId::default())).unwrap();
 
     // initialise empty in-memory-db
     let cache_db = CacheDB::new(alloydb);
@@ -78,7 +73,7 @@ async fn main() -> eyre::Result<()> {
     let output = evm.output().expect("Execution halted");
 
     // decode bytes to reserves + ts via alloy's abi decode
-    let return_vals = getReservesCall::abi_decode_returns(output, true)?;
+    let return_vals = getReservesCall::abi_decode_returns_validate(output)?;
 
     // Print emulated getReserves() call output
     println!("Reserve0: {:#?}", return_vals.reserve0);

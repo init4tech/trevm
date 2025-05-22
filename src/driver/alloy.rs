@@ -4,7 +4,10 @@ use crate::{
     trevm_bail, trevm_ensure, trevm_try, Block, BundleDriver, DriveBundleResult,
 };
 use alloy::{
-    consensus::{Transaction, TxEip4844Variant, TxEnvelope},
+    consensus::{
+        crypto::RecoveryError, transaction::SignerRecoverable, Transaction, TxEip4844Variant,
+        TxEnvelope,
+    },
     eips::{eip2718::Decodable2718, BlockNumberOrTag},
     primitives::{bytes::Buf, keccak256, Address, Bytes, TxKind, U256},
     rpc::types::mev::{
@@ -35,7 +38,7 @@ pub enum BundleError<Db: Database> {
     /// An error occurred while decoding a transaction contained in the bundle.
     TransactionDecodingError(alloy::eips::eip2718::Eip2718Error),
     /// An error occurred while recovering the sender of a transaction.
-    TransactionSenderRecoveryError(alloy::primitives::SignatureError),
+    TransactionSenderRecoveryError(alloy::consensus::crypto::RecoveryError),
     /// An error occurred while running the EVM.
     EVMError {
         /// The error that occurred while running the EVM.
@@ -71,7 +74,7 @@ impl<Db: Database> From<alloy::eips::eip2718::Eip2718Error> for BundleError<Db> 
 
 impl<Db: Database> From<alloy::primitives::SignatureError> for BundleError<Db> {
     fn from(err: alloy::primitives::SignatureError) -> Self {
-        Self::TransactionSenderRecoveryError(err)
+        Self::TransactionSenderRecoveryError(err.into())
     }
 }
 
@@ -88,6 +91,12 @@ impl<Db: Database> std::error::Error for BundleError<Db> {
             Self::TransactionSenderRecoveryError(err) => Some(err),
             _ => None,
         }
+    }
+}
+
+impl<Db: Database> From<RecoveryError> for BundleError<Db> {
+    fn from(err: RecoveryError) -> Self {
+        Self::TransactionSenderRecoveryError(err)
     }
 }
 

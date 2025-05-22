@@ -337,7 +337,13 @@ impl Tx for alloy::rpc::types::TransactionRequest {
         *gas_priority_fee = self.max_priority_fee_per_gas;
         *blob_hashes = self.blob_versioned_hashes.clone().unwrap_or_default();
         *max_fee_per_blob_gas = self.max_fee_per_blob_gas.unwrap_or_default();
-        *authorization_list = self.authorization_list.clone().unwrap_or_default();
+        *authorization_list = self
+            .authorization_list
+            .iter()
+            .flatten()
+            .cloned()
+            .map(revm::context::either::Either::Left)
+            .collect();
     }
 }
 
