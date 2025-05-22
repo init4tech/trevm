@@ -18,6 +18,7 @@ use revm::{
         Block as _, BlockEnv, Cfg as _, ContextSetters, ContextTr, Transaction as _, TxEnv,
     },
     database::{states::bundle_state::BundleRetention, BundleState, TryDatabaseCommit},
+    handler::EthPrecompiles,
     inspector::NoOpInspector,
     interpreter::{gas::calculate_initial_tx_gas_for_tx, instructions::block_info},
     primitives::{hardfork::SpecId, TxKind},
@@ -236,6 +237,28 @@ where
         F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
         self.with_opcode_override(DIFFICULTY, crate::helpers::forbidden, f)
+    }
+
+    /// Set the precompiles for the EVM. This will replace the current
+    /// precompiles with the provided ones.
+    pub fn override_precompiles(&mut self, precompiles: EthPrecompiles) -> EthPrecompiles {
+        std::mem::replace(&mut self.inner.precompiles, precompiles)
+    }
+
+    /// Run a closure with a different set of precompiles, then restore the
+    /// previous setting.
+    pub fn with_precompiles<F, NewState>(
+        mut self,
+        precompiles: EthPrecompiles,
+        f: F,
+    ) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        let old = self.override_precompiles(precompiles);
+        let mut this = f(self);
+        this.override_precompiles(old);
+        this
     }
 }
 
