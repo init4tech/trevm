@@ -1,11 +1,12 @@
-#![cfg(feature = "alloydb")]
-
 pub use alloy::eips::BlockId;
-use alloy::{primitives::{StorageValue, U256}, providers::{
-    network::{primitives::HeaderResponse, BlockResponse},
-    Network, Provider,
-}};
 use alloy::transports::TransportError;
+use alloy::{
+    primitives::{StorageValue, U256},
+    providers::{
+        network::{primitives::HeaderResponse, BlockResponse},
+        Network, Provider,
+    },
+};
 use core::error::Error;
 use revm::database_interface::{async_db::DatabaseAsyncRef, DBErrorMarker};
 use revm::primitives::{Address, B256};
@@ -53,15 +54,11 @@ pub struct AlloyDB<N: Network, P: Provider<N>> {
 impl<N: Network, P: Provider<N>> AlloyDB<N, P> {
     /// Creates a new AlloyDB instance, with a [Provider] and a block.
     pub fn new(provider: P, block_number: BlockId) -> Self {
-        Self {
-            provider,
-            block_number,
-            _marker: core::marker::PhantomData,
-        }
+        Self { provider, block_number, _marker: core::marker::PhantomData }
     }
 
     /// Sets the block number on which the queries will be based on.
-    pub fn set_block_number(&mut self, block_number: BlockId) {
+    pub const fn set_block_number(&mut self, block_number: BlockId) {
         self.block_number = block_number;
     }
 }
@@ -70,18 +67,9 @@ impl<N: Network, P: Provider<N>> DatabaseAsyncRef for AlloyDB<N, P> {
     type Error = DBTransportError;
 
     async fn basic_async_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        let nonce = self
-            .provider
-            .get_transaction_count(address)
-            .block_id(self.block_number);
-        let balance = self
-            .provider
-            .get_balance(address)
-            .block_id(self.block_number);
-        let code = self
-            .provider
-            .get_code_at(address)
-            .block_id(self.block_number);
+        let nonce = self.provider.get_transaction_count(address).block_id(self.block_number);
+        let balance = self.provider.get_balance(address).block_id(self.block_number);
+        let code = self.provider.get_code_at(address).block_id(self.block_number);
 
         let (nonce, balance, code) = tokio::join!(nonce, balance, code,);
 
@@ -113,11 +101,7 @@ impl<N: Network, P: Provider<N>> DatabaseAsyncRef for AlloyDB<N, P> {
         address: Address,
         index: StorageKey,
     ) -> Result<StorageValue, Self::Error> {
-        Ok(self
-            .provider
-            .get_storage_at(address, index)
-            .block_id(self.block_number)
-            .await?)
+        Ok(self.provider.get_storage_at(address, index).block_id(self.block_number).await?)
     }
 }
 
@@ -131,17 +115,13 @@ mod tests {
     #[ignore = "flaky RPC"]
     fn can_get_basic() {
         let client = ProviderBuilder::new().connect_http(
-            "https://mainnet.infura.io/v3/c60b0bb42f8a4c6481ecd229eddaca27"
-                .parse()
-                .unwrap(),
+            "https://mainnet.infura.io/v3/c60b0bb42f8a4c6481ecd229eddaca27".parse().unwrap(),
         );
         let alloydb = AlloyDB::new(client, BlockId::from(16148323));
         let wrapped_alloydb = WrapDatabaseAsync::new(alloydb).unwrap();
 
         // ETH/USDT pair on Uniswap V2
-        let address: Address = "0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852"
-            .parse()
-            .unwrap();
+        let address: Address = "0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852".parse().unwrap();
 
         let acc_info = wrapped_alloydb.basic_ref(address).unwrap().unwrap();
         assert!(acc_info.exists());
@@ -152,7 +132,7 @@ mod tests {
 // contained in revm.
 // <https://github.com/bluealloy/revm>
 // The original license is included below:
-// 
+//
 // MIT License
 // Copyright (c) 2021-2025 draganrakita
 // Permission is hereby granted, free of charge, to any person obtaining a copy

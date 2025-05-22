@@ -9,11 +9,7 @@ use alloy::{
     sol_types::SolCall,
 };
 use revm::{context::TxEnv, database::WrapDatabaseAsync};
-use trevm::{
-    db::alloy::AlloyDB,
-    revm::database::CacheDB,
-    NoopBlock, NoopCfg, TrevmBuilder, Tx,
-};
+use trevm::{db::alloy::AlloyDB, revm::database::CacheDB, NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 sol! {
     #[allow(missing_docs)]
