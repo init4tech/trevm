@@ -195,13 +195,15 @@ where
         self.inner.instruction.insert_instruction(DIFFICULTY, control::unknown);
     }
 
-    /// Enable the prevrandao opcode.
+    /// Enable the prevrandao opcode. If the prevrandao opcode was not
+    /// previously disabled or replaced, this will have no effect on behavior.
     pub fn enable_prevrandao(&mut self) {
         self.inner.instruction.insert_instruction(DIFFICULTY, block_info::difficulty);
     }
 
     /// Run some code with the prevrandao opcode disabled, then restore the
-    /// previous setting.
+    /// previous setting. This is useful for block simulation, where the
+    /// prevrandao opcode may produce incorrect results.
     pub fn without_prevrandao<F, NewState>(mut self, f: F) -> Trevm<Db, Insp, NewState>
     where
         F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
