@@ -20,7 +20,7 @@ pub type Instructions<Db> = EthInstructions<EthInterpreter, Ctx<Db>>;
 /// The handler type for an EVM opcode.
 pub type Instruction<Db> = revm::interpreter::Instruction<EthInterpreter, Ctx<Db>>;
 
-/// An [`Instruction`] that sets a [`ContextError`] in the [`Ctx`]. whenever it
+/// An [`Instruction`] that sets a [`ContextError`] in the [`Ctx`] whenever it
 /// is executed.
 pub fn forbidden<Db: Database, Int: InterpreterTypes>(
     _interpreter: &mut Interpreter<Int>,
