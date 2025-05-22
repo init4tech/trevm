@@ -31,7 +31,7 @@ name = "basic_transact"
 
 [[example]]
 name = "fork_ref_transact"
-required-features = ["alloydb"]
+required-features = ["alloy-db"]
 
 [dependencies]
 alloy = { version = "1.0.5", default-features = false, features = [
@@ -76,8 +76,7 @@ default = [
     "revm/secp256k1",
 ]
 
-alloydb = ["dep:tokio"]
-
+alloy-db = ["dep:tokio"]
 
 call = ["optional_eip3607", "optional_no_base_fee"]
 

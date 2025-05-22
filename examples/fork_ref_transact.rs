@@ -9,7 +9,7 @@ use alloy::{
     sol_types::SolCall,
 };
 use revm::{context::TxEnv, database::WrapDatabaseAsync};
-use trevm::{db::alloy::AlloyDB, revm::database::CacheDB, NoopBlock, NoopCfg, TrevmBuilder, Tx};
+use trevm::{db::alloy::AlloyDb, revm::database::CacheDB, NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 sol! {
     #[allow(missing_docs)]
@@ -52,7 +52,7 @@ async fn main() -> eyre::Result<()> {
     // =========================================================== //
 
     // initialize new AlloyDB
-    let alloydb = WrapDatabaseAsync::new(AlloyDB::new(client, BlockId::default())).unwrap();
+    let alloydb = WrapDatabaseAsync::new(AlloyDb::new(client, BlockId::default())).unwrap();
 
     // initialise empty in-memory-db
     let cache_db = CacheDB::new(alloydb);

@@ -10,6 +10,6 @@ pub use traits::{ArcUpgradeError, CachingDb, StateAcc, TryCachingDb, TryStateAcc
 /// read. Intended to wrap some other caching database.
 pub mod cow;
 
-#[cfg(feature = "alloydb")]
+#[cfg(feature = "alloy-db")]
 /// Alloy-powered revm Database implementation that fetches data over the network.
 pub mod alloy;

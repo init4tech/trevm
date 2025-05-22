@@ -1,17 +1,18 @@
-pub use alloy::eips::BlockId;
-use alloy::transports::TransportError;
 use alloy::{
+    eips::BlockId,
     primitives::{StorageValue, U256},
     providers::{
         network::{primitives::HeaderResponse, BlockResponse},
         Network, Provider,
     },
+    transports::TransportError,
 };
 use core::error::Error;
-use revm::database_interface::{async_db::DatabaseAsyncRef, DBErrorMarker};
-use revm::primitives::{Address, B256};
-
-use revm::state::{AccountInfo, Bytecode};
+use revm::{
+    database_interface::{async_db::DatabaseAsyncRef, DBErrorMarker},
+    primitives::{Address, B256},
+    state::{AccountInfo, Bytecode},
+};
 use std::fmt::Display;
 
 /// A type alias for the storage key used in the database.
@@ -43,7 +44,7 @@ impl From<TransportError> for DBTransportError {
 ///
 /// When accessing the database, it'll use the given provider to fetch the corresponding account's data.
 #[derive(Debug)]
-pub struct AlloyDB<N: Network, P: Provider<N>> {
+pub struct AlloyDb<N: Network, P: Provider<N>> {
     /// The provider to fetch the data from.
     provider: P,
     /// The block number on which the queries will be based on.
@@ -51,7 +52,7 @@ pub struct AlloyDB<N: Network, P: Provider<N>> {
     _marker: core::marker::PhantomData<fn() -> N>,
 }
 
-impl<N: Network, P: Provider<N>> AlloyDB<N, P> {
+impl<N: Network, P: Provider<N>> AlloyDb<N, P> {
     /// Creates a new AlloyDB instance, with a [Provider] and a block.
     pub fn new(provider: P, block_number: BlockId) -> Self {
         Self { provider, block_number, _marker: core::marker::PhantomData }
@@ -63,7 +64,7 @@ impl<N: Network, P: Provider<N>> AlloyDB<N, P> {
     }
 }
 
-impl<N: Network, P: Provider<N>> DatabaseAsyncRef for AlloyDB<N, P> {
+impl<N: Network, P: Provider<N>> DatabaseAsyncRef for AlloyDb<N, P> {
     type Error = DBTransportError;
 
     async fn basic_async_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -117,7 +118,7 @@ mod tests {
         let client = ProviderBuilder::new().connect_http(
             "https://mainnet.infura.io/v3/c60b0bb42f8a4c6481ecd229eddaca27".parse().unwrap(),
         );
-        let alloydb = AlloyDB::new(client, BlockId::from(16148323));
+        let alloydb = AlloyDb::new(client, BlockId::from(16148323));
         let wrapped_alloydb = WrapDatabaseAsync::new(alloydb).unwrap();
 
         // ETH/USDT pair on Uniswap V2
