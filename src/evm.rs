@@ -19,10 +19,7 @@ use revm::{
     },
     database::{states::bundle_state::BundleRetention, BundleState, TryDatabaseCommit},
     inspector::NoOpInspector,
-    interpreter::{
-        gas::calculate_initial_tx_gas_for_tx,
-        instructions::{block_info, control},
-    },
+    interpreter::{gas::calculate_initial_tx_gas_for_tx, instructions::block_info},
     primitives::{hardfork::SpecId, TxKind},
     state::{AccountInfo, Bytecode, EvmState},
     Database, DatabaseCommit, DatabaseRef, InspectEvm, Inspector,
@@ -195,9 +192,9 @@ where
     }
 
     /// Disable an opcode by replacing it with unknown opcode behavior. This is
-    /// a shortcut for [`Self::override_opcode`] with [`control::unknown`].
+    /// a shortcut for [`Self::override_opcode`] with [`crate::helpers::forbidden`].
     pub fn disable_opcode(&mut self, opcode: u8) -> Instruction<Db> {
-        self.override_opcode(opcode, control::unknown)
+        self.override_opcode(opcode, crate::helpers::forbidden)
     }
 
     /// Run some closure with an opcode override, then restore the previous
@@ -238,7 +235,7 @@ where
     where
         F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
-        self.with_opcode_override(DIFFICULTY, control::unknown, f)
+        self.with_opcode_override(DIFFICULTY, crate::helpers::forbidden, f)
     }
 }
 

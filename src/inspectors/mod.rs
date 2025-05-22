@@ -1,3 +1,6 @@
+mod layer;
+pub use layer::Layered;
+
 mod timeout;
 pub use timeout::TimeLimit;
 
@@ -6,9 +9,6 @@ pub use set::InspectorSet;
 
 mod spanning;
 pub use spanning::SpanningInspector;
-
-mod layer;
-pub use layer::Layered;
 
 #[cfg(test)]
 mod test {
