@@ -79,7 +79,7 @@ impl TimeLimit {
 macro_rules! check_timeout {
     ($self:ident, $ctx:ident) => {
         if $self.has_elapsed() {
-            $ctx.error = Err(ContextError::Custom("forbidden opcode".to_string()));
+            $ctx.error = Err(ContextError::Custom("timeout during evm execution".to_string()));
         }
     };
 }
