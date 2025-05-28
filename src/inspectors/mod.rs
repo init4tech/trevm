@@ -18,7 +18,7 @@ mod test {
     use std::time::Duration;
 
     #[test]
-    fn test() {
+    fn test_timeout() {
         let inspector =
             Layered::new(TimeLimit::new(Duration::from_micros(10)), SpanningInspector::at_info())
                 .wrap_around(TestInspector::default());
@@ -31,7 +31,9 @@ mod test {
             .fill_cfg(&NoopCfg)
             .fill_block(&NoopBlock);
 
-        trevm.apply_eip4788(B256::repeat_byte(0xaa)).unwrap();
+        let err = trevm.apply_eip4788(B256::repeat_byte(0xaa)).unwrap_err();
+        assert!(matches!(err, revm::context::result::EVMError::Custom(_)));
+        assert!(format!("{err}").contains("timeout during evm execution"));
 
         assert!(trevm.inner_mut_unchecked().inspector().outer().outer().has_elapsed());
     }

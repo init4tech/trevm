@@ -1,30 +1,13 @@
+use crate::helpers::Ctx;
 use revm::{
+    context_interface::context::ContextError,
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Gas,
-        InstructionResult, Interpreter, InterpreterResult, InterpreterTypes,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
+        InterpreterTypes,
     },
-    primitives::Bytes,
-    Inspector,
+    Database, Inspector,
 };
 use std::time::{Duration, Instant};
-
-const CALL_TIMEOUT: CallOutcome = CallOutcome {
-    result: InterpreterResult {
-        result: InstructionResult::CallTooDeep,
-        output: Bytes::new(),
-        gas: Gas::new_spent(0),
-    },
-    memory_offset: 0..0,
-};
-
-const CREATE_TIMEOUT: CreateOutcome = CreateOutcome {
-    result: InterpreterResult {
-        result: InstructionResult::CallTooDeep,
-        output: Bytes::new(),
-        gas: Gas::new_spent(0),
-    },
-    address: None,
-};
 
 /// A revm [`Inspector`] that limits wallclock time spent on execution.
 ///
@@ -41,14 +24,8 @@ const CREATE_TIMEOUT: CreateOutcome = CreateOutcome {
 ///     - any invalid opcode
 ///
 /// When execution is terminated by the timer, it will result in a
-/// [`InstructionResult::CallTooDeep`]. This is somewhat unintutive. `revm`
-/// uses the [`InstructionResult`] enum to represent possible outcomes of a
-/// opcode. It requires that the inspector's outcome is a valid
-/// [`InstructionResult`], but does not provide a way to represent a custom
-/// outcome. This means that the inspector must overload an existing outcome.
-/// `CallTooDeep` is used here because it is effectively unreachable in normal
-/// `evm` execution due to [EIP-150] call gas forwarding rules, and therefore
-/// overloading it is unlikely to cause issues.
+/// [`ContextError::Custom`], which will be propagated as an
+/// [`EVMError::Custom`] to the caller of the EVM interpreter.
 ///
 /// ## Usage Note
 ///
@@ -63,6 +40,7 @@ const CREATE_TIMEOUT: CreateOutcome = CreateOutcome {
 /// discarded.
 ///
 /// [EIP-150]: https://eips.ethereum.org/EIPS/eip-150
+/// [`EVMError::Custom`]: revm::context::result::EVMError::Custom
 #[derive(Debug, Clone, Copy)]
 pub struct TimeLimit {
     duration: Duration,
@@ -93,63 +71,60 @@ impl TimeLimit {
     }
 }
 
-impl<Ctx, Int: InterpreterTypes> Inspector<Ctx, Int> for TimeLimit {
-    fn initialize_interp(&mut self, _interp: &mut Interpreter<Int>, _context: &mut Ctx) {
+macro_rules! check_timeout {
+    ($self:ident, $ctx:ident) => {
+        if $self.has_elapsed() {
+            $ctx.error = Err(ContextError::Custom("timeout during evm execution".to_string()));
+        }
+    };
+}
+
+impl<Db: Database, Int: InterpreterTypes> Inspector<Ctx<Db>, Int> for TimeLimit {
+    fn initialize_interp(&mut self, _interp: &mut Interpreter<Int>, _ctx: &mut Ctx<Db>) {
         self.reset();
     }
 
-    fn call(&mut self, _context: &mut Ctx, _inputs: &mut CallInputs) -> Option<CallOutcome> {
-        if self.has_elapsed() {
-            return Some(CALL_TIMEOUT);
-        }
+    fn call(&mut self, ctx: &mut Ctx<Db>, _inputs: &mut CallInputs) -> Option<CallOutcome> {
+        check_timeout!(self, ctx);
 
         None
     }
 
-    fn call_end(&mut self, _context: &mut Ctx, _inputs: &CallInputs, outcome: &mut CallOutcome) {
-        if self.has_elapsed() {
-            *outcome = CALL_TIMEOUT;
-        }
+    fn call_end(&mut self, ctx: &mut Ctx<Db>, _inputs: &CallInputs, _outcome: &mut CallOutcome) {
+        check_timeout!(self, ctx);
     }
 
-    fn create(&mut self, _context: &mut Ctx, _inputs: &mut CreateInputs) -> Option<CreateOutcome> {
-        if self.has_elapsed() {
-            return Some(CREATE_TIMEOUT);
-        }
+    fn create(&mut self, ctx: &mut Ctx<Db>, _inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        check_timeout!(self, ctx);
+
         None
     }
 
     fn create_end(
         &mut self,
-        _context: &mut Ctx,
+        ctx: &mut Ctx<Db>,
         _inputs: &CreateInputs,
-        outcome: &mut CreateOutcome,
+        _outcome: &mut CreateOutcome,
     ) {
-        if self.has_elapsed() {
-            *outcome = CREATE_TIMEOUT;
-        }
+        check_timeout!(self, ctx);
     }
 
     fn eofcreate(
         &mut self,
-        _context: &mut Ctx,
+        ctx: &mut Ctx<Db>,
         _inputs: &mut EOFCreateInputs,
     ) -> Option<CreateOutcome> {
-        if self.has_elapsed() {
-            return Some(CREATE_TIMEOUT);
-        }
+        check_timeout!(self, ctx);
 
         None
     }
 
     fn eofcreate_end(
         &mut self,
-        _context: &mut Ctx,
+        ctx: &mut Ctx<Db>,
         _inputs: &EOFCreateInputs,
-        outcome: &mut CreateOutcome,
+        _outcome: &mut CreateOutcome,
     ) {
-        if self.has_elapsed() {
-            *outcome = CREATE_TIMEOUT;
-        }
+        check_timeout!(self, ctx);
     }
 }
