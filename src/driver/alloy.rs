@@ -54,11 +54,11 @@ impl<Db: Database> core::fmt::Display for BundleError<Db> {
             Self::BundleEmpty => write!(f, "bundle has no transactions"),
             Self::Eip4844BlobGasExceeded => write!(f, "max blob gas limit exceeded"),
             Self::UnsupportedTransactionType => write!(f, "unsupported transaction type"),
-            Self::TransactionDecodingError(_) => write!(f, "transaction decoding error"),
-            Self::TransactionSenderRecoveryError(_) => {
-                write!(f, "transaction sender recovery error")
+            Self::TransactionDecodingError(err) => write!(f, "transaction decoding error: {}", err),
+            Self::TransactionSenderRecoveryError(err) => {
+                write!(f, "transaction sender recovery error: {}", err)
             }
-            Self::EVMError { inner: _ } => write!(f, "internal EVM Error"),
+            Self::EVMError { inner } => write!(f, "internal EVM error: {}", inner),
         }
     }
 }
