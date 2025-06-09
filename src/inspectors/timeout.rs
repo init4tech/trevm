@@ -57,7 +57,9 @@ impl TimeLimit {
 
     /// Check if the timeout has been reached.
     pub fn has_elapsed(&self) -> bool {
-        self.execution_start.elapsed() >= self.duration
+        let elapsed = self.execution_start.elapsed();
+        println!("elapsed: {elapsed:?}, duration: {}ms", self.duration.as_millis());
+        elapsed >= self.duration
     }
 
     /// Set the execution start time to [`Instant::now`]. This is invoked during [`Inspector::initialize_interp`].
