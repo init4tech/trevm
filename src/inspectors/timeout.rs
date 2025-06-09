@@ -85,16 +85,19 @@ impl<Db: Database, Int: InterpreterTypes> Inspector<Ctx<Db>, Int> for TimeLimit 
     }
 
     fn call(&mut self, ctx: &mut Ctx<Db>, _inputs: &mut CallInputs) -> Option<CallOutcome> {
+        println!("call");
         check_timeout!(self, ctx);
 
         None
     }
 
     fn call_end(&mut self, ctx: &mut Ctx<Db>, _inputs: &CallInputs, _outcome: &mut CallOutcome) {
+        println!("call_end");
         check_timeout!(self, ctx);
     }
 
     fn create(&mut self, ctx: &mut Ctx<Db>, _inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        println!("create");
         check_timeout!(self, ctx);
 
         None
@@ -106,6 +109,7 @@ impl<Db: Database, Int: InterpreterTypes> Inspector<Ctx<Db>, Int> for TimeLimit 
         _inputs: &CreateInputs,
         _outcome: &mut CreateOutcome,
     ) {
+        println!("create_end");
         check_timeout!(self, ctx);
     }
 
@@ -114,6 +118,7 @@ impl<Db: Database, Int: InterpreterTypes> Inspector<Ctx<Db>, Int> for TimeLimit 
         ctx: &mut Ctx<Db>,
         _inputs: &mut EOFCreateInputs,
     ) -> Option<CreateOutcome> {
+        println!("eofcreate");
         check_timeout!(self, ctx);
 
         None
@@ -125,6 +130,7 @@ impl<Db: Database, Int: InterpreterTypes> Inspector<Ctx<Db>, Int> for TimeLimit 
         _inputs: &EOFCreateInputs,
         _outcome: &mut CreateOutcome,
     ) {
+        println!("eofcreate_end");
         check_timeout!(self, ctx);
     }
 }
