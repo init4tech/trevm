@@ -223,6 +223,47 @@ impl Tx for Signed<alloy::consensus::TxEip4844Variant> {
     }
 }
 
+impl Tx for Signed<alloy::consensus::TxEip7702> {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        let TxEnv {
+            tx_type,
+            caller,
+            gas_limit,
+            gas_price,
+            kind,
+            value,
+            data,
+            nonce,
+            chain_id,
+            access_list,
+            gas_priority_fee,
+            blob_hashes,
+            max_fee_per_blob_gas,
+            authorization_list,
+        } = tx_env;
+        *tx_type = TxType::Eip7702 as u8;
+        *caller = self.recover_signer().unwrap();
+        *gas_limit = self.tx().gas_limit;
+        *gas_price = self.tx().max_fee_per_gas;
+        *kind = self.tx().to.into();
+        *value = self.tx().value;
+        *data = self.tx().input.clone();
+        *nonce = self.tx().nonce;
+        *chain_id = Some(self.tx().chain_id);
+        access_list.clone_from(&self.tx().access_list);
+        *gas_priority_fee = Some(self.tx().max_priority_fee_per_gas);
+        blob_hashes.clear();
+        *max_fee_per_blob_gas = 0;
+        *authorization_list = self
+            .tx()
+            .authorization_list
+            .iter()
+            .cloned()
+            .map(revm::context::either::Either::Left)
+            .collect();
+    }
+}
+
 impl Tx for alloy::consensus::TxEnvelope {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         match self {
@@ -230,7 +271,7 @@ impl Tx for alloy::consensus::TxEnvelope {
             Self::Eip2930(t) => t.fill_tx_env(tx_env),
             Self::Eip1559(t) => t.fill_tx_env(tx_env),
             Self::Eip4844(t) => t.fill_tx_env(tx_env),
-            _ => panic!("Unsupported transaction type"),
+            Self::Eip7702(t) => t.fill_tx_env(tx_env),
         }
     }
 }
