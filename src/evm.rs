@@ -1801,7 +1801,7 @@ where
     pub fn estimate_gas(mut self) -> Result<(crate::EstimationResult, Self), EvmErrored<Db, Insp>> {
         use tracing::{debug, enabled};
 
-        if let Some(est) = crate::trevm_try!(self.estimate_gas_simple_transfer(), self) {
+        if let Some(est) = trevm_try!(self.estimate_gas_simple_transfer(), self) {
             return Ok((crate::EstimationResult::basic_transfer_success(est), self));
         }
 
