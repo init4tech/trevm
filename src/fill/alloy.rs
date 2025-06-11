@@ -327,11 +327,12 @@ impl Tx for alloy::rpc::types::TransactionRequest {
         // intend that to mean "as much as possible"
         *tx_type = self.transaction_type.unwrap_or(TxType::Eip1559 as u8);
         *gas_limit = self.gas.unwrap_or(u64::MAX);
-        *gas_price = self.gas_price.unwrap_or_default();
+        *gas_price =
+            self.gas_price.unwrap_or_default().max(self.max_fee_per_gas.unwrap_or_default());
         *kind = self.to.unwrap_or_default();
         *value = self.value.unwrap_or_default();
         *data = self.input.input().cloned().unwrap_or_default();
-        *nonce = self.nonce.unwrap_or_default(); // TODO: IS THIS CORRECT?
+        *nonce = self.nonce.unwrap_or_default();
         *chain_id = self.chain_id;
         *access_list = self.access_list.clone().unwrap_or_default();
         *gas_priority_fee = self.max_priority_fee_per_gas;
