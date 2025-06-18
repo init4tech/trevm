@@ -95,8 +95,8 @@ impl SearchRange {
 pub enum EstimationResult {
     /// The estimation was successful, the result is the gas estimation.
     Success {
-        /// The gas estimation.
-        estimation: u64,
+        /// The input estimation limit.
+        limit: u64,
         /// The amount of gas that was refunded to the caller as unused.
         refund: u64,
         /// The amount of gas used in the execution.
@@ -106,6 +106,8 @@ pub enum EstimationResult {
     },
     /// Estimation failed due to contract revert.
     Revert {
+        /// The input estimation limit.
+        limit: u64,
         /// The revert reason.
         reason: Bytes,
         /// The amount of gas used in the execution.
@@ -113,6 +115,8 @@ pub enum EstimationResult {
     },
     /// The estimation failed due to EVM halt.
     Halt {
+        /// The input estimation limit.
+        limit: u64,
         /// The halt reason.
         reason: HaltReason,
         /// The amount of gas used in the execution
@@ -123,18 +127,17 @@ pub enum EstimationResult {
 impl core::fmt::Display for EstimationResult {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Success { estimation, refund, gas_used, .. } => {
+            Self::Success { limit, refund, gas_used, .. } => {
                 write!(
                     f,
-                    "Success {{ estimation: {}, refund: {}, gas_used: {}, .. }}",
-                    estimation, refund, gas_used
+                    "Success {{ gas_limit: {limit}, refund: {refund}, gas_used: {gas_used}, .. }}",
                 )
             }
-            Self::Revert { gas_used, .. } => {
-                write!(f, "Revert {{ gas_used: {}, .. }}", gas_used)
+            Self::Revert { limit, gas_used, .. } => {
+                write!(f, "Revert {{ gas_limit: {limit}, gas_used: {gas_used}, .. }}")
             }
-            Self::Halt { reason, gas_used } => {
-                write!(f, "Halt {{ reason: {:?}, gas_used: {} }}", reason, gas_used)
+            Self::Halt { limit, reason, gas_used } => {
+                write!(f, "Halt {{ gas_limit: {limit}, reason: {reason:?}, gas_used: {gas_used} }}")
             }
         }
     }
@@ -146,16 +149,16 @@ impl EstimationResult {
     pub fn from_limit_and_execution_result(limit: u64, value: &ExecutionResult) -> Self {
         match value {
             ExecutionResult::Success { gas_used, output, gas_refunded, .. } => Self::Success {
-                estimation: limit,
+                limit,
                 refund: *gas_refunded,
                 gas_used: *gas_used,
                 output: output.clone(),
             },
             ExecutionResult::Revert { output, gas_used } => {
-                Self::Revert { reason: output.clone(), gas_used: *gas_used }
+                Self::Revert { limit, reason: output.clone(), gas_used: *gas_used }
             }
             ExecutionResult::Halt { reason, gas_used } => {
-                Self::Halt { reason: *reason, gas_used: *gas_used }
+                Self::Halt { limit, reason: *reason, gas_used: *gas_used }
             }
         }
     }
@@ -163,7 +166,7 @@ impl EstimationResult {
     /// Create a successful estimation result with a gas estimation of 21000.
     pub const fn basic_transfer_success(estimation: u64) -> Self {
         Self::Success {
-            estimation,
+            limit: estimation,
             refund: 0,
             gas_used: estimation,
             output: Output::Call(Bytes::new()),
@@ -180,11 +183,13 @@ impl EstimationResult {
         !self.is_success()
     }
 
-    /// Get the gas estimation, if the execution was successful.
-    pub const fn gas_estimation(&self) -> Option<u64> {
+    /// Get the gas limit that was set in the EVM when the estimation was
+    /// produced.
+    pub const fn limit(&self) -> u64 {
         match self {
-            Self::Success { estimation, .. } => Some(*estimation),
-            _ => None,
+            Self::Success { limit, .. } => *limit,
+            Self::Revert { limit, .. } => *limit,
+            Self::Halt { limit, .. } => *limit,
         }
     }
 
@@ -242,13 +247,12 @@ impl EstimationResult {
     /// Adjust the binary search range based on the estimation outcome.
     pub(crate) const fn adjust_binary_search_range(
         &self,
-        limit: u64,
         range: &mut SearchRange,
     ) -> Result<(), Self> {
         match self {
-            Self::Success { .. } => range.set_max(limit),
-            Self::Revert { .. } => range.set_min(limit),
-            Self::Halt { reason, gas_used } => {
+            Self::Success { limit, .. } => range.set_max(*limit),
+            Self::Revert { limit, .. } => range.set_min(*limit),
+            Self::Halt { limit, reason, gas_used } => {
                 // Both `OutOfGas` and `InvalidEFOpcode` can occur dynamically
                 // if the gas left is too low. Treat this as an out of gas
                 // condition, knowing that the call succeeds with a
@@ -257,9 +261,9 @@ impl EstimationResult {
                 // Common usage of invalid opcode in OpenZeppelin:
                 // <https://github.com/OpenZeppelin/openzeppelin-contracts/blob/94697be8a3f0dfcd95dfb13ffbd39b5973f5c65d/contracts/metatx/ERC2771Forwarder.sol#L360-L367>
                 if matches!(reason, HaltReason::OutOfGas(_) | HaltReason::InvalidFEOpcode) {
-                    range.set_min(limit);
+                    range.set_min(*limit);
                 } else {
-                    return Err(Self::Halt { reason: *reason, gas_used: *gas_used });
+                    return Err(Self::Halt { limit: *limit, reason: *reason, gas_used: *gas_used });
                 }
             }
         }
