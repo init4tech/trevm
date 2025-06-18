@@ -1799,7 +1799,7 @@ where
     /// [`MIN_TRANSACTION_GAS`]: crate::MIN_TRANSACTION_GAS
     #[cfg(feature = "estimate_gas")]
     pub fn estimate_gas(mut self) -> Result<(crate::EstimationResult, Self), EvmErrored<Db, Insp>> {
-        use tracing::{debug, enabled};
+        use tracing::{debug, enabled, trace};
 
         if let Some(est) = trevm_try!(self.estimate_gas_simple_transfer(), self) {
             return Ok((crate::EstimationResult::basic_transfer_success(est), self));
@@ -1814,13 +1814,15 @@ where
             crate::est::SearchRange::new(crate::MIN_TRANSACTION_GAS, initial_limit);
 
         let span = tracing::debug_span!(
-            "estimate_gas",
+            "Trevm::estimate_gas",
             start_min = search_range.min(),
             start_max = search_range.max(),
-            tx = "omitted",
         );
         if enabled!(tracing::Level::TRACE) {
             span.record("tx", format!("{:?}", &self.tx()));
+            span.record("block", format!("{:?}", &self.block()));
+        } else {
+            span.record("tx", "omitted. Use TRACE for details");
         }
         let _e = span.enter();
 
@@ -1834,7 +1836,7 @@ where
         // Run an estimate with the max gas limit.
         // NB: we declare these mut as we re-use the binding throughout the
         // function.
-        debug!(gas_limit = search_range.max(), "running optimistic estimate");
+        debug!(gas_limit = self.gas_limit(), "running optimistic estimate");
         let (mut estimate, mut trevm) = self.run_estimate(&search_range.max().into())?;
 
         // If it failed, no amount of gas is likely to work, so we shortcut
@@ -1843,10 +1845,11 @@ where
             debug!(%estimate, "optimistic estimate failed");
             return Ok((estimate, trevm));
         }
+        trace!(%estimate, "optimistic estimate succeeded");
 
         // Now we know that it succeeds at _some_ gas limit. We can now binary
         // search.
-        let mut gas_used = estimate.gas_estimation().expect("checked is_failure");
+        let mut gas_used = estimate.gas_used();
         let gas_refunded = estimate.gas_refunded().expect("checked is_failure");
 
         // NB: if we've made it this far it's very unlikely that `gas_used` is
@@ -1862,6 +1865,7 @@ where
         // frame can forward only 63/64 of the gas it has when it makes a new
         // frame.
         let mut needle = gas_used + gas_refunded + revm::interpreter::gas::CALL_STIPEND * 64 / 63;
+
         // If the first search is outside the range, we don't need to try it.
         if search_range.contains(needle) {
             estimate_and_adjust!(estimate, trevm, needle, search_range);
