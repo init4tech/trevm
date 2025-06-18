@@ -46,12 +46,17 @@ macro_rules! estimate_and_adjust {
         ::tracing::trace!(
             estimate = %$est,
             gas_limit = $gas_limit,
-            range = %$range,
+            max = %$range.max(),
+            min = %$range.min(),
             "running gas estimate call"
         );
 
         ($est, $trevm) = $trevm.run_estimate(&$gas_limit.into())?;
         if let Err(e) = $est.adjust_binary_search_range($gas_limit, &mut $range) {
+            ::tracing::trace!(
+                %e,
+                "error adjusting binary search range"
+            );
             return Ok((e, $trevm));
         }
     };
