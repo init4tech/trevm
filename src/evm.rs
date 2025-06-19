@@ -1729,6 +1729,8 @@ where
         self,
         filler: &crate::fillers::GasEstimationFiller,
     ) -> Result<(crate::EstimationResult, Self), EvmErrored<Db, Insp>> {
+        use tracing::trace;
+
         let mut estimation = std::mem::MaybeUninit::uninit();
 
         let this = self.try_with_estimate_gas_filler(filler, |this| match this.run() {
@@ -1744,6 +1746,7 @@ where
         // SAFETY: if we did not shortcut return, then estimation was
         // definitely written
         Ok((unsafe { estimation.assume_init() }, this))
+            .inspect(|(est, _)| trace!(?est, "gas estimation result",))
     }
 
     /// Implements gas estimation. This will output an estimate of the minimum
@@ -1848,7 +1851,10 @@ where
         trace!(%estimate, "optimistic estimate succeeded");
 
         // Now we know that it succeeds at _some_ gas limit. We can now binary
-        // search.
+        // search. We start by recording the initial best estimate. We'll update
+        // this best-estimate as we go inside the `estimate_and_adjust` macro
+        // invocations.
+        let mut best = estimate.clone();
         let mut gas_used = estimate.gas_used();
         let gas_refunded = estimate.gas_refunded().expect("checked is_failure");
 
@@ -1868,7 +1874,7 @@ where
 
         // If the first search is outside the range, we don't need to try it.
         if search_range.contains(needle) {
-            estimate_and_adjust!(estimate, trevm, needle, search_range);
+            estimate_and_adjust!(best, estimate, trevm, needle, search_range);
             // NB: `estimate` is rebound in the macro, so do not move this line
             // up.
             gas_used = estimate.gas_used();
@@ -1885,11 +1891,11 @@ where
         // highest gas limit)
         // <https://github.com/ethereum/go-ethereum/blob/a5a4fa7032bb248f5a7c40f4e8df2b131c4186
         while search_range.size() > 1 && search_range.ratio() > 0.015 {
-            estimate_and_adjust!(estimate, trevm, needle, search_range);
+            estimate_and_adjust!(best, estimate, trevm, needle, search_range);
             needle = search_range.midpoint();
         }
 
-        Ok((estimate, trevm))
+        Ok((best, trevm))
     }
 }
 
