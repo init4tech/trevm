@@ -42,15 +42,18 @@ macro_rules! trevm_bail {
 /// Macro for gas estimation binary search loop.
 #[cfg(feature = "estimate_gas")]
 macro_rules! estimate_and_adjust {
-    ($est:ident, $trevm:ident, $gas_limit:ident, $range:ident) => {
+    ($best:ident, $est:ident, $trevm:ident, $gas_limit:ident, $range:ident) => {
         ::tracing::trace!(
-            estimate = %$est,
+            best = $best.gas_used(),
             max = %$range.max(),
             min = %$range.min(),
-            "running gas estimate call"
+            needle = $gas_limit,
+            "running gas estimation"
         );
-
         ($est, $trevm) = $trevm.run_estimate(&$gas_limit.into())?;
+        if $est.is_success() {
+            $best = $est.clone();
+        }
         if let Err(e) = $est.adjust_binary_search_range(&mut $range) {
             ::tracing::trace!(
                 %e,

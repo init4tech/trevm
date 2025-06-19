@@ -263,6 +263,7 @@ impl EstimationResult {
                 if matches!(reason, HaltReason::OutOfGas(_) | HaltReason::InvalidFEOpcode) {
                     range.set_min(*limit);
                 } else {
+                    // NB: can't clone here as this is a const fn.
                     return Err(Self::Halt { limit: *limit, reason: *reason, gas_used: *gas_used });
                 }
             }
