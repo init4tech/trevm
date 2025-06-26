@@ -19,7 +19,7 @@ pub trait Tx: Send + Sync {
     fn fill_tx_env(&self, tx_env: &mut TxEnv);
 
     /// Fill the transaction environment on the EVM.
-    fn fill_tx<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>)
+    fn fill_tx<Db: Database, Insp, Inst, Prec, Frame>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>)
     where
         Self: Sized,
     {
@@ -67,7 +67,7 @@ pub trait Block: Send + Sync {
     fn fill_block_env(&self, block_env: &mut BlockEnv);
 
     /// Fill the block environment on the EVM.
-    fn fill_block<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>)
+    fn fill_block<Db: Database, Insp, Inst, Prec, Frame>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>)
     where
         Self: Sized,
     {
@@ -130,7 +130,7 @@ pub trait Cfg: Send + Sync {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv);
 
     /// Fill the configuration environment on the EVM.
-    fn fill_cfg<Db: Database, Insp, Inst, Prec>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec>)
+    fn fill_cfg<Db: Database, Insp, Inst, Prec, Frame>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>)
     where
         Self: Sized,
     {

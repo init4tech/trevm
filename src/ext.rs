@@ -171,11 +171,11 @@ pub trait EvmExtUnchecked<Db: Database> {
     }
 }
 
-impl<Ctx, Insp, Inst, Prec> EvmExtUnchecked<Ctx::Db> for Evm<Ctx, Insp, Inst, Prec>
+impl<Ctx, Insp, Inst, Prec, Frame> EvmExtUnchecked<Ctx::Db> for Evm<Ctx, Insp, Inst, Prec, Frame>
 where
     Ctx: ContextTr,
 {
     fn db_mut_ext(&mut self) -> &mut Ctx::Db {
-        self.ctx.db()
+        self.ctx.db_mut()
     }
 }
