@@ -1639,7 +1639,7 @@ where
     /// [`InspectEvm::inspect_replay`] and produces either [`EvmTransacted`] or
     /// [`EvmErrored`].
     pub fn run(mut self) -> Result<EvmTransacted<Db, Insp>, EvmErrored<Db, Insp>> {
-        let result = self.inner.inspect_replay();
+        let result = self.inner.inspect_tx(self.tx().clone());
 
         let Self { inner, .. } = self;
 
