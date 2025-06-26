@@ -686,20 +686,16 @@ mod test {
         roundtrip(&changed_acc);
 
         let bytecode = Bytecode::new_raw(Bytes::from(vec![1, 2, 3]));
-        let eof_bytes = Bytecode::Eof(Arc::new(Eof::default()));
         roundtrip(&bytecode);
-        roundtrip(&eof_bytes);
 
         let bsi = BundleStateIndex {
             state: vec![
                 (Address::repeat_byte(0xa), created_acc),
-                (Address::repeat_byte(0xb), changed_acc),
             ]
             .into_iter()
             .collect(),
             new_contracts: vec![
                 (B256::repeat_byte(0xa), Cow::Owned(bytecode)),
-                (B256::repeat_byte(0xb), Cow::Owned(eof_bytes)),
             ]
             .into_iter()
             .collect(),

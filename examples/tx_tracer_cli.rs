@@ -79,8 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Prepare block environment
     let mut block_env = BlockEnv::default();
-    block_env.number = 1;
-    block_env.timestamp = 1234567890;
+    block_env.number = U256::from(1u64);
+    block_env.timestamp = U256::from(1234567890u64);
     block_env.gas_limit = 30_000_000;
     block_env.basefee = 1_000_000_000; // 1 gwei
     block_env.beneficiary = Address::with_last_byte(255);

@@ -299,7 +299,7 @@ impl Block for alloy::consensus::Header {
 
         if let Some(excess_blob_gas) = self.excess_blob_gas {
             block_env
-                .set_blob_excess_gas_and_price(excess_blob_gas, self.withdrawals_root.is_some());
+                .set_blob_excess_gas_and_price(excess_blob_gas, revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE);
         }
     }
 
@@ -329,7 +329,7 @@ impl Block for alloy::rpc::types::eth::Header {
         *prevrandao = Some(self.mix_hash);
         *blob_excess_gas_and_price = self
             .blob_gas_used
-            .map(|bgu| BlobExcessGasAndPrice::new(bgu, self.withdrawals_root.is_some()));
+            .map(|bgu| BlobExcessGasAndPrice::new(bgu, revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE));
     }
 }
 

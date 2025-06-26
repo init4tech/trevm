@@ -197,16 +197,16 @@ mod test {
                 prevrandao,
                 blob_excess_gas_and_price,
             } = block_env;
-            *number = 1;
+            *number = U256::ONE;
             *beneficiary = Default::default();
-            *timestamp = 1720450148; // Time when I was writing the test code
+            *timestamp = U256::from(1720450148u64); // Time when I was writing the test code
             *gas_limit = 30_000_000;
             *basefee = 5 * GWEI_TO_WEI;
 
             let diff = B256::repeat_byte(0xab);
             *prevrandao = Some(diff);
             *difficulty = U256::from_be_bytes(diff.into());
-            *blob_excess_gas_and_price = Some(BlobExcessGasAndPrice::new(1_000_000, false));
+            *blob_excess_gas_and_price = Some(BlobExcessGasAndPrice::new(1_000_000, revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE));
         }
 
         fn tx_count_hint(&self) -> Option<usize> {

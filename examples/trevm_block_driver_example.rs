@@ -38,8 +38,8 @@ struct SimpleBlock {
 
 impl Block for SimpleBlock {
     fn fill_block_env(&self, block_env: &mut BlockEnv) {
-        block_env.number = self.number;
-        block_env.timestamp = self.timestamp;
+        block_env.number = U256::from(self.number);
+        block_env.timestamp = U256::from(self.timestamp);
         block_env.gas_limit = 30_000_000u64; // 30M gas limit
     }
 }

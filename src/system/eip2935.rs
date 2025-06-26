@@ -75,12 +75,12 @@ mod test {
         let mut trevm = crate::test_utils::test_trevm().fill_cfg(&NoopCfg).fill_block(&NoopBlock);
 
         trevm.inner_mut_unchecked().modify_block(|block| {
-            block.number = block_num;
+            block.number = U256::from(block_num);
         });
 
         // we set the previous block hash in the cachedb, as it will be loaded
         // during eip application
-        trevm.inner_mut_unchecked().db().cache.block_hashes.insert(prev_block_num, prev_hash);
+        trevm.inner_mut_unchecked().db_mut().cache.block_hashes.insert(prev_block_num, prev_hash);
 
         trevm.apply_eip2935().unwrap();
 
