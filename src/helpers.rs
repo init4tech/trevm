@@ -1,5 +1,5 @@
 use revm::{
-    context::{BlockEnv, CfgEnv, TxEnv},
+    context::{BlockEnv, CfgEnv, FrameStack, TxEnv},
     context_interface::context::ContextError,
     handler::{instructions::EthInstructions, EthPrecompiles},
     inspector::NoOpInspector,
@@ -11,8 +11,8 @@ use revm::{
 pub type Ctx<Db, J = Journal<Db>, C = ()> = Context<BlockEnv, TxEnv, CfgEnv, Db, J, C>;
 
 /// EVM with default env types and adjustable DB.
-pub type Evm<Db, Insp = NoOpInspector, Inst = Instructions<Db>, Prec = EthPrecompiles> =
-    revm::context::Evm<Ctx<Db>, Insp, Inst, Prec, Frame>;
+pub type Evm<Db, Frame, Insp = NoOpInspector, Inst = Instructions<Db>, Prec = EthPrecompiles> =
+    revm::context::Evm<Ctx<Db>, Insp, Inst, Prec, FrameStack<Frame>>;
 
 /// Handler table for EVM opcodes.
 pub type Instructions<Db> = EthInstructions<EthInterpreter, Ctx<Db>>;

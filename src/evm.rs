@@ -275,7 +275,7 @@ where
         &mut self,
         address: Address,
     ) -> Result<Option<AccountInfo>, <Db as Database>::Error> {
-        self.inner.db().basic(address)
+        self.inner.db_mut().basic(address)
     }
 
     /// Get the current nonce for a specific address
@@ -300,7 +300,7 @@ where
         address: Address,
         slot: U256,
     ) -> Result<U256, <Db as Database>::Error> {
-        self.inner.db().storage(address, slot)
+        self.inner.db_mut().storage(address, slot)
     }
 
     /// Get the code at the given account, if any.
@@ -312,7 +312,7 @@ where
     ) -> Result<Option<Bytecode>, <Db as Database>::Error> {
         let acct_info = self.try_read_account(address)?;
         match acct_info {
-            Some(acct) => Ok(Some(self.inner.db().code_by_hash(acct.code_hash)?)),
+            Some(acct) => Ok(Some(self.inner.db_mut().code_by_hash(acct.code_hash)?)),
             None => Ok(None),
         }
     }
@@ -409,7 +409,7 @@ where
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
     pub fn read_account(&mut self, address: Address) -> Option<AccountInfo> {
-        self.inner.db().basic(address).expect("infallible")
+        self.inner.db_mut().basic(address).expect("infallible")
     }
 
     /// Get the current nonce for a specific address
@@ -430,7 +430,7 @@ where
     ///
     /// Note: due to revm's DB model, this requires a mutable pointer.
     pub fn read_storage(&mut self, address: Address, slot: U256) -> U256 {
-        self.inner.db().storage(address, slot).expect("infallible")
+        self.inner.db_mut().storage(address, slot).expect("infallible")
     }
 
     /// Get the code at the given account, if any.
@@ -438,7 +438,7 @@ where
     /// Note: due to revm's DB model, this requires a mutable pointer.
     pub fn read_code(&mut self, address: Address) -> Option<Bytecode> {
         let acct_info = self.read_account(address)?;
-        Some(self.inner.db().code_by_hash(acct_info.code_hash).expect("infallible"))
+        Some(self.inner.db_mut().code_by_hash(acct_info.code_hash).expect("infallible"))
     }
 }
 
@@ -493,7 +493,7 @@ where
     where
         Db: DatabaseCommit,
     {
-        self.inner.db().commit(state);
+        self.inner.db_mut().commit(state);
     }
 
     /// Modify an account with a closure and commit the modified account. This
@@ -735,7 +735,7 @@ where
     /// Set the [EIP-161] state clear flag, activated in the Spurious Dragon
     /// hardfork.
     pub fn set_state_clear_flag(&mut self, flag: bool) {
-        self.inner.db().set_state_clear_flag(flag)
+        self.inner.db_mut().set_state_clear_flag(flag)
     }
 }
 
@@ -753,7 +753,7 @@ where
         &mut self,
         flag: bool,
     ) -> Result<(), <Db as TryStateAcc>::Error> {
-        self.inner.db().try_set_state_clear_flag(flag)
+        self.inner.db_mut().try_set_state_clear_flag(flag)
     }
 }
 
@@ -1204,8 +1204,8 @@ where
     /// [`State::take_bundle`]: revm::database::State::take_bundle
     pub fn finish(self) -> BundleState {
         let Self { inner: mut evm, .. } = self;
-        evm.db().merge_transitions(BundleRetention::Reverts);
-        let bundle = evm.db().take_bundle();
+        evm.db_mut().merge_transitions(BundleRetention::Reverts);
+        let bundle = evm.db_mut().take_bundle();
 
         bundle
     }
@@ -1231,7 +1231,7 @@ where
     pub fn try_finish(
         mut self,
     ) -> Result<BundleState, EvmErrored<Db, Insp, <Db as TryStateAcc>::Error>> {
-        let db = self.inner.db();
+        let db = self.inner.db_mut();
 
         trevm_try!(db.try_merge_transitions(BundleRetention::Reverts), self);
 
@@ -1544,7 +1544,7 @@ where
         overrides.fill_block(&mut self.inner);
 
         if let Some(hashes) = overrides.block_hash.as_ref() {
-            self.inner.db().set_block_hashes(hashes)
+            self.inner.db_mut().set_block_hashes(hashes)
         }
 
         self
@@ -1590,7 +1590,7 @@ where
         overrides.fill_block(&mut self.inner);
 
         if let Some(hashes) = overrides.block_hash.as_ref() {
-            trevm_try!(self.inner.db().try_set_block_hashes(hashes), self);
+            trevm_try!(self.inner.db_mut().try_set_block_hashes(hashes), self);
         }
 
         Ok(self)
@@ -2110,7 +2110,7 @@ where
     {
         let Self { mut inner, state: TransactedState { result } } = self;
 
-        inner.db().commit(result.state);
+        inner.db_mut().commit(result.state);
 
         (result.result, Trevm { inner, state: NeedsTx::new() })
     }
@@ -2133,7 +2133,7 @@ where
     {
         let Self { mut inner, state: TransactedState { result } } = self;
 
-        trevm_try!(inner.db().try_commit(result.state), Trevm { inner, state: NeedsTx::new() });
+        trevm_try!(inner.db_mut().try_commit(result.state), Trevm { inner, state: NeedsTx::new() });
         Ok((result.result, Trevm { inner, state: NeedsTx::new() }))
     }
 
