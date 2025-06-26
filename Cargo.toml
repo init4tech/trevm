@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.23.8"
+version = "0.26.0"
 rust-version = "1.83.0"
 edition = "2021"
 authors = ["init4"]
@@ -53,10 +53,10 @@ thiserror = "2.0.11"
 tokio = { version = "1.44", optional = true }
 
 [dev-dependencies]
-revm = { version = "23.1.0", features = ["serde-json", "std", "alloydb"] }
+revm = { version = "26.0.1", features = ["serde-json", "std", "alloydb"] }
 trevm = { path = ".", features = ["test-utils"] }
 
-alloy = { version = "1.0.5", features = ["providers", "transports"] }
+alloy = { version = "1.0.13", features = ["providers", "transports"] }
 
 # misc
 eyre = "0.6"
@@ -87,7 +87,6 @@ estimate_gas = ["optional_eip3607", "optional_no_base_fee", "dep:tracing"]
 test-utils = ["revm/std", "revm/serde-json", "revm/alloydb"]
 
 secp256k1 = ["revm/secp256k1"]
-secp256r1 = ["revm/secp256r1"]
 c-kzg = ["revm/c-kzg"]
 blst = ["revm/blst"]
 
