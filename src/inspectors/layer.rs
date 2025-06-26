@@ -1,7 +1,6 @@
 use revm::{
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter,
-        InterpreterTypes,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter, InterpreterTypes,
     },
     primitives::{Address, Log, U256},
     Inspector,

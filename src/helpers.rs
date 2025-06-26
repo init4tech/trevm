@@ -22,8 +22,6 @@ pub type Instruction<Db> = revm::interpreter::Instruction<EthInterpreter, Ctx<Db
 
 /// An [`Instruction`] that sets a [`ContextError`] in the [`Ctx`] whenever it
 /// is executed.
-pub fn forbidden<Db: Database, Int: InterpreterTypes>(
-    ctx: InstructionContext<'_, Ctx<Db>, Int>,
-) {
+pub fn forbidden<Db: Database, Int: InterpreterTypes>(ctx: InstructionContext<'_, Ctx<Db>, Int>) {
     ctx.host.error = Err(ContextError::Custom("forbidden opcode".to_string()));
 }

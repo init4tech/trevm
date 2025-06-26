@@ -2,8 +2,7 @@ use crate::helpers::Ctx;
 use revm::{
     context_interface::context::ContextError,
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter,
-        InterpreterTypes,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter, InterpreterTypes,
     },
     Database, Inspector,
 };

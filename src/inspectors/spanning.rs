@@ -2,8 +2,8 @@ use alloy::{consensus::constants::SELECTOR_LEN, hex};
 use revm::{
     context::{ContextTr, LocalContextTr},
     interpreter::{
-        CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome,
-        Interpreter, InterpreterTypes,
+        CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter,
+        InterpreterTypes,
     },
     Inspector,
 };

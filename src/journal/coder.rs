@@ -4,9 +4,7 @@ use alloy::{
     rlp::{Buf, BufMut},
 };
 use revm::{
-    bytecode::{
-        eip7702::{Eip7702Bytecode, Eip7702DecodeError},
-    },
+    bytecode::eip7702::{Eip7702Bytecode, Eip7702DecodeError},
     database::{states::StorageSlot, BundleState},
     state::{AccountInfo, Bytecode},
 };
@@ -32,7 +30,6 @@ const TAG_STORAGE_UNCHANGED: u8 = 3;
 
 // Bytecode encoding
 const TAG_BYTECODE_RAW: u8 = 0;
-const TAG_BYTECODE_EOF: u8 = 1;
 const TAG_BYTECODE_7702: u8 = 2;
 
 // Option encoding
@@ -115,7 +112,6 @@ impl core::error::Error for JournalDecodeError {
         }
     }
 }
-
 
 impl From<Eip7702DecodeError> for JournalDecodeError {
     fn from(err: Eip7702DecodeError) -> Self {
@@ -689,16 +685,10 @@ mod test {
         roundtrip(&bytecode);
 
         let bsi = BundleStateIndex {
-            state: vec![
-                (Address::repeat_byte(0xa), created_acc),
-            ]
-            .into_iter()
-            .collect(),
-            new_contracts: vec![
-                (B256::repeat_byte(0xa), Cow::Owned(bytecode)),
-            ]
-            .into_iter()
-            .collect(),
+            state: vec![(Address::repeat_byte(0xa), created_acc)].into_iter().collect(),
+            new_contracts: vec![(B256::repeat_byte(0xa), Cow::Owned(bytecode))]
+                .into_iter()
+                .collect(),
         };
         roundtrip(&bsi);
     }

@@ -295,8 +295,11 @@ where
         );
 
         // Set the state block number this simulation was based on
-        self.response.state_block_number =
-            self.bundle.state_block_number.as_number().unwrap_or(trevm.inner().block.number.as_limbs()[0]);
+        self.response.state_block_number = self
+            .bundle
+            .state_block_number
+            .as_number()
+            .unwrap_or(trevm.inner().block.number.as_limbs()[0]);
 
         let bundle_filler = BundleBlockFiller::from(&self.bundle);
 

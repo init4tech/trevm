@@ -1,11 +1,11 @@
 //! Basic Trevm example demonstrating safe transaction execution
 
 use revm::database::InMemoryDB;
-use trevm::{NoopBlock, NoopCfg, TrevmBuilder, Tx};
 use revm::{
-    primitives::{Address, TxKind, hex},
     context::TxEnv,
+    primitives::{hex, Address, TxKind},
 };
+use trevm::{NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 struct MyTransaction {
     caller: Address,
@@ -32,22 +32,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Type-safe builder pattern
     let result = TrevmBuilder::new()
         .with_db(InMemoryDB::default())
-        .build_trevm()?         // EvmNeedsCfg
-        .fill_cfg(&NoopCfg)     // EvmNeedsBlock
+        .build_trevm()? // EvmNeedsCfg
+        .fill_cfg(&NoopCfg) // EvmNeedsBlock
         .fill_block(&NoopBlock) // EvmNeedsTx
-        .run_tx(&tx);           // Result<EvmTransacted, EvmErrored>
+        .run_tx(&tx); // Result<EvmTransacted, EvmErrored>
 
     // Safe error handling with type guarantees
     match result {
         Ok(transacted) => {
             println!("Transaction succeeded!");
             let _final_evm = transacted.accept_state(); // EvmNeedsTx
-            // State automatically applied
+                                                        // State automatically applied
         }
         Err(errored) => {
             println!("Transaction failed: {:?}", errored.error());
             let _recovered_evm = errored.discard_error(); // EvmNeedsTx
-            // Can continue with next transaction
+                                                          // Can continue with next transaction
         }
     }
 

@@ -1,16 +1,13 @@
 //! Block driver example showing how to process multiple transactions
 
 use revm::{
+    context::{BlockEnv, TxEnv},
     database::InMemoryDB,
     inspector::NoOpInspector,
     primitives::{Address, TxKind, U256},
-    context::{TxEnv, BlockEnv},
     state::AccountInfo,
 };
-use trevm::{
-    BlockDriver, RunTxResult, NoopCfg, TrevmBuilder, Tx, Block,
-    trevm_aliases
-};
+use trevm::{trevm_aliases, Block, BlockDriver, NoopCfg, RunTxResult, TrevmBuilder, Tx};
 
 trevm_aliases!(InMemoryDB);
 
@@ -57,7 +54,7 @@ impl std::error::Error for SimpleDriverError {}
 
 impl From<revm::context::result::EVMError<std::convert::Infallible>> for SimpleDriverError {
     fn from(err: revm::context::result::EVMError<std::convert::Infallible>) -> Self {
-        SimpleDriverError(format!("EVM Error: {:?}", err))
+        Self(format!("EVM Error: {:?}", err))
     }
 }
 
@@ -84,17 +81,20 @@ impl SimpleBlockDriver {
 impl BlockDriver<InMemoryDB, NoOpInspector> for SimpleBlockDriver {
     type Block = SimpleBlock;
     type Error = SimpleDriverError;
-    
+
     fn block(&self) -> &Self::Block {
         &self.block
     }
-    
-    fn run_txns(&mut self, mut evm: trevm::EvmNeedsTx<InMemoryDB, NoOpInspector>) -> RunTxResult<Self, InMemoryDB, NoOpInspector> {
+
+    fn run_txns(
+        &mut self,
+        mut evm: trevm::EvmNeedsTx<InMemoryDB, NoOpInspector>,
+    ) -> RunTxResult<Self, InMemoryDB, NoOpInspector> {
         println!("Processing {} transactions", self.transactions.len());
-        
+
         for (i, tx) in self.transactions.iter().enumerate() {
             println!("Processing transaction {}", i + 1);
-            
+
             match evm.run_tx(tx) {
                 Ok(transacted) => {
                     let gas_used = transacted.gas_used();
@@ -108,11 +108,14 @@ impl BlockDriver<InMemoryDB, NoOpInspector> for SimpleBlockDriver {
                 }
             }
         }
-        
+
         Ok(evm)
     }
-    
-    fn post_block(&mut self, _evm: &trevm::EvmNeedsBlock<InMemoryDB, NoOpInspector>) -> Result<(), Self::Error> {
+
+    fn post_block(
+        &mut self,
+        _evm: &trevm::EvmNeedsBlock<InMemoryDB, NoOpInspector>,
+    ) -> Result<(), Self::Error> {
         println!("Post-block processing completed");
         println!("Processed {} transactions", self.transactions.len());
         Ok(())
@@ -121,21 +124,21 @@ impl BlockDriver<InMemoryDB, NoOpInspector> for SimpleBlockDriver {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut db = InMemoryDB::default();
-    
+
     // Setup accounts
     let alice = Address::with_last_byte(1);
     let bob = Address::with_last_byte(2);
     let charlie = Address::with_last_byte(3);
-    
+
     // Fund Alice
     let alice_info = AccountInfo::new(
         U256::from(1_000_000_000_000_000_000u64), // 1 ETH
         0,
         Default::default(),
-        Default::default()
+        Default::default(),
     );
     db.insert_account_info(alice, alice_info);
-    
+
     // Create some transactions
     let transactions = vec![
         SimpleTransfer {
@@ -151,16 +154,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             nonce: 1,
         },
     ];
-    
+
     let mut driver = SimpleBlockDriver::new(transactions, 1);
-    
+
     // Use the driver to process the block
-    let result = TrevmBuilder::new()
-        .with_db(db)
-        .build_trevm()?
-        .fill_cfg(&NoopCfg)
-        .drive_block(&mut driver);
-    
+    let result =
+        TrevmBuilder::new().with_db(db).build_trevm()?.fill_cfg(&NoopCfg).drive_block(&mut driver);
+
     match result {
         Ok(_evm_needs_block) => {
             println!("Block processed successfully!");
@@ -169,6 +169,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Block processing failed: {:?}", errored.error());
         }
     }
-    
+
     Ok(())
 }

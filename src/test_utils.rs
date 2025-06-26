@@ -5,8 +5,7 @@ use revm::{
     database::{CacheDB, EmptyDB, InMemoryDB, State},
     inspector::{inspectors::TracerEip3155, NoOpInspector},
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter,
-        InterpreterTypes,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter, InterpreterTypes,
     },
     primitives::{hardfork::SpecId, Log},
     state::AccountInfo,

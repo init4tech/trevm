@@ -1,14 +1,14 @@
 //! Advanced Trevm example with custom inspector for tracing
 
 use revm::{
+    context::result::{ExecutionResult, Output},
+    context::TxEnv,
     database::InMemoryDB,
     inspector::inspectors::TracerEip3155,
-    primitives::{Address, TxKind, hex, U256},
-    context::TxEnv,
+    primitives::{hex, Address, TxKind, U256},
     state::AccountInfo,
-    context::result::{ExecutionResult, Output},
 };
-use trevm::{NoopBlock, NoopCfg, TrevmBuilder, Tx, trevm_aliases};
+use trevm::{trevm_aliases, NoopBlock, NoopCfg, TrevmBuilder, Tx};
 
 // Create type aliases for cleaner code
 trevm_aliases!(InMemoryDB, TracerEip3155);
@@ -45,24 +45,27 @@ impl Tx for CallContract {
 }
 
 // Helper function to extract created contract address from ExecutionResult
-fn get_created_address(result: &ExecutionResult) -> Option<Address> {
+const fn get_created_address(result: &ExecutionResult) -> Option<Address> {
     match result {
-        ExecutionResult::Success { output, .. } => {
-            match output {
-                Output::Create(_bytes, address) => *address,
-                _ => None,
-            }
-        }
+        ExecutionResult::Success { output, .. } => match output {
+            Output::Create(_bytes, address) => *address,
+            _ => None,
+        },
         _ => None,
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut db = InMemoryDB::default();
-    
+
     // Pre-fund deployer account
     let deployer = Address::with_last_byte(1);
-    let acc_info = AccountInfo::new(U256::from(1_000_000_000_000_000_000u64), 0, Default::default(), Default::default());
+    let acc_info = AccountInfo::new(
+        U256::from(1_000_000_000_000_000_000u64),
+        0,
+        Default::default(),
+        Default::default(),
+    );
     db.insert_account_info(deployer, acc_info);
 
     // Create tracer that outputs to stdout
@@ -88,13 +91,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Contract deployed successfully!");
             if let Some(deployed_addr) = get_created_address(transacted.result()) {
                 println!("Contract address: {:?}", deployed_addr);
-                
+
                 // Now call the contract
                 let call_tx = CallContract {
                     caller: deployer,
                     to: deployed_addr,
                     data: vec![], // Simple call with no data
-                    nonce: 1, // Nonce after deployment transaction
+                    nonce: 1,     // Nonce after deployment transaction
                 };
 
                 println!("\n=== Calling Contract ===");

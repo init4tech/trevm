@@ -19,8 +19,10 @@ pub trait Tx: Send + Sync {
     fn fill_tx_env(&self, tx_env: &mut TxEnv);
 
     /// Fill the transaction environment on the EVM.
-    fn fill_tx<Db: Database, Insp, Inst, Prec, Frame>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>)
-    where
+    fn fill_tx<Db: Database, Insp, Inst, Prec, Frame>(
+        &self,
+        evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>,
+    ) where
         Self: Sized,
     {
         evm.ctx.modify_tx(|tx_env| self.fill_tx_env(tx_env));
@@ -67,8 +69,10 @@ pub trait Block: Send + Sync {
     fn fill_block_env(&self, block_env: &mut BlockEnv);
 
     /// Fill the block environment on the EVM.
-    fn fill_block<Db: Database, Insp, Inst, Prec, Frame>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>)
-    where
+    fn fill_block<Db: Database, Insp, Inst, Prec, Frame>(
+        &self,
+        evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>,
+    ) where
         Self: Sized,
     {
         evm.ctx.modify_block(|block_env| self.fill_block_env(block_env));
@@ -130,8 +134,10 @@ pub trait Cfg: Send + Sync {
     fn fill_cfg_env(&self, cfg_env: &mut CfgEnv);
 
     /// Fill the configuration environment on the EVM.
-    fn fill_cfg<Db: Database, Insp, Inst, Prec, Frame>(&self, evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>)
-    where
+    fn fill_cfg<Db: Database, Insp, Inst, Prec, Frame>(
+        &self,
+        evm: &mut Evm<Ctx<Db>, Insp, Inst, Prec, Frame>,
+    ) where
         Self: Sized,
     {
         evm.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
@@ -206,7 +212,10 @@ mod test {
             let diff = B256::repeat_byte(0xab);
             *prevrandao = Some(diff);
             *difficulty = U256::from_be_bytes(diff.into());
-            *blob_excess_gas_and_price = Some(BlobExcessGasAndPrice::new(1_000_000, revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE));
+            *blob_excess_gas_and_price = Some(BlobExcessGasAndPrice::new(
+                1_000_000,
+                revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE,
+            ));
         }
 
         fn tx_count_hint(&self) -> Option<usize> {
