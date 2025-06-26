@@ -48,7 +48,7 @@ where
         let slot = eip2935_slot(prev_block.to());
 
         let parent_block_hash =
-            self.inner_mut_unchecked().db().block_hash(prev_block).map_err(EVMError::Database)?;
+            self.inner_mut_unchecked().db_mut().block_hash(prev_block.to()).map_err(EVMError::Database)?;
 
         self.try_set_storage_unchecked(HISTORY_STORAGE_ADDRESS, slot, parent_block_hash.into())
             .map_err(EVMError::Database)?;
