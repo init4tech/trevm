@@ -3,7 +3,7 @@ use revm::{
     context_interface::context::ContextError,
     handler::{instructions::EthInstructions, EthFrame, EthPrecompiles},
     inspector::NoOpInspector,
-    interpreter::{interpreter::EthInterpreter, Interpreter, InterpreterTypes},
+    interpreter::{interpreter::EthInterpreter, InstructionContext, InterpreterTypes},
     Context, Database, Journal,
 };
 
@@ -23,8 +23,7 @@ pub type Instruction<Db> = revm::interpreter::Instruction<EthInterpreter, Ctx<Db
 /// An [`Instruction`] that sets a [`ContextError`] in the [`Ctx`] whenever it
 /// is executed.
 pub fn forbidden<Db: Database, Int: InterpreterTypes>(
-    _interpreter: &mut Interpreter<Int>,
-    ctx: &mut Ctx<Db>,
+    ctx: InstructionContext<'_, Ctx<Db>, Int>,
 ) {
-    ctx.error = Err(ContextError::Custom("forbidden opcode".to_string()));
+    ctx.host.error = Err(ContextError::Custom("forbidden opcode".to_string()));
 }
