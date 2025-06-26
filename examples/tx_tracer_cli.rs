@@ -64,23 +64,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Contract deployment
     let deploy_bytecode = hex::decode("608060405234801561001057600080fd5b50600a600081905550")?;
 
-    let mut deploy_tx_env = TxEnv::default();
-    deploy_tx_env.caller = caller;
-    deploy_tx_env.kind = TxKind::Create;
-    deploy_tx_env.data = deploy_bytecode.into();
-    deploy_tx_env.gas_limit = 500_000;
-    deploy_tx_env.gas_price = 1_000_000_000; // 1 gwei (must be >= basefee)
-    deploy_tx_env.nonce = 0;
+    let deploy_tx_env = TxEnv {
+        caller,
+        kind: TxKind::Create,
+        data: deploy_bytecode.into(),
+        gas_limit: 500_000,
+        gas_price: 1_000_000_000, // 1 gwei (must be >= basefee)
+        nonce: 0,
+        ..Default::default()
+    };
 
     let deploy_tx = TracedTransaction { tx_env: deploy_tx_env };
 
     // Prepare block environment
-    let mut block_env = BlockEnv::default();
-    block_env.number = U256::from(1u64);
-    block_env.timestamp = U256::from(1234567890u64);
-    block_env.gas_limit = 30_000_000;
-    block_env.basefee = 1_000_000_000; // 1 gwei
-    block_env.beneficiary = Address::with_last_byte(255);
+    let block_env = BlockEnv {
+        number: U256::from(1u64),
+        timestamp: U256::from(1234567890u64),
+        gas_limit: 30_000_000,
+        basefee: 1_000_000_000, // 1 gwei
+        beneficiary: Address::with_last_byte(255),
+        ..Default::default()
+    };
 
     let traced_block = TracedBlock { block_env };
 
@@ -136,13 +140,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\n🔄 Tracing simple transfer...");
                 println!("{}", "=".repeat(80));
 
-                let mut transfer_tx_env = TxEnv::default();
-                transfer_tx_env.caller = caller;
-                transfer_tx_env.kind = TxKind::Call(contract_addr);
-                transfer_tx_env.value = U256::from(100_000_000_000_000_000u64); // 0.1 ETH
-                transfer_tx_env.gas_limit = 21_000;
-                transfer_tx_env.gas_price = 1_000_000_000; // 1 gwei (must be >= basefee)
-                transfer_tx_env.nonce = 1;
+                let transfer_tx_env = TxEnv {
+                    caller,
+                    kind: TxKind::Call(contract_addr),
+                    value: U256::from(100_000_000_000_000_000u64), // 0.1 ETH
+                    data: vec![].into(),                           // No data for simple transfer
+                    gas_limit: 21_000,
+                    gas_price: 1_000_000_000, // 1 gwei (must be >= basefee)
+                    nonce: 1,                 // Increment nonce for the transfer
+                    ..Default::default()
+                };
 
                 let transfer_tx = TracedTransaction { tx_env: transfer_tx_env };
 
@@ -194,7 +201,7 @@ mod hex {
     }
 
     pub(crate) fn decode(s: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        let s = if s.starts_with("0x") { &s[2..] } else { s };
+        let s = s.strip_prefix("0x").map_or(s, |s| &s[2..]);
         if s.len() % 2 != 0 {
             return Err("Invalid hex string length".into());
         }

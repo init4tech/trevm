@@ -47,10 +47,7 @@ impl Tx for CallContract {
 // Helper function to extract created contract address from ExecutionResult
 const fn get_created_address(result: &ExecutionResult) -> Option<Address> {
     match result {
-        ExecutionResult::Success { output, .. } => match output {
-            Output::Create(_bytes, address) => *address,
-            _ => None,
-        },
+        ExecutionResult::Success { output: Output::Create(_bytes, address), .. } => *address,
         _ => None,
     }
 }
