@@ -1129,12 +1129,12 @@ where
     }
 
     /// Get the current block number.
-    pub fn block_number(&self) -> u64 {
+    pub fn block_number(&self) -> U256 {
         self.block().number()
     }
 
     /// Get the current block timestamp.
-    pub fn block_timestamp(&self) -> u64 {
+    pub fn block_timestamp(&self) -> U256 {
         self.block().timestamp()
     }
 

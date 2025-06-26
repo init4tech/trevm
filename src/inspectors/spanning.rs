@@ -2,7 +2,7 @@ use alloy::{consensus::constants::SELECTOR_LEN, hex};
 use revm::{
     context::{ContextTr, LocalContextTr},
     interpreter::{
-        CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs,
+        CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome,
         Interpreter, InterpreterTypes,
     },
     Inspector,
@@ -157,23 +157,6 @@ impl SpanningInspector {
     fn enter_create<Ctx>(&mut self, context: &Ctx, inputs: &CreateInputs) {
         self.active.push(self.span_create(context, inputs).entered())
     }
-
-    /// Create a span for an EOF `CREATE`-family opcode.
-    fn span_eof_create<Ctx>(&self, _context: &Ctx, inputs: &EOFCreateInputs) -> Span {
-        runtime_level_span!(
-            self.level,
-            "eof_create",
-            caller = %inputs.caller,
-            value = %inputs.value,
-            gas_limit = inputs.gas_limit,
-            kind = ?inputs.kind,
-        )
-    }
-
-    /// Create, enter, and store a span for an EOF `CREATE`-family opcode.
-    fn enter_eof_create<Ctx>(&mut self, context: &Ctx, inputs: &EOFCreateInputs) {
-        self.active.push(self.span_eof_create(context, inputs).entered())
-    }
 }
 
 impl<Ctx, Int> Inspector<Ctx, Int> for SpanningInspector
@@ -203,24 +186,6 @@ where
         &mut self,
         _context: &mut Ctx,
         _inputs: &CreateInputs,
-        _outcome: &mut CreateOutcome,
-    ) {
-        self.exit_span();
-    }
-
-    fn eofcreate(
-        &mut self,
-        context: &mut Ctx,
-        inputs: &mut EOFCreateInputs,
-    ) -> Option<CreateOutcome> {
-        self.enter_eof_create(context, inputs);
-        None
-    }
-
-    fn eofcreate_end(
-        &mut self,
-        _context: &mut Ctx,
-        _inputs: &EOFCreateInputs,
         _outcome: &mut CreateOutcome,
     ) {
         self.exit_span();

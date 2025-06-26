@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use revm::{
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter,
         InterpreterTypes,
     },
     primitives::{Address, Log, U256},
@@ -123,29 +123,6 @@ where
         outcome: &mut CreateOutcome,
     ) {
         self.inspectors.iter_mut().for_each(|i| i.create_end(context, inputs, outcome))
-    }
-
-    fn eofcreate(
-        &mut self,
-        context: &mut Ctx,
-        inputs: &mut EOFCreateInputs,
-    ) -> Option<CreateOutcome> {
-        for inspector in self.inspectors.iter_mut() {
-            let outcome = inspector.eofcreate(context, inputs);
-            if outcome.is_some() {
-                return outcome;
-            }
-        }
-        None
-    }
-
-    fn eofcreate_end(
-        &mut self,
-        context: &mut Ctx,
-        inputs: &EOFCreateInputs,
-        outcome: &mut CreateOutcome,
-    ) {
-        self.inspectors.iter_mut().for_each(|i| i.eofcreate_end(context, inputs, outcome))
     }
 
     fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {

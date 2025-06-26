@@ -2,7 +2,7 @@ use crate::helpers::Ctx;
 use revm::{
     context_interface::context::ContextError,
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter,
         InterpreterTypes,
     },
     Database, Inspector,
@@ -104,25 +104,6 @@ impl<Db: Database, Int: InterpreterTypes> Inspector<Ctx<Db>, Int> for TimeLimit 
         &mut self,
         ctx: &mut Ctx<Db>,
         _inputs: &CreateInputs,
-        _outcome: &mut CreateOutcome,
-    ) {
-        check_timeout!(self, ctx);
-    }
-
-    fn eofcreate(
-        &mut self,
-        ctx: &mut Ctx<Db>,
-        _inputs: &mut EOFCreateInputs,
-    ) -> Option<CreateOutcome> {
-        check_timeout!(self, ctx);
-
-        None
-    }
-
-    fn eofcreate_end(
-        &mut self,
-        ctx: &mut Ctx<Db>,
-        _inputs: &EOFCreateInputs,
         _outcome: &mut CreateOutcome,
     ) {
         check_timeout!(self, ctx);

@@ -12,7 +12,7 @@ pub type Ctx<Db, J = Journal<Db>, C = ()> = Context<BlockEnv, TxEnv, CfgEnv, Db,
 
 /// EVM with default env types and adjustable DB.
 pub type Evm<Db, Insp = NoOpInspector, Inst = Instructions<Db>, Prec = EthPrecompiles> =
-    revm::context::Evm<Ctx<Db>, Insp, Inst, Prec>;
+    revm::context::Evm<Ctx<Db>, Insp, Inst, Prec, Frame>;
 
 /// Handler table for EVM opcodes.
 pub type Instructions<Db> = EthInstructions<EthInterpreter, Ctx<Db>>;

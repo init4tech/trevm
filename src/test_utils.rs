@@ -209,26 +209,6 @@ where
         self.create_end = true;
     }
 
-    fn eofcreate(
-        &mut self,
-        _context: &mut Ctx,
-        _inputs: &mut EOFCreateInputs,
-    ) -> Option<CreateOutcome> {
-        tracing::info!("eofcreate");
-        self.eofcreate = true;
-        None
-    }
-
-    fn eofcreate_end(
-        &mut self,
-        _context: &mut Ctx,
-        _inputs: &EOFCreateInputs,
-        _outcome: &mut CreateOutcome,
-    ) {
-        tracing::info!("eofcreate_end");
-        self.eofcreate_end = true;
-    }
-
     fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {
         tracing::info!(?contract, ?target, ?value, "selfdestruct");
         self.selfdestruct = true;

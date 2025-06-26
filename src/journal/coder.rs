@@ -6,8 +6,6 @@ use alloy::{
 use revm::{
     bytecode::{
         eip7702::{Eip7702Bytecode, Eip7702DecodeError},
-        eof::EofDecodeError,
-        Eof,
     },
     database::{states::StorageSlot, BundleState},
     state::{AccountInfo, Bytecode},
@@ -16,7 +14,6 @@ use std::{
     borrow::{Cow, ToOwned},
     collections::BTreeMap,
     fmt::Debug,
-    sync::Arc,
     vec::Vec,
 };
 
@@ -73,9 +70,6 @@ pub enum JournalDecodeError {
     /// Storage slot is unchanged, journal should not contain unchanged slots.
     UnchangedStorage,
 
-    /// Error decoding an EOF bytecode.
-    EofDecode(EofDecodeError),
-
     /// Error decoding an EIP-7702 bytecode.
     Eip7702Decode(Eip7702DecodeError),
 }
@@ -95,9 +89,6 @@ impl core::fmt::Display for JournalDecodeError {
                     "storage slot is unchanged. Unchanged items should never be in the journal"
                 )
             }
-            Self::EofDecode(e) => {
-                write!(f, "error decoding EOF bytecode: {e}")
-            }
             Self::Eip7702Decode(e) => {
                 write!(f, "error decoding EIP-7702 bytecode: {e}")
             }
@@ -108,7 +99,6 @@ impl core::fmt::Display for JournalDecodeError {
 impl core::error::Error for JournalDecodeError {
     fn cause(&self) -> Option<&dyn core::error::Error> {
         match self {
-            Self::EofDecode(e) => Some(e),
             Self::Eip7702Decode(e) => Some(e),
             _ => None,
         }
@@ -120,18 +110,12 @@ impl core::error::Error for JournalDecodeError {
 
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
-            Self::EofDecode(e) => Some(e),
             Self::Eip7702Decode(e) => Some(e),
             _ => None,
         }
     }
 }
 
-impl From<EofDecodeError> for JournalDecodeError {
-    fn from(err: EofDecodeError) -> Self {
-        Self::EofDecode(err)
-    }
-}
 
 impl From<Eip7702DecodeError> for JournalDecodeError {
     fn from(err: Eip7702DecodeError) -> Self {
@@ -365,7 +349,6 @@ impl JournalEncode for Bytecode {
     fn encode(&self, buf: &mut dyn BufMut) {
         match self {
             Self::LegacyAnalyzed(_) => buf.put_u8(TAG_BYTECODE_RAW),
-            Self::Eof(_) => buf.put_u8(TAG_BYTECODE_EOF),
             Self::Eip7702(_) => buf.put_u8(TAG_BYTECODE_7702),
         }
 
@@ -585,7 +568,6 @@ impl JournalDecode for Bytecode {
 
         match tag {
             TAG_BYTECODE_RAW => Ok(Self::new_raw(raw)),
-            TAG_BYTECODE_EOF => Ok(Self::Eof(Arc::new(Eof::decode(raw)?))),
             TAG_BYTECODE_7702 => Ok(Self::Eip7702(Eip7702Bytecode::new_raw(raw)?)),
             _ => Err(JournalDecodeError::InvalidTag { ty_name: "Bytecode", tag, max_expected: 2 }),
         }

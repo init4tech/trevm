@@ -83,7 +83,7 @@ pub trait EvmExtUnchecked<Db: Database> {
         let mut acct = self.account(address)?;
         let old = self.storage(address, index)?;
 
-        let change = EvmStorageSlot::new_changed(old, value);
+        let change = EvmStorageSlot::new_changed(old, value, 0);
         acct.storage.insert(index, change);
         acct.mark_touch();
 

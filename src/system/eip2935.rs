@@ -31,7 +31,7 @@ where
     ///
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
     pub fn apply_eip2935(&mut self) -> Result<(), EVMError<Db::Error>> {
-        if self.spec_id() < SpecId::PRAGUE || self.block().number == 0 {
+        if self.spec_id() < SpecId::PRAGUE || self.block().number == U256::ZERO {
             return Ok(());
         }
 
@@ -42,10 +42,10 @@ where
         )?;
 
         let block_num = self.block().number;
-        let prev_block = block_num.saturating_sub(1);
+        let prev_block = block_num.saturating_sub(U256::ONE);
 
         // Update the EVM state with the new value.
-        let slot = eip2935_slot(prev_block);
+        let slot = eip2935_slot(prev_block.to());
 
         let parent_block_hash =
             self.inner_mut_unchecked().db().block_hash(prev_block).map_err(EVMError::Database)?;
