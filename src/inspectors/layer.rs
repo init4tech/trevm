@@ -1,7 +1,6 @@
 use revm::{
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
-        InterpreterTypes,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter, InterpreterTypes,
     },
     primitives::{Address, Log, U256},
     Inspector,
@@ -115,27 +114,6 @@ where
     ) {
         self.outer.create_end(context, inputs, outcome);
         self.inner.create_end(context, inputs, outcome);
-    }
-
-    fn eofcreate(
-        &mut self,
-        context: &mut Ctx,
-        inputs: &mut EOFCreateInputs,
-    ) -> Option<CreateOutcome> {
-        if let Some(outcome) = self.outer.eofcreate(context, inputs) {
-            return Some(outcome);
-        }
-        self.inner.eofcreate(context, inputs)
-    }
-
-    fn eofcreate_end(
-        &mut self,
-        context: &mut Ctx,
-        inputs: &EOFCreateInputs,
-        outcome: &mut CreateOutcome,
-    ) {
-        self.outer.eofcreate_end(context, inputs, outcome);
-        self.inner.eofcreate_end(context, inputs, outcome);
     }
 
     fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {

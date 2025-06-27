@@ -69,9 +69,9 @@ impl Cfg for GasEstimationFiller {
         DisableNonceCheck.fill_cfg_env(cfg_env);
     }
 
-    fn fill_cfg<Db: revm::Database, Insp, Inst, Prec>(
+    fn fill_cfg<Db: revm::Database, Insp, Inst, Prec, Frame>(
         &self,
-        evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec>,
+        evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec, Frame>,
     ) {
         evm.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
 
@@ -103,9 +103,9 @@ impl Cfg for CallFiller {
         DisableNonceCheck.fill_cfg_env(cfg_env);
     }
 
-    fn fill_cfg<Db: revm::Database, Insp, Inst, Prec>(
+    fn fill_cfg<Db: revm::Database, Insp, Inst, Prec, Frame>(
         &self,
-        evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec>,
+        evm: &mut revm::context::Evm<crate::helpers::Ctx<Db>, Insp, Inst, Prec, Frame>,
     ) {
         evm.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
 

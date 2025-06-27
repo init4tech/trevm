@@ -288,9 +288,9 @@ impl Block for alloy::consensus::Header {
             prevrandao,
             blob_excess_gas_and_price: _,
         } = block_env;
-        *number = self.number;
+        *number = U256::from(self.number);
         *beneficiary = self.beneficiary;
-        *timestamp = self.timestamp;
+        *timestamp = U256::from(self.timestamp);
         *gas_limit = self.gas_limit;
         *basefee = self.base_fee_per_gas.unwrap_or_default();
 
@@ -298,8 +298,10 @@ impl Block for alloy::consensus::Header {
         *prevrandao = Some(self.mix_hash);
 
         if let Some(excess_blob_gas) = self.excess_blob_gas {
-            block_env
-                .set_blob_excess_gas_and_price(excess_blob_gas, self.withdrawals_root.is_some());
+            block_env.set_blob_excess_gas_and_price(
+                excess_blob_gas,
+                revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE,
+            );
         }
     }
 
@@ -320,16 +322,19 @@ impl Block for alloy::rpc::types::eth::Header {
             prevrandao,
             blob_excess_gas_and_price,
         } = block_env;
-        *number = self.number;
+        *number = U256::from(self.number);
         *beneficiary = self.beneficiary;
-        *timestamp = self.timestamp;
+        *timestamp = U256::from(self.timestamp);
         *gas_limit = self.gas_limit;
         *basefee = self.base_fee_per_gas.unwrap_or_default();
         *difficulty = self.difficulty;
         *prevrandao = Some(self.mix_hash);
-        *blob_excess_gas_and_price = self
-            .blob_gas_used
-            .map(|bgu| BlobExcessGasAndPrice::new(bgu, self.withdrawals_root.is_some()));
+        *blob_excess_gas_and_price = self.blob_gas_used.map(|bgu| {
+            BlobExcessGasAndPrice::new(
+                bgu,
+                revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE,
+            )
+        });
     }
 }
 
@@ -408,7 +413,7 @@ impl Block for alloy::rpc::types::BlockOverrides {
             *difficulty = U256::from(*d);
         }
         if let Some(t) = &self.time {
-            *timestamp = *t;
+            *timestamp = U256::from(*t);
         }
         if let Some(g) = &self.gas_limit {
             *gas_limit = *g;

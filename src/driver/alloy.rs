@@ -278,7 +278,7 @@ where
     ) -> DriveBundleResult<Self, Db, Insp> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
-            trevm.inner().block.number == self.bundle.block_number,
+            trevm.inner().block.number == U256::from(self.bundle.block_number),
             trevm,
             BundleError::BlockNumberMismatch
         );
@@ -295,8 +295,11 @@ where
         );
 
         // Set the state block number this simulation was based on
-        self.response.state_block_number =
-            self.bundle.state_block_number.as_number().unwrap_or(trevm.inner().block.number);
+        self.response.state_block_number = self
+            .bundle
+            .state_block_number
+            .as_number()
+            .unwrap_or(trevm.inner().block.number.as_limbs()[0]);
 
         let bundle_filler = BundleBlockFiller::from(&self.bundle);
 
@@ -416,7 +419,7 @@ where
         {
             // Check if the block we're in is valid for this bundle. Both must match
             trevm_ensure!(
-                trevm.inner().block.number == self.bundle.block_number,
+                trevm.inner().block.number == U256::from(self.bundle.block_number),
                 trevm,
                 BundleError::BlockNumberMismatch
             );
@@ -424,7 +427,7 @@ where
             // Check for start timestamp range validity
             if let Some(min_timestamp) = self.bundle.min_timestamp {
                 trevm_ensure!(
-                    trevm.inner().block.timestamp >= min_timestamp,
+                    trevm.inner().block.timestamp >= U256::from(min_timestamp),
                     trevm,
                     BundleError::TimestampOutOfRange
                 );
@@ -433,7 +436,7 @@ where
             // Check for end timestamp range validity
             if let Some(max_timestamp) = self.bundle.max_timestamp {
                 trevm_ensure!(
-                    trevm.inner().block.timestamp <= max_timestamp,
+                    trevm.inner().block.timestamp <= U256::from(max_timestamp),
                     trevm,
                     BundleError::TimestampOutOfRange
                 );
@@ -503,9 +506,9 @@ struct BundleBlockFiller {
 impl Block for BundleBlockFiller {
     fn fill_block_env(&self, block_env: &mut revm::context::block::BlockEnv) {
         if let Some(timestamp) = self.timestamp {
-            block_env.timestamp = timestamp;
+            block_env.timestamp = U256::from(timestamp);
         } else {
-            block_env.timestamp += 12;
+            block_env.timestamp += U256::from(12);
         }
         if let Some(gas_limit) = self.gas_limit {
             block_env.gas_limit = gas_limit;
@@ -517,7 +520,7 @@ impl Block for BundleBlockFiller {
             block_env.basefee = base_fee.try_into().unwrap_or(u64::MAX);
         }
         if let Some(block_number) = self.block_number.as_number() {
-            block_env.number = block_number;
+            block_env.number = U256::from(block_number);
         }
     }
 }
@@ -559,7 +562,7 @@ where
     ) -> DriveBundleResult<Self, Db, Insp> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
-            trevm.inner().block.number == self.block_number,
+            trevm.inner().block.number == U256::from(self.block_number),
             trevm,
             BundleError::BlockNumberMismatch
         );
@@ -650,7 +653,7 @@ where
     ) -> DriveBundleResult<Self, Db, Insp> {
         // Check if the block we're in is valid for this bundle. Both must match
         trevm_ensure!(
-            trevm.inner().block.number == self.block_number,
+            trevm.inner().block.number == U256::from(self.block_number),
             trevm,
             BundleError::BlockNumberMismatch
         );
@@ -659,7 +662,7 @@ where
 
         if let Some(min_timestamp) = self.min_timestamp {
             trevm_ensure!(
-                trevm.inner().block.timestamp >= min_timestamp,
+                trevm.inner().block.timestamp >= U256::from(min_timestamp),
                 trevm,
                 BundleError::TimestampOutOfRange
             );
@@ -668,7 +671,7 @@ where
         // Check for end timestamp range validity
         if let Some(max_timestamp) = self.max_timestamp {
             trevm_ensure!(
-                trevm.inner().block.timestamp <= max_timestamp,
+                trevm.inner().block.timestamp <= U256::from(max_timestamp),
                 trevm,
                 BundleError::TimestampOutOfRange
             );
