@@ -57,11 +57,11 @@ impl<Db: Database> core::fmt::Display for BundleError<Db> {
             Self::BundleEmpty => write!(f, "bundle has no transactions"),
             Self::Eip4844BlobGasExceeded => write!(f, "max blob gas limit exceeded"),
             Self::UnsupportedTransactionType => write!(f, "unsupported transaction type"),
-            Self::TransactionDecodingError(err) => write!(f, "transaction decoding error: {}", err),
+            Self::TransactionDecodingError(err) => write!(f, "transaction decoding error: {err}"),
             Self::TransactionSenderRecoveryError(err) => {
-                write!(f, "transaction sender recovery error: {}", err)
+                write!(f, "transaction sender recovery error: {err}")
             }
-            Self::EVMError { inner } => write!(f, "internal EVM error: {}", inner),
+            Self::EVMError { inner } => write!(f, "internal EVM error: {inner}"),
         }
     }
 }
@@ -107,11 +107,11 @@ impl<Db: Database> core::fmt::Debug for BundleError<Db> {
             Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
             Self::BundleEmpty => write!(f, "BundleEmpty"),
             Self::BundleReverted => write!(f, "BundleReverted"),
-            Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({:?})", e),
+            Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({e:?})"),
             Self::UnsupportedTransactionType => write!(f, "UnsupportedTransactionType"),
             Self::Eip4844BlobGasExceeded => write!(f, "Eip4844BlobGasExceeded"),
             Self::TransactionSenderRecoveryError(e) => {
-                write!(f, "TransactionSenderRecoveryError({:?})", e)
+                write!(f, "TransactionSenderRecoveryError({e:?})")
             }
             Self::EVMError { .. } => write!(f, "EVMError"),
         }
