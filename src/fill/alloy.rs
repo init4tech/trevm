@@ -2,10 +2,7 @@ use alloy::{
     consensus::{Signed, TxType},
     primitives::U256,
 };
-use revm::{
-    context::{BlockEnv, TxEnv},
-    context_interface::block::BlobExcessGasAndPrice,
-};
+use revm::context::{BlockEnv, TxEnv};
 
 use crate::{Block, Tx};
 
@@ -315,32 +312,7 @@ impl Block for alloy::consensus::Header {
 
 impl Block for alloy::rpc::types::eth::Header {
     fn fill_block_env(&self, block_env: &mut BlockEnv) {
-        let BlockEnv {
-            number,
-            beneficiary,
-            timestamp,
-            gas_limit,
-            basefee,
-            difficulty,
-            prevrandao,
-            blob_excess_gas_and_price,
-        } = block_env;
-        *number = U256::from(self.number);
-        *beneficiary = self.beneficiary;
-        *timestamp = U256::from(self.timestamp);
-        *gas_limit = self.gas_limit;
-        *basefee = self.base_fee_per_gas.unwrap_or_default();
-        *difficulty = self.difficulty;
-        *prevrandao = Some(self.mix_hash);
-
-        let update_fraction = if self.prague_active() {
-            revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE
-        } else {
-            revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_CANCUN
-        };
-
-        *blob_excess_gas_and_price =
-            self.blob_gas_used.map(|bgu| BlobExcessGasAndPrice::new(bgu, update_fraction));
+        self.inner.fill_block_env(block_env);
     }
 }
 
