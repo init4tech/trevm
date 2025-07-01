@@ -31,7 +31,7 @@ where
     ///
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
     pub fn apply_eip2935(&mut self) -> Result<(), EVMError<Db::Error>> {
-        if self.spec_id() < SpecId::PRAGUE || self.block().number == U256::ZERO {
+        if self.spec_id() < SpecId::PRAGUE || self.block_number().is_zero() {
             return Ok(());
         }
 
