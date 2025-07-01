@@ -31,7 +31,7 @@ where
     ///
     /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
     pub fn apply_eip2935(&mut self) -> Result<(), EVMError<Db::Error>> {
-        if self.spec_id() < SpecId::PRAGUE || self.block().number == 0 {
+        if self.spec_id() < SpecId::PRAGUE || self.block_number().is_zero() {
             return Ok(());
         }
 
@@ -42,13 +42,16 @@ where
         )?;
 
         let block_num = self.block().number;
-        let prev_block = block_num.saturating_sub(1);
+        let prev_block = block_num.saturating_sub(U256::ONE);
 
         // Update the EVM state with the new value.
-        let slot = eip2935_slot(prev_block);
+        let slot = eip2935_slot(prev_block.to());
 
-        let parent_block_hash =
-            self.inner_mut_unchecked().db().block_hash(prev_block).map_err(EVMError::Database)?;
+        let parent_block_hash = self
+            .inner_mut_unchecked()
+            .db_mut()
+            .block_hash(prev_block.to())
+            .map_err(EVMError::Database)?;
 
         self.try_set_storage_unchecked(HISTORY_STORAGE_ADDRESS, slot, parent_block_hash.into())
             .map_err(EVMError::Database)?;
@@ -75,12 +78,12 @@ mod test {
         let mut trevm = crate::test_utils::test_trevm().fill_cfg(&NoopCfg).fill_block(&NoopBlock);
 
         trevm.inner_mut_unchecked().modify_block(|block| {
-            block.number = block_num;
+            block.number = U256::from(block_num);
         });
 
         // we set the previous block hash in the cachedb, as it will be loaded
         // during eip application
-        trevm.inner_mut_unchecked().db().cache.block_hashes.insert(prev_block_num, prev_hash);
+        trevm.inner_mut_unchecked().db_mut().cache.block_hashes.insert(prev_block_num, prev_hash);
 
         trevm.apply_eip2935().unwrap();
 

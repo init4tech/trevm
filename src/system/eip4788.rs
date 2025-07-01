@@ -89,7 +89,7 @@ mod test {
         let mut trevm = crate::test_utils::test_trevm().fill_cfg(&NoopCfg).fill_block(&NoopBlock);
 
         trevm.inner_mut_unchecked().modify_block(|block| {
-            block.timestamp = timestamp;
+            block.timestamp = U256::from(timestamp);
         });
 
         let parent_beacon_root = B256::repeat_byte(0xaa);

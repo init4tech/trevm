@@ -5,8 +5,7 @@ use revm::{
     database::{CacheDB, EmptyDB, InMemoryDB, State},
     inspector::{inspectors::TracerEip3155, NoOpInspector},
     interpreter::{
-        CallInputs, CallOutcome, CreateInputs, CreateOutcome, EOFCreateInputs, Interpreter,
-        InterpreterTypes,
+        CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter, InterpreterTypes,
     },
     primitives::{hardfork::SpecId, Log},
     state::AccountInfo,
@@ -207,26 +206,6 @@ where
     ) {
         tracing::info!("create_end");
         self.create_end = true;
-    }
-
-    fn eofcreate(
-        &mut self,
-        _context: &mut Ctx,
-        _inputs: &mut EOFCreateInputs,
-    ) -> Option<CreateOutcome> {
-        tracing::info!("eofcreate");
-        self.eofcreate = true;
-        None
-    }
-
-    fn eofcreate_end(
-        &mut self,
-        _context: &mut Ctx,
-        _inputs: &EOFCreateInputs,
-        _outcome: &mut CreateOutcome,
-    ) {
-        tracing::info!("eofcreate_end");
-        self.eofcreate_end = true;
     }
 
     fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {

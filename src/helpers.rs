@@ -1,9 +1,9 @@
 use revm::{
     context::{BlockEnv, CfgEnv, TxEnv},
     context_interface::context::ContextError,
-    handler::{instructions::EthInstructions, EthPrecompiles},
+    handler::{instructions::EthInstructions, EthFrame, EthPrecompiles},
     inspector::NoOpInspector,
-    interpreter::{interpreter::EthInterpreter, Interpreter, InterpreterTypes},
+    interpreter::{interpreter::EthInterpreter, InstructionContext, InterpreterTypes},
     Context, Database, Journal,
 };
 
@@ -12,7 +12,7 @@ pub type Ctx<Db, J = Journal<Db>, C = ()> = Context<BlockEnv, TxEnv, CfgEnv, Db,
 
 /// EVM with default env types and adjustable DB.
 pub type Evm<Db, Insp = NoOpInspector, Inst = Instructions<Db>, Prec = EthPrecompiles> =
-    revm::context::Evm<Ctx<Db>, Insp, Inst, Prec>;
+    revm::context::Evm<Ctx<Db>, Insp, Inst, Prec, EthFrame>;
 
 /// Handler table for EVM opcodes.
 pub type Instructions<Db> = EthInstructions<EthInterpreter, Ctx<Db>>;
@@ -22,9 +22,6 @@ pub type Instruction<Db> = revm::interpreter::Instruction<EthInterpreter, Ctx<Db
 
 /// An [`Instruction`] that sets a [`ContextError`] in the [`Ctx`] whenever it
 /// is executed.
-pub fn forbidden<Db: Database, Int: InterpreterTypes>(
-    _interpreter: &mut Interpreter<Int>,
-    ctx: &mut Ctx<Db>,
-) {
-    ctx.error = Err(ContextError::Custom("forbidden opcode".to_string()));
+pub fn forbidden<Db: Database, Int: InterpreterTypes>(ctx: InstructionContext<'_, Ctx<Db>, Int>) {
+    ctx.host.error = Err(ContextError::Custom("forbidden opcode".to_string()));
 }
