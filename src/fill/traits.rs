@@ -212,6 +212,7 @@ mod test {
             let diff = B256::repeat_byte(0xab);
             *prevrandao = Some(diff);
             *difficulty = U256::from_be_bytes(diff.into());
+
             *blob_excess_gas_and_price = Some(BlobExcessGasAndPrice::new(
                 1_000_000,
                 revm::primitives::eip4844::BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE,
