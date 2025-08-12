@@ -34,17 +34,17 @@ impl<'a> BlockUpdate<'a> {
     }
 
     /// Get the height of the block.
-    pub fn height(&self) -> u64 {
+    pub const fn height(&self) -> u64 {
         self.height
     }
 
     /// Get the previous journal hash.
-    pub fn prev_journal_hash(&self) -> B256 {
+    pub const fn prev_journal_hash(&self) -> B256 {
         self.prev_journal_hash
     }
 
     /// Get the journal index.
-    pub fn journal(&self) -> &BundleStateIndex<'a> {
+    pub const fn journal(&self) -> &BundleStateIndex<'a> {
         &self.journal
     }
 
