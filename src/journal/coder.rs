@@ -618,12 +618,10 @@ impl JournalDecode for BundleState {
 
 impl JournalEncode for Header {
     fn serialized_size(&self) -> usize {
-        // Assuming the header is encoded in a way that is compatible with RLP
         alloy::rlp::Encodable::length(&self)
     }
 
     fn encode(&self, buf: &mut dyn BufMut) {
-        // Assuming the header is encoded in a way that is compatible with RLP
         alloy::rlp::Encodable::encode(self, buf);
     }
 }

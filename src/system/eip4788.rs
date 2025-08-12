@@ -104,8 +104,8 @@ mod test {
             U256::from(timestamp)
         );
         assert_eq!(
-            trevm.try_read_storage(BEACON_ROOTS_ADDRESS, root_slot).unwrap(),
-            parent_beacon_root.into()
+            trevm.try_read_storage(BEACON_ROOTS_ADDRESS, root_slot).unwrap().to_be_bytes(),
+            parent_beacon_root
         );
         assert_eq!(
             trevm.try_read_code(BEACON_ROOTS_ADDRESS).unwrap().unwrap(),

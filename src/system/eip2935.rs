@@ -88,8 +88,8 @@ mod test {
         trevm.apply_eip2935().unwrap();
 
         assert_eq!(
-            trevm.try_read_storage(HISTORY_STORAGE_ADDRESS, slot).unwrap(),
-            prev_hash.into()
+            trevm.try_read_storage(HISTORY_STORAGE_ADDRESS, slot).unwrap().to_be_bytes(),
+            prev_hash
         );
         assert_eq!(
             trevm.try_read_code(HISTORY_STORAGE_ADDRESS).unwrap().unwrap(),
