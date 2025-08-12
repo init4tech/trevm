@@ -153,7 +153,7 @@ pub(crate) mod sealed {
 ///
 /// ## Basic usage:
 ///
-/// Invoking with just a DB type will use [`()`] for the ext
+/// Invoking with just a DB type will use `()` for the ext
 ///
 /// ```
 /// use trevm::trevm_aliases;

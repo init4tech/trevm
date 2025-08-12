@@ -2134,11 +2134,12 @@ where
         let Self { mut inner, state: TransactedState { result } } = self;
 
         trevm_try!(inner.db_mut().try_commit(result.state), Trevm { inner, state: NeedsTx::new() });
+
         Ok((result.result, Trevm { inner, state: NeedsTx::new() }))
     }
 
-    /// Accept the state changes, commiting them to the database. Do not return
-    /// the [`ExecutionResult.`]
+    /// Accept the state changes, commiting them to the database, dropping the
+    /// [`ExecutionResult`].
     pub fn accept_state(self) -> EvmNeedsTx<Db, Insp>
     where
         Db: DatabaseCommit,

@@ -1,5 +1,6 @@
 use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
 use alloy::{
+    consensus::Header,
     primitives::{Address, Bytes, B256, U256},
     rlp::{Buf, BufMut},
 };
@@ -69,6 +70,9 @@ pub enum JournalDecodeError {
 
     /// Error decoding an EIP-7702 bytecode.
     Eip7702Decode(Eip7702DecodeError),
+
+    /// RLP decoding error.
+    Rlp(alloy::rlp::Error),
 }
 
 impl core::fmt::Display for JournalDecodeError {
@@ -89,6 +93,9 @@ impl core::fmt::Display for JournalDecodeError {
             Self::Eip7702Decode(e) => {
                 write!(f, "error decoding EIP-7702 bytecode: {e}")
             }
+            Self::Rlp(e) => {
+                write!(f, "error decoding RLP: {e}")
+            }
         }
     }
 }
@@ -97,6 +104,7 @@ impl core::error::Error for JournalDecodeError {
     fn cause(&self) -> Option<&dyn core::error::Error> {
         match self {
             Self::Eip7702Decode(e) => Some(e),
+            Self::Rlp(e) => Some(e),
             _ => None,
         }
     }
@@ -108,6 +116,7 @@ impl core::error::Error for JournalDecodeError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Eip7702Decode(e) => Some(e),
+            Self::Rlp(e) => Some(e),
             _ => None,
         }
     }
@@ -116,6 +125,12 @@ impl core::error::Error for JournalDecodeError {
 impl From<Eip7702DecodeError> for JournalDecodeError {
     fn from(err: Eip7702DecodeError) -> Self {
         Self::Eip7702Decode(err)
+    }
+}
+
+impl From<alloy::rlp::Error> for JournalDecodeError {
+    fn from(err: alloy::rlp::Error) -> Self {
+        Self::Rlp(err)
     }
 }
 
@@ -598,6 +613,22 @@ impl JournalDecode for BundleState {
 
     fn decode(buf: &mut &[u8]) -> Result<Self> {
         BundleStateIndex::decode(buf).map(Self::from)
+    }
+}
+
+impl JournalEncode for Header {
+    fn serialized_size(&self) -> usize {
+        alloy::rlp::Encodable::length(&self)
+    }
+
+    fn encode(&self, buf: &mut dyn BufMut) {
+        alloy::rlp::Encodable::encode(self, buf);
+    }
+}
+
+impl JournalDecode for Header {
+    fn decode(buf: &mut &[u8]) -> Result<Self> {
+        alloy::rlp::Decodable::decode(buf).map_err(Into::into)
     }
 }
 
