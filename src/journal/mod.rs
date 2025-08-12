@@ -56,3 +56,6 @@ pub use coder::{JournalDecode, JournalDecodeError, JournalEncode};
 
 mod index;
 pub use index::{AcctDiff, BundleStateIndex, InfoOutcome};
+
+mod update;
+pub use update::BlockUpdate;
