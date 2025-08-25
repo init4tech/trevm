@@ -2,6 +2,7 @@ use crate::{
     db::{StateAcc, TryStateAcc},
     driver::DriveBlockResult,
     helpers::{Ctx, Evm, Instruction},
+    inspectors::Layered,
     Block, BlockDriver, BundleDriver, Cfg, ChainDriver, DriveBundleResult, DriveChainResult,
     ErroredState, EvmErrored, EvmExtUnchecked, EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady,
     EvmTransacted, HasBlock, HasCfg, HasTx, NeedsCfg, NeedsTx, TransactedState, Tx,
@@ -99,6 +100,92 @@ where
     /// Deconstruct the [`Trevm`] into the backing DB, dropping all other types.
     pub fn into_db(self) -> Db {
         self.inner.ctx.journaled_state.database
+    }
+
+    /// Get a reference to the inspector.
+    pub fn inspector(&self) -> &Insp {
+        &self.inner.inspector
+    }
+
+    /// Get a mutable reference to the inspector.
+    pub fn inspector_mut(&mut self) -> &mut Insp {
+        &mut self.inner.inspector
+    }
+
+    /// Replace the current inspector with a new inspector of the same type.
+    pub fn replace_inspector(mut self, inspector: Insp) -> Self
+    where
+        TrevmState: Copy,
+    {
+        *self.inspector_mut() = inspector;
+        self
+    }
+
+    /// Layer a new inspector on top of the current one.
+    pub fn layer_inspector<Insp2>(
+        self,
+        inspector: Insp2,
+    ) -> Trevm<Db, Layered<Insp2, Insp>, TrevmState>
+    where
+        Insp2: Inspector<Ctx<Db>>,
+        TrevmState: Copy,
+    {
+        let inner = Box::new(Evm {
+            ctx: self.inner.ctx,
+            inspector: Layered::new(inspector, self.inner.inspector),
+            instruction: self.inner.instruction,
+            precompiles: self.inner.precompiles,
+            frame_stack: self.inner.frame_stack,
+        });
+        Trevm { inner, state: self.state }
+    }
+
+    /// Take the inspector out of the Trevm, replacing it with a
+    /// [`NoOpInspector`].
+    pub fn take_inspector(self) -> (Insp, Trevm<Db, NoOpInspector, TrevmState>) {
+        let inspector = self.inner.inspector;
+        let inner = Box::new(Evm {
+            ctx: self.inner.ctx,
+            inspector: NoOpInspector,
+            instruction: self.inner.instruction,
+            precompiles: self.inner.precompiles,
+            frame_stack: self.inner.frame_stack,
+        });
+        (inspector, Trevm { inner, state: self.state })
+    }
+
+    /// Replace the current inspector with a new one, dropping the old one.
+    pub fn set_inspector<Insp2>(self, inspector: Insp2) -> Trevm<Db, Insp2, TrevmState>
+    where
+        Insp2: Inspector<Ctx<Db>>,
+        TrevmState: Copy,
+    {
+        let inner = Box::new(Evm {
+            ctx: self.inner.ctx,
+            inspector,
+            instruction: self.inner.instruction,
+            precompiles: self.inner.precompiles,
+            frame_stack: self.inner.frame_stack,
+        });
+        Trevm { inner, state: self.state }
+    }
+
+    /// Run the closure with a different inspector, then restore the previous
+    /// one.
+    pub fn with_inspector<Insp2, F, NewState>(
+        self,
+        inspector: Insp2,
+        f: F,
+    ) -> Trevm<Db, Insp, NewState>
+    where
+        Insp2: Inspector<Ctx<Db>>,
+        F: FnOnce(Trevm<Db, Insp2, TrevmState>) -> Trevm<Db, Insp2, NewState>,
+        TrevmState: Copy,
+        NewState: Copy,
+    {
+        let (old, this) = self.take_inspector();
+        let this = f(this.set_inspector(inspector));
+        this.set_inspector(old)
     }
 
     /// Get the id of the currently running hardfork spec.
