@@ -1,5 +1,5 @@
 use alloy::{
-    consensus::{Signed, TxType},
+    consensus::{Signed, TxEip4844, TxType},
     primitives::U256,
 };
 use revm::context::{BlockEnv, TxEnv};
@@ -262,6 +262,18 @@ impl Tx for Signed<alloy::consensus::TxEip7702> {
 }
 
 impl Tx for alloy::consensus::TxEnvelope {
+    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+        match self {
+            Self::Legacy(t) => t.fill_tx_env(tx_env),
+            Self::Eip2930(t) => t.fill_tx_env(tx_env),
+            Self::Eip1559(t) => t.fill_tx_env(tx_env),
+            Self::Eip4844(t) => t.fill_tx_env(tx_env),
+            Self::Eip7702(t) => t.fill_tx_env(tx_env),
+        }
+    }
+}
+
+impl Tx for alloy::consensus::EthereumTxEnvelope<TxEip4844> {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
         match self {
             Self::Legacy(t) => t.fill_tx_env(tx_env),
