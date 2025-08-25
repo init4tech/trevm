@@ -10,6 +10,9 @@ pub use set::InspectorSet;
 mod spanning;
 pub use spanning::SpanningInspector;
 
+mod with_output;
+pub use with_output::InspectorWithOutput;
+
 #[cfg(test)]
 mod test {
     use super::*;
