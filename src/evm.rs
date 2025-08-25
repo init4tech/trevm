@@ -194,7 +194,7 @@ where
         Insp2: Inspector<Ctx<Db>>,
         F: FnOnce(
             Trevm<Db, Insp2, TrevmState>,
-        ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>,
+        ) -> Result<Trevm<Db, Insp2, NewState>, EvmErrored<Db, Insp2, E>>,
     {
         let (previous, this) = self.take_inspector();
         let this = this.set_inspector(inspector);
