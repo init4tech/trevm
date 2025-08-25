@@ -1,5 +1,5 @@
 use crate::journal::{BundleStateIndex, JournalDecode, JournalDecodeError, JournalEncode};
-use alloy::primitives::{keccak256, B256};
+use alloy::primitives::{keccak256, Bytes, B256};
 use std::sync::OnceLock;
 
 /// Journal associated with a block
@@ -15,7 +15,7 @@ pub struct BlockUpdate<'a> {
     journal: BundleStateIndex<'a>,
 
     /// The serialized journal
-    serialized: OnceLock<Vec<u8>>,
+    serialized: OnceLock<Bytes>,
 
     /// The hash of the serialized journal
     hash: OnceLock<B256>,
@@ -50,7 +50,7 @@ impl<'a> BlockUpdate<'a> {
 
     /// Serialize the block update.
     pub fn serialized(&self) -> &[u8] {
-        self.serialized.get_or_init(|| JournalEncode::encoded(self)).as_slice()
+        self.serialized.get_or_init(|| JournalEncode::encoded(self)).as_ref()
     }
 
     /// Serialize and hash the block update.
@@ -78,7 +78,7 @@ impl JournalDecode for BlockUpdate<'static> {
             height: JournalDecode::decode(buf)?,
             prev_journal_hash: JournalDecode::decode(buf)?,
             journal: JournalDecode::decode(buf)?,
-            serialized: OnceLock::from(original.to_vec()),
+            serialized: OnceLock::from(Bytes::copy_from_slice(original)),
             hash: OnceLock::from(keccak256(original)),
         })
     }

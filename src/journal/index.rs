@@ -160,7 +160,7 @@ impl From<AcctDiff<'_>> for BundleAccount {
 /// # fn make_index(bundle_state: &BundleState) -> Result<(), JournalDecodeError> {
 /// let index = BundleStateIndex::from(bundle_state);
 /// let serialized_index = index.encoded();
-/// let decoded = BundleStateIndex::decode(&mut serialized_index.as_slice())?;
+/// let decoded = BundleStateIndex::decode(&mut serialized_index.as_ref())?;
 /// assert_eq!(index, decoded);
 /// # Ok(())
 /// # }

@@ -2,7 +2,7 @@ use crate::journal::{AcctDiff, BundleStateIndex, InfoOutcome};
 use alloy::{
     consensus::Header,
     primitives::{Address, Bytes, B256, U256},
-    rlp::{Buf, BufMut},
+    rlp::{Buf, BufMut, BytesMut},
 };
 use revm::{
     bytecode::eip7702::{Eip7702Bytecode, Eip7702DecodeError},
@@ -13,7 +13,6 @@ use std::{
     borrow::{Cow, ToOwned},
     collections::BTreeMap,
     fmt::Debug,
-    vec::Vec,
 };
 
 type Result<T, E = JournalDecodeError> = core::result::Result<T, E>;
@@ -156,10 +155,10 @@ pub trait JournalEncode: Debug {
     fn encode(&self, buf: &mut dyn BufMut);
 
     /// Shortcut to encode the type into a new vec.
-    fn encoded(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
+    fn encoded(&self) -> Bytes {
+        let mut buf = BytesMut::with_capacity(self.serialized_size());
         self.encode(&mut buf);
-        buf
+        buf.freeze().into()
     }
 }
 
@@ -641,7 +640,7 @@ mod test {
         let enc = JournalEncode::encoded(expected);
         let ty_name = core::any::type_name::<T>();
         assert_eq!(enc.len(), expected.serialized_size(), "{ty_name}");
-        let dec = T::decode(&mut enc.as_slice()).expect("decoding failed");
+        let dec = T::decode(&mut enc.as_ref()).expect("decoding failed");
         assert_eq!(&dec, expected, "{ty_name}");
     }
 

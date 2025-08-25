@@ -31,7 +31,7 @@
 //!
 //! // We can serialize it and deserialize it :)
 //! let serialized_index = index.encoded();
-//! let decoded = BundleStateIndex::decode(&mut serialized_index.as_slice())?;
+//! let decoded = BundleStateIndex::decode(&mut serialized_index.as_ref())?;
 //! assert_eq!(index, decoded);
 //!
 //! // It contains information about accounts
