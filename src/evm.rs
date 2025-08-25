@@ -184,8 +184,7 @@ where
         NewState: Copy,
     {
         let (old, this) = self.take_inspector();
-        let this = this.set_inspector(inspector);
-        let this = f(this);
+        let this = f(this.set_inspector(inspector));
         this.set_inspector(old)
     }
 
