@@ -112,6 +112,15 @@ where
         &mut self.inner.inspector
     }
 
+    /// Replace the current inspector with a new inspector of the same type.
+    pub fn replace_inspector(mut self, inspector: Insp) -> Self
+    where
+        TrevmState: Copy,
+    {
+        *self.inspector_mut() = inspector;
+        self
+    }
+
     /// Layer a new inspector on top of the current one.
     pub fn layer_inspector<Insp2>(
         self,
