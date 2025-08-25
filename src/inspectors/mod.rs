@@ -4,11 +4,17 @@ pub use layer::Layered;
 mod timeout;
 pub use timeout::TimeLimit;
 
+#[cfg(feature = "tracing-inspectors")]
+mod tracing;
+
 mod set;
 pub use set::InspectorSet;
 
 mod spanning;
 pub use spanning::SpanningInspector;
+
+mod with_output;
+pub use with_output::InspectorWithOutput;
 
 #[cfg(test)]
 mod test {
