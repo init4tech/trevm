@@ -184,13 +184,12 @@ where
     /// Run a fallible function with the provided inspector, then restore the
     /// previous inspector. If the function returns an error, it will be
     /// wrapped in an [`EvmErrored`] along with the current EVM state.
-    pub fn try_with_inspector<C, F, Insp2, NewState, E>(
+    pub fn try_with_inspector<F, Insp2, NewState, E>(
         self,
         inspector: Insp2,
         f: F,
     ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>
     where
-        C: Cfg,
         Insp2: Inspector<Ctx<Db>>,
         F: FnOnce(
             Trevm<Db, Insp2, TrevmState>,
