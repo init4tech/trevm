@@ -113,10 +113,7 @@ where
     }
 
     /// Replace the current inspector with a new inspector of the same type.
-    pub fn replace_inspector(mut self, inspector: Insp) -> Self
-    where
-        TrevmState: Copy,
-    {
+    pub fn replace_inspector(mut self, inspector: Insp) -> Self {
         *self.inspector_mut() = inspector;
         self
     }
@@ -128,7 +125,6 @@ where
     ) -> Trevm<Db, Layered<Insp2, Insp>, TrevmState>
     where
         Insp2: Inspector<Ctx<Db>>,
-        TrevmState: Copy,
     {
         let inner = Box::new(Evm {
             ctx: self.inner.ctx,
@@ -158,7 +154,6 @@ where
     pub fn set_inspector<Insp2>(self, inspector: Insp2) -> Trevm<Db, Insp2, TrevmState>
     where
         Insp2: Inspector<Ctx<Db>>,
-        TrevmState: Copy,
     {
         let inner = Box::new(Evm {
             ctx: self.inner.ctx,
@@ -180,12 +175,34 @@ where
     where
         Insp2: Inspector<Ctx<Db>>,
         F: FnOnce(Trevm<Db, Insp2, TrevmState>) -> Trevm<Db, Insp2, NewState>,
-        TrevmState: Copy,
-        NewState: Copy,
     {
         let (old, this) = self.take_inspector();
         let this = f(this.set_inspector(inspector));
         this.set_inspector(old)
+    }
+
+    /// Run a fallible function with the provided inspector, then restore the
+    /// previous inspector. If the function returns an error, it will be
+    /// wrapped in an [`EvmErrored`] along with the current EVM state.
+    pub fn try_with_inspector<C, F, Insp2, NewState, E>(
+        self,
+        inspector: Insp2,
+        f: F,
+    ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>
+    where
+        C: Cfg,
+        Insp2: Inspector<Ctx<Db>>,
+        F: FnOnce(
+            Trevm<Db, Insp2, TrevmState>,
+        ) -> Result<Trevm<Db, Insp, NewState>, EvmErrored<Db, Insp, E>>,
+    {
+        let (previous, this) = self.take_inspector();
+        let this = this.set_inspector(inspector);
+
+        match f(this) {
+            Ok(evm) => Ok(evm.set_inspector(previous)),
+            Err(evm) => Err(evm.set_inspector(previous)),
+        }
     }
 
     /// Get the id of the currently running hardfork spec.
