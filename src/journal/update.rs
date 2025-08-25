@@ -48,6 +48,11 @@ impl<'a> BlockUpdate<'a> {
         &self.journal
     }
 
+    /// Decompose the block update into its parts.
+    pub fn into_parts(self) -> (u64, B256, BundleStateIndex<'a>) {
+        (self.height, self.prev_journal_hash, self.journal)
+    }
+
     /// Serialize the block update.
     pub fn serialized(&self) -> &[u8] {
         self.serialized.get_or_init(|| JournalEncode::encoded(self)).as_ref()
@@ -74,10 +79,17 @@ impl JournalEncode for BlockUpdate<'_> {
 impl JournalDecode for BlockUpdate<'static> {
     fn decode(buf: &mut &[u8]) -> Result<Self, JournalDecodeError> {
         let original = *buf;
+        let height = JournalDecode::decode(buf)?;
+        let prev_journal_hash = JournalDecode::decode(buf)?;
+        let journal = JournalDecode::decode(buf)?;
+
+        let bytes_read = original.len() - buf.len();
+        let original = &original[..bytes_read];
+
         Ok(Self {
-            height: JournalDecode::decode(buf)?,
-            prev_journal_hash: JournalDecode::decode(buf)?,
-            journal: JournalDecode::decode(buf)?,
+            height,
+            prev_journal_hash,
+            journal,
             serialized: OnceLock::from(Bytes::copy_from_slice(original)),
             hash: OnceLock::from(keccak256(original)),
         })
