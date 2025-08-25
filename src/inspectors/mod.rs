@@ -4,6 +4,9 @@ pub use layer::Layered;
 mod timeout;
 pub use timeout::TimeLimit;
 
+#[cfg(feature = "tracing-inspectors")]
+mod tracing;
+
 mod set;
 pub use set::InspectorSet;
 
