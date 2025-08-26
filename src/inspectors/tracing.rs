@@ -13,12 +13,12 @@ pub struct TracingInspectorOutput {
 
 impl TracingInspectorOutput {
     /// Creates a new output instance.
-    pub fn new(traces: CallTraceArena) -> Self {
+    pub const fn new(traces: CallTraceArena) -> Self {
         Self { traces }
     }
 
     /// Returns a reference to the traces produced by the inspector.
-    pub fn traces(&self) -> &CallTraceArena {
+    pub const fn traces(&self) -> &CallTraceArena {
         &self.traces
     }
 
@@ -39,7 +39,7 @@ impl<Db: Database> InspectorWithOutput<Ctx<Db>> for TracingInspector {
     type Output = TracingInspectorOutput;
 
     fn has_output(&self) -> bool {
-        self.traces().nodes().len() > 0
+        !self.traces().nodes().is_empty()
     }
 
     fn reset_output(&mut self) {
