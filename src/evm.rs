@@ -828,6 +828,66 @@ where
     }
 }
 
+// Layered inspector
+impl<Db, Outer, Inner, TrevmState> Trevm<Db, Layered<Outer, Inner>, TrevmState>
+where
+    Db: Database,
+    Outer: Inspector<Ctx<Db>>,
+    Inner: Inspector<Ctx<Db>>,
+{
+    /// Remove the outer-layer inspector, leaving the inner-layer inspector in
+    /// place.
+    pub fn take_outer(self) -> (Outer, Trevm<Db, Inner, TrevmState>) {
+        let (outer, inner) = self.inner.inspector.into_parts();
+
+        (
+            outer,
+            Trevm {
+                inner: Box::new(Evm {
+                    ctx: self.inner.ctx,
+                    inspector: inner,
+                    instruction: self.inner.instruction,
+                    precompiles: self.inner.precompiles,
+                    frame_stack: self.inner.frame_stack,
+                }),
+                state: self.state,
+            },
+        )
+    }
+
+    /// Remove the outer-layer inspector, leaving the inner-layer inspector in
+    /// place.
+    pub fn remove_outer(self) -> Trevm<Db, Inner, TrevmState> {
+        self.take_outer().1
+    }
+
+    /// Remove the inner-layer inspector, leaving the outer-layer inspector in
+    /// place.
+    pub fn take_inner(self) -> (Inner, Trevm<Db, Outer, TrevmState>) {
+        let (outer, inner) = self.inner.inspector.into_parts();
+
+        (
+            inner,
+            Trevm {
+                inner: Box::new(Evm {
+                    ctx: self.inner.ctx,
+                    inspector: outer,
+                    instruction: self.inner.instruction,
+                    precompiles: self.inner.precompiles,
+                    frame_stack: self.inner.frame_stack,
+                }),
+                state: self.state,
+            },
+        )
+    }
+
+    /// Remove the inner-layer inspector, leaving the outer-layer inspector in
+    /// place.
+    pub fn remove_inner(self) -> Trevm<Db, Outer, TrevmState> {
+        self.take_inner().1
+    }
+}
+
 // --- ALL STATES, WITH State<Db>
 
 impl<Db, Insp, TrevmState> Trevm<Db, Insp, TrevmState>

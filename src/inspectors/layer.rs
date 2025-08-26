@@ -41,12 +41,18 @@ impl<Outer, Inner> Layered<Outer, Inner> {
         Layered { outer: self, inner }
     }
 
-    /// Get a reference to the current inspector.
+    /// Decompose the [`Layered`] inspector into its outer and inner
+    /// inspectors.
+    pub fn into_parts(self) -> (Outer, Inner) {
+        (self.outer, self.inner)
+    }
+
+    /// Get a reference to the outer inspector.
     pub const fn outer(&self) -> &Outer {
         &self.outer
     }
 
-    /// Get a mutable reference to the current inspector.
+    /// Get a mutable reference to the outer inspector.
     pub const fn outer_mut(&mut self) -> &mut Outer {
         &mut self.outer
     }

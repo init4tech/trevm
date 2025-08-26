@@ -6,6 +6,8 @@ pub use timeout::TimeLimit;
 
 #[cfg(feature = "tracing-inspectors")]
 mod tracing;
+#[cfg(feature = "tracing-inspectors")]
+pub use tracing::TracingInspectorOutput;
 
 mod set;
 pub use set::InspectorSet;
