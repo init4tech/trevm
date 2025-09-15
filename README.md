@@ -1,8 +1,5 @@
 ## Trevm
 
-⚠️ Trevm is **experimental** software and not considered ready for production
-use. ⚠️
-
 Trevm is a [typestate] API wrapper for [revm]. It provides an ergonomic way to
 interact with the revm API, shortcuts for common tasks, and straightforward API
 extensibility. Trevm does NOT try to provide low-level EVM management, but
