@@ -2432,14 +2432,14 @@ mod tests {
 
         let tx = tx.with_gas_limit(estimation.limit());
 
-        let mut output = trevm.clear_tx().fill_tx(&tx).run().unwrap();
+        let mut output = trevm.clear_tx().fill_tx(&tx).run().unwrap().accept();
 
-        let bob_code = output.read_code(BOB.address());
+        let bob_code = output.1.read_code(BOB.address());
         dbg!(&bob_code);
 
-        dbg!(&output.result());
-        assert!(output.result().is_success());
-        assert!(output.result().logs().len() == 1);
+        dbg!(&output.0);
+        assert!(output.0.is_success());
+        assert!(output.0.logs().len() == 1);
     }
 }
 
