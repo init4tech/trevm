@@ -2357,6 +2357,7 @@ mod tests {
     use alloy::signers::SignerSync;
     use alloy::{consensus::constants::ETH_TO_WEI, rpc::types::TransactionRequest};
 
+    use revm::context::transaction::AuthorizationTr;
     use revm::database::InMemoryDB;
     use revm::inspector::NoOpInspector;
     use revm::primitives::bytes;
@@ -2417,6 +2418,7 @@ mod tests {
         };
         let signature = BOB.sign_hash_sync(&authorization.signature_hash()).unwrap();
         let signed_authorization = authorization.into_signed(signature);
+        assert!(signed_authorization.authority().unwrap() == BOB.address());
 
         let tx = TransactionRequest::default()
             .from(ALICE.address())

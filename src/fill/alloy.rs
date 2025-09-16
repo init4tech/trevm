@@ -359,9 +359,22 @@ impl Tx for alloy::rpc::types::TransactionRequest {
 
         *caller = self.from.unwrap_or_default();
 
-        // NB: this is set to max if not provided, as users will typically
-        // intend that to mean "as much as possible"
-        *tx_type = self.transaction_type.unwrap_or(TxType::Eip1559 as u8);
+        // Determine the minimal tx type usable.
+        *tx_type = {
+            if self.transaction_type.is_some() {
+                self.transaction_type.unwrap()
+            } else if self.authorization_list.is_some() {
+                TxType::Eip7702 as u8
+            } else if self.has_eip4844_fields() {
+                TxType::Eip4844 as u8
+            } else if self.has_eip1559_fields() {
+                TxType::Eip1559 as u8
+            } else if self.access_list.is_some() {
+                TxType::Eip2930 as u8
+            } else {
+                TxType::Legacy as u8
+            }
+        };
         *gas_limit = self.gas.unwrap_or(u64::MAX);
         *gas_price =
             self.gas_price.unwrap_or_default().max(self.max_fee_per_gas.unwrap_or_default());
