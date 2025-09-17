@@ -12,14 +12,14 @@ use revm::{
     interpreter::{
         CallInputs, CallOutcome, CreateInputs, CreateOutcome, Interpreter, InterpreterTypes,
     },
-    primitives::{hardfork::SpecId, Log},
+    primitives::{bytes, hardfork::SpecId, Log},
     state::AccountInfo,
     Context, Inspector, MainBuilder,
 };
 
 /// LogContract bytecode
 /// This is the runtime bytecode. This should be set directly with ``set_bytecode_unchecked``
-/// ```no_run
+/// ```ignore
 /// contract LogContract {
 ///     event Hello();
 ///     event World();
@@ -33,7 +33,7 @@ use revm::{
 ///     }
 /// }
 /// ```
-pub const LOG_BYTECODE: &str = "0x6004361015600b575f80fd5b5f3560e01c80637b3ab2d014605f57639ee1a440146027575f80fd5b34605b575f366003190112605b577f2d67bb91f17bca05af6764ab411e86f4ddf757adb89fcec59a7d21c525d417125f80a1005b5f80fd5b34605b575f366003190112605b577fbcdfe0d5b27dd186282e187525415c57ea3077c34efb39148111e4d342e7ab0e5f80a100fea2646970667358221220f6b42b522bc9fb2b4c7d7e611c7c3e995d057ecab7fd7be4179712804c886b4f64736f6c63430008190033";
+pub const LOG_DEPLOYED_BYTECODE: alloy::primitives::Bytes = bytes!("6080604052348015600e575f80fd5b50600436106030575f3560e01c80637b3ab2d01460345780639ee1a44014603c575b5f80fd5b603a6044565b005b60426072565b005b7fbcdfe0d5b27dd186282e187525415c57ea3077c34efb39148111e4d342e7ab0e60405160405180910390a1565b7f2d67bb91f17bca05af6764ab411e86f4ddf757adb89fcec59a7d21c525d4171260405160405180910390a156fea2646970667358221220144b313f421e29c7119666392827595d05f3dc33d0ccb0e75314cc9180e4fb1f64736f6c634300081a0033");
 
 /// Alice testing signer
 pub static ALICE: LazyLock<PrivateKeySigner> =

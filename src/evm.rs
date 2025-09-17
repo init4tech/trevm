@@ -2348,22 +2348,21 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{
+        test_utils::{test_trevm_with_funds, ALICE, BOB, LOG_DEPLOYED_BYTECODE},
+        NoopBlock, NoopCfg, TrevmBuilder,
+    };
     use alloy::{
+        consensus::constants::ETH_TO_WEI,
         network::{TransactionBuilder, TransactionBuilder7702},
         rpc::types::{Authorization, TransactionRequest},
         signers::SignerSync,
-        consensus::constants::ETH_TO_WEI,
     };
     use revm::{
-        context::transaction::AuthorizationTr,
-        database::InMemoryDB,
-        primitives::bytes,
+        context::transaction::AuthorizationTr, database::InMemoryDB,
+        inspector::inspectors::TracerEip3155, primitives::bytes,
     };
-    use crate::{
-        test_utils::{test_trevm_with_funds, ALICE, BOB, LOG_BYTECODE},
-        TrevmBuilder, NoopBlock, NoopCfg,
-    };
-    use super::*;
 
     #[test]
     fn test_estimate_gas_simple_transfer() {
@@ -2395,7 +2394,7 @@ mod tests {
         let mut trevm =
             TrevmBuilder::new().with_db(db).with_spec_id(SpecId::PRAGUE).build_trevm().unwrap();
         let _ = trevm.test_set_balance(ALICE.address(), U256::from(ETH_TO_WEI));
-        let _ = trevm.set_bytecode_unchecked(log_address, Bytecode::new_raw(LOG_BYTECODE.into()));
+        let _ = trevm.set_bytecode_unchecked(log_address, Bytecode::new_raw(LOG_DEPLOYED_BYTECODE));
 
         // Bob will sign the authorization.
         let authorization = Authorization {
@@ -2417,6 +2416,7 @@ mod tests {
         let (estimation, trevm) =
             trevm.fill_cfg(&NoopCfg).fill_block(&NoopBlock).fill_tx(&tx).estimate_gas().unwrap();
 
+        dbg!(&estimation);
         assert!(estimation.is_success());
 
         let tx = tx.with_gas_limit(estimation.limit());
