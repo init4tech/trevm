@@ -19,7 +19,7 @@ use revm::{
 
 /// LogContract bytecode
 /// This is the runtime bytecode. This should be set directly with ``set_bytecode_unchecked``
-/// ```
+/// ```no_run
 /// contract LogContract {
 ///     event Hello();
 ///     event World();
