@@ -2359,10 +2359,7 @@ mod tests {
         rpc::types::{Authorization, TransactionRequest},
         signers::SignerSync,
     };
-    use revm::{
-        context::transaction::AuthorizationTr, database::InMemoryDB,
-        inspector::inspectors::TracerEip3155, primitives::bytes,
-    };
+    use revm::{context::transaction::AuthorizationTr, database::InMemoryDB, primitives::bytes};
 
     #[test]
     fn test_estimate_gas_simple_transfer() {
@@ -2416,7 +2413,6 @@ mod tests {
         let (estimation, trevm) =
             trevm.fill_cfg(&NoopCfg).fill_block(&NoopBlock).fill_tx(&tx).estimate_gas().unwrap();
 
-        dbg!(&estimation);
         assert!(estimation.is_success());
 
         let tx = tx.with_gas_limit(estimation.limit());
