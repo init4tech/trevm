@@ -2033,7 +2033,7 @@ where
         // NB: 64 / 63 is due to Ethereum's gas-forwarding rules. Each call
         // frame can forward only 63/64 of the gas it has when it makes a new
         // frame.
-        let mut needle = gas_used + gas_refunded + revm::interpreter::gas::CALL_STIPEND * 64 / 63;
+        let mut needle = (gas_used + gas_refunded + revm::interpreter::gas::CALL_STIPEND) * 64 / 63;
 
         // If the first search is outside the range, we don't need to try it.
         if search_range.contains(needle) {
@@ -2343,6 +2343,84 @@ where
     pub fn take_estimation(self) -> (crate::EstimationResult, EvmReady<Db, Insp>) {
         let estimation = self.estimation();
         (estimation, Trevm { inner: self.inner, state: crate::Ready::new() })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        test_utils::{test_trevm_with_funds, ALICE, BOB, LOG_DEPLOYED_BYTECODE},
+        NoopBlock, NoopCfg, TrevmBuilder,
+    };
+    use alloy::{
+        consensus::constants::ETH_TO_WEI,
+        network::{TransactionBuilder, TransactionBuilder7702},
+        rpc::types::{Authorization, TransactionRequest},
+        signers::SignerSync,
+    };
+    use revm::{context::transaction::AuthorizationTr, database::InMemoryDB, primitives::bytes};
+
+    #[test]
+    fn test_estimate_gas_simple_transfer() {
+        let trevm = test_trevm_with_funds(&[
+            (ALICE.address(), U256::from(ETH_TO_WEI)),
+            (BOB.address(), U256::from(ETH_TO_WEI)),
+        ]);
+
+        let tx = TransactionRequest::default()
+            .from(ALICE.address())
+            .to(BOB.address())
+            .value(U256::from(ETH_TO_WEI / 2));
+
+        let (estimation, _trevm) =
+            trevm.fill_cfg(&NoopCfg).fill_block(&NoopBlock).fill_tx(&tx).estimate_gas().unwrap();
+
+        assert!(estimation.is_success());
+        // The gas used should correspond to a simple transfer.
+        assert_eq!(estimation.gas_used(), 21000);
+    }
+
+    #[test]
+    fn test_7702_authorization_estimation() {
+        // Insert the LogContract code
+        let db = InMemoryDB::default();
+        let log_address = Address::repeat_byte(0x32);
+
+        // Set up trevm, and test balances.
+        let mut trevm =
+            TrevmBuilder::new().with_db(db).with_spec_id(SpecId::PRAGUE).build_trevm().unwrap();
+        let _ = trevm.test_set_balance(ALICE.address(), U256::from(ETH_TO_WEI));
+        let _ = trevm.set_bytecode_unchecked(log_address, Bytecode::new_raw(LOG_DEPLOYED_BYTECODE));
+
+        // Bob will sign the authorization.
+        let authorization = Authorization {
+            chain_id: U256::ZERO,
+            address: log_address,
+            // We know Bob's nonce is 0.
+            nonce: 0,
+        };
+        let signature = BOB.sign_hash_sync(&authorization.signature_hash()).unwrap();
+        let signed_authorization = authorization.into_signed(signature);
+        assert_eq!(signed_authorization.authority().unwrap(), BOB.address());
+
+        let tx = TransactionRequest::default()
+            .from(ALICE.address())
+            .to(BOB.address())
+            .with_authorization_list(vec![signed_authorization])
+            .with_input(bytes!("0x7b3ab2d0")); // emitHello()
+
+        let (estimation, trevm) =
+            trevm.fill_cfg(&NoopCfg).fill_block(&NoopBlock).fill_tx(&tx).estimate_gas().unwrap();
+
+        assert!(estimation.is_success());
+
+        let tx = tx.with_gas_limit(estimation.limit());
+
+        let output = trevm.clear_tx().fill_tx(&tx).run().unwrap().accept();
+
+        assert!(output.0.is_success());
+        assert_eq!(output.0.logs().len(), 1);
     }
 }
 

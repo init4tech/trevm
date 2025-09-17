@@ -45,8 +45,17 @@ impl<Db, Insp> TrevmBuilder<Db, Insp> {
     }
 
     /// Set the inspector for the EVM.
+    ///
+    /// Equivalent to [`Self::with_inspector`].
     pub fn with_insp<OInsp>(self, insp: OInsp) -> TrevmBuilder<Db, OInsp> {
         TrevmBuilder { db: self.db, insp, spec: self.spec, precompiles: self.precompiles }
+    }
+
+    /// Set the inspector for the EVM.
+    ///
+    /// Equivalent to [`Self::with_insp`].
+    pub fn with_inspector<OInsp>(self, insp: OInsp) -> TrevmBuilder<Db, OInsp> {
+        self.with_insp(insp)
     }
 
     /// Set the spec id for the EVM.
