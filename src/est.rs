@@ -34,7 +34,7 @@ impl SearchRange {
 
     /// Calculate the midpoint of the search range.
     pub(crate) const fn midpoint(&self) -> u64 {
-        ((self.max() as u128 + self.min() as u128) / 2) as u64
+        (self.max() + self.min()) / 2
     }
 
     /// Get the start of the search range.
@@ -296,6 +296,12 @@ mod tests {
         range.maybe_lower_max(180);
         assert_eq!(range.max(), 180);
         assert_eq!(range.midpoint(), 152);
+
+        range.maybe_raise_min(100);
+        assert_eq!(range.min(), 125);
+
+        range.maybe_lower_max(200);
+        assert_eq!(range.max(), 180);
     }
 }
 

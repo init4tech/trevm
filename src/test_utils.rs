@@ -1,5 +1,7 @@
+use std::sync::LazyLock;
+
 use crate::{helpers::Ctx, EvmNeedsCfg, Trevm};
-use alloy::primitives::{Address, U256};
+use alloy::{primitives::{Address, U256}, signers::{k256::ecdsa::SigningKey, local::PrivateKeySigner}};
 use revm::{
     bytecode::Bytecode,
     database::{CacheDB, EmptyDB, InMemoryDB, State},
@@ -13,7 +15,29 @@ use revm::{
 };
 
 /// LogContract bytecode
+/// ```
+/// contract LogContract {
+///     event Hello();
+///     event World();
+///
+///     function emitHello() public {
+///         emit Hello();
+///     }
+///
+///     function emitWorld() public {
+///         emit World();
+///     }
+/// }
+/// ```
 pub const LOG_BYTECODE: &str = "0x60806040526004361015610013575b6100ca565b61001d5f3561003c565b80637b3ab2d01461003757639ee1a4400361000e57610097565b610064565b60e01c90565b60405190565b5f80fd5b5f80fd5b5f91031261005a57565b61004c565b5f0190565b3461009257610074366004610050565b61007c6100ce565b610084610042565b8061008e8161005f565b0390f35b610048565b346100c5576100a7366004610050565b6100af610106565b6100b7610042565b806100c18161005f565b0390f35b610048565b5f80fd5b7fbcdfe0d5b27dd186282e187525415c57ea3077c34efb39148111e4d342e7ab0e6100f7610042565b806101018161005f565b0390a1565b7f2d67bb91f17bca05af6764ab411e86f4ddf757adb89fcec59a7d21c525d4171261012f610042565b806101398161005f565b0390a156fea2646970667358221220e22cd46ba129dcbd6f62f632cc862b0924d3f36c991fd0b45947581aa3010d6464736f6c634300081a0033";
+
+
+/// Alice testing signer
+pub static ALICE: LazyLock<PrivateKeySigner> =
+    LazyLock::new(|| PrivateKeySigner::from(SigningKey::from_slice(&[0x11; 32]).unwrap()));
+/// Bob testing signer
+pub static BOB: LazyLock<PrivateKeySigner> =
+    LazyLock::new(|| PrivateKeySigner::from(SigningKey::from_slice(&[0x22; 32]).unwrap()));
 
 impl<Insp, State> Trevm<InMemoryDB, Insp, State>
 where

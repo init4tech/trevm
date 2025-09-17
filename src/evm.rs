@@ -2348,41 +2348,29 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::LazyLock;
-
-    use alloy::network::{TransactionBuilder, TransactionBuilder7702};
-    use alloy::rpc::types::Authorization;
-    use alloy::signers::k256::ecdsa::SigningKey;
-    use alloy::signers::local::PrivateKeySigner;
-    use alloy::signers::SignerSync;
-    use alloy::{consensus::constants::ETH_TO_WEI, rpc::types::TransactionRequest};
-
-    use revm::context::transaction::AuthorizationTr;
-    use revm::database::InMemoryDB;
-    use revm::inspector::NoOpInspector;
-    use revm::primitives::bytes;
-
-    use crate::test_utils::{test_trevm_with_funds, LOG_BYTECODE};
-    use crate::{EvmNeedsCfg, TrevmBuilder};
-    use crate::{NoopBlock, NoopCfg};
-
+    use alloy::{
+        network::{TransactionBuilder, TransactionBuilder7702},
+        rpc::types::{Authorization, TransactionRequest},
+        signers::SignerSync,
+        consensus::constants::ETH_TO_WEI,
+    };
+    use revm::{
+        context::transaction::AuthorizationTr,
+        database::InMemoryDB,
+        primitives::bytes,
+    };
+    use crate::{
+        test_utils::{test_trevm_with_funds, ALICE, BOB, LOG_BYTECODE},
+        TrevmBuilder, NoopBlock, NoopCfg,
+    };
     use super::*;
-
-    static ALICE: LazyLock<PrivateKeySigner> =
-        LazyLock::new(|| PrivateKeySigner::from(SigningKey::from_slice(&[0x11; 32]).unwrap()));
-    static BOB: LazyLock<PrivateKeySigner> =
-        LazyLock::new(|| PrivateKeySigner::from(SigningKey::from_slice(&[0x22; 32]).unwrap()));
-
-    fn trevm_with_funds() -> EvmNeedsCfg<InMemoryDB, NoOpInspector> {
-        test_trevm_with_funds(&[
-            (ALICE.address(), U256::from(ETH_TO_WEI)),
-            (BOB.address(), U256::from(ETH_TO_WEI)),
-        ])
-    }
 
     #[test]
     fn test_estimate_gas_simple_transfer() {
-        let trevm = trevm_with_funds();
+        let trevm = test_trevm_with_funds(&[
+            (ALICE.address(), U256::from(ETH_TO_WEI)),
+            (BOB.address(), U256::from(ETH_TO_WEI)),
+        ]);
 
         let tx = TransactionRequest::default()
             .from(ALICE.address())
@@ -2394,7 +2382,7 @@ mod tests {
 
         assert!(estimation.is_success());
         // The gas used should correspond to a simple transfer.
-        assert!(estimation.gas_used() == 21000);
+        assert_eq!(estimation.gas_used(), 21000);
     }
 
     #[test]
@@ -2418,7 +2406,7 @@ mod tests {
         };
         let signature = BOB.sign_hash_sync(&authorization.signature_hash()).unwrap();
         let signed_authorization = authorization.into_signed(signature);
-        assert!(signed_authorization.authority().unwrap() == BOB.address());
+        assert_eq!(signed_authorization.authority().unwrap(), BOB.address());
 
         let tx = TransactionRequest::default()
             .from(ALICE.address())
@@ -2429,19 +2417,14 @@ mod tests {
         let (estimation, trevm) =
             trevm.fill_cfg(&NoopCfg).fill_block(&NoopBlock).fill_tx(&tx).estimate_gas().unwrap();
 
-        dbg!(&estimation);
         assert!(estimation.is_success());
 
         let tx = tx.with_gas_limit(estimation.limit());
 
-        let mut output = trevm.clear_tx().fill_tx(&tx).run().unwrap().accept();
+        let output = trevm.clear_tx().fill_tx(&tx).run().unwrap().accept();
 
-        let bob_code = output.1.read_code(BOB.address());
-        dbg!(&bob_code);
-
-        dbg!(&output.0);
         assert!(output.0.is_success());
-        assert!(output.0.logs().len() == 1);
+        assert_eq!(output.0.logs().len(), 1);
     }
 }
 
