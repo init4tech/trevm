@@ -1,5 +1,3 @@
-use std::sync::LazyLock;
-
 use crate::{helpers::Ctx, EvmNeedsCfg, Trevm};
 use alloy::{
     primitives::{Address, U256},
@@ -16,6 +14,7 @@ use revm::{
     state::AccountInfo,
     Context, Inspector, MainBuilder,
 };
+use std::sync::LazyLock;
 
 /// LogContract bytecode
 /// This is the runtime bytecode. This should be set directly with ``set_bytecode_unchecked``

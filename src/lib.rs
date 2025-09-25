@@ -368,14 +368,9 @@
 #[macro_use]
 mod macros;
 
-mod builder;
-pub use builder::{TrevmBuilder, TrevmBuilderError};
-
-mod connect;
-pub use connect::{DbConnect, EvmFactory};
-
 /// Contains database implementations and related
 pub mod db;
+pub use db::DbConnect;
 
 mod driver;
 pub use driver::{
@@ -384,7 +379,14 @@ pub use driver::{
 };
 
 mod evm;
-pub use evm::Trevm;
+pub(crate) use evm::states::sealed::*;
+pub use evm::{
+    states::{
+        EvmBlockDriverErrored, EvmBundleDriverErrored, EvmChainDriverErrored, EvmErrored,
+        EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
+    },
+    EvmFactory, Trevm, TrevmBuilder, TrevmBuilderError,
+};
 
 #[cfg(feature = "estimate_gas")]
 mod est;
@@ -407,13 +409,6 @@ pub mod journal;
 
 mod lifecycle;
 pub use lifecycle::{ethereum_receipt, BlockOutput, PostTx, PostflightResult};
-
-mod states;
-pub(crate) use states::sealed::*;
-pub use states::{
-    EvmBlockDriverErrored, EvmBundleDriverErrored, EvmChainDriverErrored, EvmErrored,
-    EvmNeedsBlock, EvmNeedsCfg, EvmNeedsTx, EvmReady, EvmTransacted,
-};
 
 pub mod system;
 

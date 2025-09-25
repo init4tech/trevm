@@ -1,4 +1,4 @@
-use crate::{helpers::Ctx, states::EvmBundleDriverErrored, EvmNeedsTx};
+use crate::{helpers::Ctx, EvmBundleDriverErrored, EvmNeedsTx};
 use revm::{
     context::result::EVMError, inspector::NoOpInspector, Database, DatabaseCommit, Inspector,
 };

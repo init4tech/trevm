@@ -86,7 +86,7 @@ concurrent-db = ["dep:dashmap"]
 
 estimate_gas = ["optional_eip3607", "optional_no_base_fee", "dep:tracing"]
 
-test-utils = ["revm/std", "revm/serde-json", "revm/alloydb"]
+test-utils = ["revm/std", "revm/serde-json", "revm/alloydb", "alloy/signers", "alloy/signer-local"]
 
 secp256k1 = ["revm/secp256k1"]
 c-kzg = ["revm/c-kzg"]
