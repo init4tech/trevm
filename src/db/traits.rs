@@ -5,6 +5,42 @@ use revm::{
 };
 use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
 
+/// Trait for types that can be used to connect to a database.
+///
+/// Connectors should contain configuration information like filesystem paths.
+/// They are intended to enable parallel instantiation of multiple EVMs in
+/// multiple threads sharing some database configuration
+///
+/// `DbConnect` is blanket implemented for clonable [`Database`] types by
+/// simply cloning the database instance. This allows already-instantiated DBs
+/// to be used as connectors, however, if the [`Database`] uses a shared
+/// resource like a file or network connection, care should be taken to ensure
+/// that the implementation does not share uintended state between EVM
+/// instances.
+pub trait DbConnect: Sync {
+    /// The database type returned when connecting.
+    type Database: Database;
+
+    /// The error type returned when connecting to the database.
+    type Error: core::error::Error;
+
+    /// Connect to the database.
+    fn connect(&self) -> Result<Self::Database, Self::Error>;
+}
+
+impl<Db> DbConnect for Db
+where
+    Db: Database + Clone + Sync,
+{
+    type Database = Self;
+
+    type Error = Infallible;
+
+    fn connect(&self) -> Result<Self::Database, Self::Error> {
+        Ok(self.clone())
+    }
+}
+
 /// Abstraction trait covering types that accumulate state changes into a
 /// [`BundleState`]. The prime example of this is [`State`]. These types are
 /// use to accumulate state changes during the execution of a sequence of
