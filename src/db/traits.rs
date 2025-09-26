@@ -11,10 +11,12 @@ use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
 /// They are intended to enable parallel instantiation of multiple EVMs in
 /// multiple threads sharing some database configuration
 ///
-/// The lifetime on this trait allows the resulting DB to borrow from the
-/// connector. E.g. the connector may contain some `Db` and the resulting Db may
-/// contain `&Db`. This allows for (e.g.) shared caches between DBs on multiple
-/// threads.
+/// `DbConnect` is blanket implemented for clonable [`Database`] types by
+/// simply cloning the database instance. This allows already-instantiated DBs
+/// to be used as connectors, however, if the [`Database`] uses a shared
+/// resource like a file or network connection, care should be taken to ensure
+/// that the implementation does not share uintended state between EVM
+/// instances.
 pub trait DbConnect: Sync {
     /// The database type returned when connecting.
     type Database: Database;
