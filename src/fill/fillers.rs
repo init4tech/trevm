@@ -31,6 +31,19 @@ impl Cfg for DisableGasChecks {
     }
 }
 
+/// A [`Cfg`] that disables the chain ID check, while leaving other [`CfgEnv`]
+/// attributes untouched.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DisableChainIdCheck;
+
+impl Cfg for DisableChainIdCheck {
+    fn fill_cfg_env(&self, cfg_env: &mut CfgEnv) {
+        {
+            cfg_env.tx_chain_id_check = false;
+        }
+    }
+}
+
 /// A [`Cfg`] that disables the nonce check, while leaving other [`CfgEnv`]
 /// attributes untouched.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

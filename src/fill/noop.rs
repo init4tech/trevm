@@ -15,5 +15,5 @@ impl Block for NoopBlock {
 pub struct NoopCfg;
 
 impl Cfg for NoopCfg {
-    fn fill_cfg_env(&self, _: &mut CfgEnv) {}
+    fn fill_cfg_env(&self, _env: &mut CfgEnv) {}
 }
