@@ -57,6 +57,35 @@ where
         self.set_code_size_limit(0x6000)
     }
 
+    /// Disable the [EIP-155] chain ID check.
+    ///
+    /// [`EIP-155`]: https://eips.ethereum.org/EIPS/eip-155
+    pub fn disable_chain_id_check(&mut self) {
+        self.inner.ctx.modify_cfg(|cfg| cfg.tx_chain_id_check = false);
+    }
+
+    /// Enable the [EIP-155] chain ID check.
+    ///
+    /// [`EIP-155`]: https://eips.ethereum.org/EIPS/eip-155
+    pub fn enable_chain_id_check(&mut self) {
+        self.inner.ctx.modify_cfg(|cfg| cfg.tx_chain_id_check = true);
+    }
+
+    /// Run a closure with the chain ID check disabled, then restore the previous
+    /// setting.
+    ///
+    /// [`EIP-155`]: https://eips.ethereum.org/EIPS/eip-155
+    pub fn without_chain_id_check<F, NewState: HasCfg>(mut self, f: F) -> Trevm<Db, Insp, NewState>
+    where
+        F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
+    {
+        let previous = self.inner.cfg().tx_chain_id_check;
+        self.disable_chain_id_check();
+        let mut new = f(self);
+        new.inner.ctx.modify_cfg(|cfg| cfg.tx_chain_id_check = previous);
+        new
+    }
+
     /// Run a function with the provided configuration, then restore the
     /// previous configuration. This will not affect the block and tx, if those
     /// have been filled.
