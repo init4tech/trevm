@@ -247,7 +247,7 @@ where
     /// Disable an opcode by replacing it with unknown opcode behavior. This is
     /// a shortcut for [`Self::override_opcode`] with [`crate::helpers::forbidden`].
     pub fn disable_opcode(&mut self, opcode: u8) -> Instruction<Db> {
-        self.override_opcode(opcode, crate::helpers::forbidden)
+        self.override_opcode(opcode, Instruction::new(crate::helpers::forbidden, 0))
     }
 
     /// Run some closure with an opcode override, then restore the previous
@@ -278,7 +278,7 @@ where
     /// Enable the prevrandao opcode. If the prevrandao opcode was not
     /// previously disabled or replaced, this will have no effect on behavior.
     pub fn enable_prevrandao(&mut self) -> Instruction<Db> {
-        self.override_opcode(DIFFICULTY, block_info::difficulty)
+        self.override_opcode(DIFFICULTY, Instruction::new(block_info::difficulty, 2))
     }
 
     /// Run some code with the prevrandao opcode disabled, then restore the
@@ -288,7 +288,7 @@ where
     where
         F: FnOnce(Self) -> Trevm<Db, Insp, NewState>,
     {
-        self.with_opcode_override(DIFFICULTY, crate::helpers::forbidden, f)
+        self.with_opcode_override(DIFFICULTY, Instruction::new(crate::helpers::forbidden, 0), f)
     }
 
     /// Set the precompiles for the EVM. This will replace the current

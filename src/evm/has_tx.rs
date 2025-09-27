@@ -219,6 +219,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
+        fillers::DisableChainIdCheck,
         test_utils::{test_trevm_with_funds, ALICE, BOB, LOG_DEPLOYED_BYTECODE},
         NoopBlock, NoopCfg, TrevmBuilder,
     };
@@ -285,8 +286,12 @@ mod tests {
             .with_authorization_list(vec![signed_authorization])
             .with_input(bytes!("0x7b3ab2d0")); // emitHello()
 
-        let (estimation, trevm) =
-            trevm.fill_cfg(&NoopCfg).fill_block(&NoopBlock).fill_tx(&tx).estimate_gas().unwrap();
+        let (estimation, trevm) = trevm
+            .fill_cfg(&DisableChainIdCheck)
+            .fill_block(&NoopBlock)
+            .fill_tx(&tx)
+            .estimate_gas()
+            .unwrap();
 
         assert!(estimation.is_success());
 
