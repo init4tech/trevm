@@ -230,4 +230,40 @@ mod test {
             *chain_id = 1;
         }
     }
+
+    // This test exists to ensure that if fields are added to BlockEnv or TxEnv,
+    // the compiler will emit an error to remind us to update the fillers to
+    // handle the new fields. The change canary is not present for [`CfgEnv`]
+    // because it is marked `#[non_exhaustive]`, which prevents compiler errors
+    // when fields are added. This is moderately annoying.
+    #[allow(unused_variables)]
+    fn _change_canary(block: &BlockEnv, tx: &TxEnv) {
+        let BlockEnv {
+            number,
+            beneficiary,
+            timestamp,
+            gas_limit,
+            basefee,
+            difficulty,
+            prevrandao,
+            blob_excess_gas_and_price,
+        } = block;
+
+        let TxEnv {
+            tx_type,
+            caller,
+            gas_limit,
+            gas_price,
+            kind,
+            value,
+            data,
+            nonce,
+            chain_id,
+            access_list,
+            gas_priority_fee,
+            blob_hashes,
+            max_fee_per_blob_gas,
+            authorization_list,
+        } = tx;
+    }
 }
