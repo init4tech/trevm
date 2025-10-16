@@ -11,9 +11,9 @@ mod state;
 pub use state::{Child, ConcurrentState, ConcurrentStateInfo};
 
 use crate::db::StateAcc;
+use alloy::primitives::B256;
 use revm::{
     database::{states::bundle_state::BundleRetention, BundleState},
-    primitives::B256,
     DatabaseRef,
 };
 use std::collections::BTreeMap;
