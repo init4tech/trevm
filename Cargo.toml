@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.29.0"
+version = "0.30.0"
 rust-version = "1.83.0"
 edition = "2021"
 authors = ["init4"]
@@ -44,8 +44,8 @@ alloy = { version = "1.0.35", default-features = false, features = [
     "sol-types",
 ] }
 
-revm = { version = "29.0.1", default-features = false }
-revm-inspectors = { version = "0.30", optional = true }
+revm = { version = "30.1.2", default-features = false }
+revm-inspectors = { version = "0.31", optional = true }
 
 dashmap = { version = "6.1.0", optional = true }
 tracing = { version = "0.1.41", optional = true }
@@ -54,7 +54,7 @@ thiserror = "2.0.11"
 tokio = { version = "1.44", optional = true }
 
 [dev-dependencies]
-revm = { version = "29.0.1", features = ["serde-json", "std", "alloydb"] }
+revm = { version = "30.1.1", features = ["serde-json", "std", "alloydb"] }
 trevm = { path = ".", features = ["test-utils"] }
 
 alloy = { version = "1.0.35", features = ["providers", "transports"] }

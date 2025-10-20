@@ -158,7 +158,7 @@ impl EstimationResult {
                 Self::Revert { limit, reason: output.clone(), gas_used: *gas_used }
             }
             ExecutionResult::Halt { reason, gas_used } => {
-                Self::Halt { limit, reason: *reason, gas_used: *gas_used }
+                Self::Halt { limit, reason: reason.clone(), gas_used: *gas_used }
             }
         }
     }
@@ -245,14 +245,11 @@ impl EstimationResult {
     }
 
     /// Adjust the binary search range based on the estimation outcome.
-    pub(crate) const fn adjust_binary_search_range(
-        &self,
-        range: &mut SearchRange,
-    ) -> Result<(), Self> {
+    pub(crate) fn adjust_binary_search_range(&self, range: &mut SearchRange) -> Result<(), Self> {
         match self {
             Self::Success { limit, .. } => range.set_max(*limit),
             Self::Revert { limit, .. } => range.set_min(*limit),
-            Self::Halt { limit, reason, gas_used } => {
+            Self::Halt { limit, reason, .. } => {
                 // Both `OutOfGas` and `InvalidEFOpcode` can occur dynamically
                 // if the gas left is too low. Treat this as an out of gas
                 // condition, knowing that the call succeeds with a
@@ -263,8 +260,7 @@ impl EstimationResult {
                 if matches!(reason, HaltReason::OutOfGas(_) | HaltReason::InvalidFEOpcode) {
                     range.set_min(*limit);
                 } else {
-                    // NB: can't clone here as this is a const fn.
-                    return Err(Self::Halt { limit: *limit, reason: *reason, gas_used: *gas_used });
+                    return Err(self.clone());
                 }
             }
         }
