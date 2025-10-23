@@ -39,7 +39,7 @@ impl Tx for SampleTx {
 // Produce aliases for the Trevm type
 trevm_aliases!(TracerEip3155, InMemoryDB);
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let mut db = revm::database::InMemoryDB::default();
 
     let bytecode = Bytecode::new_raw(hex::decode(CONTRACT_BYTECODE).unwrap().into());
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let trevm = TrevmBuilder::new()
         .with_db(db)
         .with_insp(insp)
-        .build_trevm()?
+        .build_trevm()
         .fill_cfg(&NoopCfg)
         .fill_block(&NoopBlock);
 
@@ -72,6 +72,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Execution error: {e:?}");
         }
     };
-
-    Ok(())
 }

@@ -41,15 +41,13 @@
 //! use revm::{database::in_memory_db::InMemoryDB};
 //! use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx};
 //!
-//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
-//! # -> Result<(), Box<dyn std::error::Error>> {
+//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T) {
 //! TrevmBuilder::new()
 //!     .with_db(InMemoryDB::default())
-//!     .build_trevm()?
+//!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
 //!     .run_tx(tx);
-//! # Ok(())
 //! # }
 //! ```
 //! If you get stuck, don't worry! You _cannot_ invoke the wrong function or
@@ -118,14 +116,12 @@
 //! # use revm::{database::in_memory_db::InMemoryDB, inspector::NoOpInspector};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, BlockDriver};
 //! # use alloy::primitives::B256;
-//! # fn t<C: Cfg, D: BlockDriver<InMemoryDB, NoOpInspector>>(cfg: &C, mut driver: D)
-//! # -> Result<(), Box<dyn std::error::Error>> {
+//! # fn t<C: Cfg, D: BlockDriver<InMemoryDB, NoOpInspector>>(cfg: &C, mut driver: D) {
 //! let trevm = TrevmBuilder::new()
 //!     .with_db(InMemoryDB::default())
-//!     .build_trevm()?
+//!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     .drive_block(&mut driver);
-//! # Ok(())
 //! # }
 //! ```
 //!
@@ -148,11 +144,10 @@
 //! # use revm::{database::in_memory_db::InMemoryDB};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx};
 //! # use alloy::primitives::B256;
-//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
-//! # -> Result<(), Box<dyn std::error::Error>> {
+//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T) {
 //! let trevm = match TrevmBuilder::new()
 //!     .with_db(InMemoryDB::default())
-//!     .build_trevm()?
+//!     .build_trevm()
 //!     .fill_cfg(cfg)
 //!     .fill_block(block)
 //!     .fill_tx(tx)
@@ -160,7 +155,6 @@
 //!         Ok(trevm) => trevm.accept_state(),
 //!         Err(e) => e.discard_error(),
 //!     };
-//! # Ok(())
 //! # }
 //! ```
 //!
@@ -245,14 +239,13 @@
 //! # State, StateBuilder}};
 //! # use trevm::{TrevmBuilder, EvmErrored, Cfg, Block, Tx, BlockOutput,
 //! # EvmNeedsCfg, EvmNeedsBlock, EvmNeedsTx, EvmReady, EvmTransacted};
-//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T)
-//! # -> Result<(), Box<dyn std::error::Error>> {
+//! # fn t<C: Cfg, B: Block, T: Tx>(cfg: &C, block: &B, tx: &T) {
 //! let state = StateBuilder::new_with_database(InMemoryDB::default()).build();
 //!
 //! // Trevm starts in `EvmNeedsCfg`.
 //! let trevm: EvmNeedsCfg<_, _> = TrevmBuilder::new()
 //!     .with_db(state)
-//!     .build_trevm()?;
+//!     .build_trevm();
 //!
 //! // Once the cfg is filled, we move to `EvmNeedsBlock`.
 //! let trevm: EvmNeedsBlock<_, _> = trevm.fill_cfg(cfg);
@@ -285,7 +278,6 @@
 //! // Finishing the EVM gets us the final changes and a list of block outputs
 //! // that includes the transaction receipts.
 //! let bundle: BundleState = trevm.finish();
-//! # Ok(())
 //! # }
 //! ```
 //!

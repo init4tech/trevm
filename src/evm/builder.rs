@@ -1,7 +1,7 @@
 use crate::{evm::Trevm, helpers::Ctx, EvmNeedsCfg};
 use revm::{
-    database::in_memory_db::InMemoryDB, handler::EthPrecompiles, inspector::NoOpInspector,
-    precompile::Precompiles, primitives::hardfork::SpecId, Database, Inspector, MainBuilder,
+    handler::EthPrecompiles, inspector::NoOpInspector, precompile::Precompiles,
+    primitives::hardfork::SpecId, Database, Inspector, MainBuilder,
 };
 
 /// Error that can occur when building a Trevm instance.
@@ -13,48 +13,65 @@ pub enum TrevmBuilderError {
     DatabaseNotSet,
 }
 
+#[allow(unnameable_types)]
+#[derive(Debug, Copy, Clone)]
+pub struct BuilderNeedsDb {
+    _private: (),
+}
+
+#[allow(unnameable_types)]
+#[derive(Debug, Copy, Clone)]
+pub struct BuilderReady<Db> {
+    db: Db,
+}
+
 /// A builder for [`Trevm`] that allows configuring the EVM.
 #[derive(Debug, Clone)]
-pub struct TrevmBuilder<Db, Insp> {
-    pub(crate) db: Option<Db>,
+pub struct TrevmBuilder<Insp, State = BuilderNeedsDb> {
     pub(crate) insp: Insp,
     pub(crate) spec: SpecId,
     pub(crate) precompiles: Option<&'static Precompiles>,
+    pub(crate) state: State,
 }
 
-impl TrevmBuilder<InMemoryDB, NoOpInspector> {
+impl TrevmBuilder<NoOpInspector> {
     /// Create a new builder with the default database and inspector.
     #[allow(clippy::new_without_default)] // default would make bad devex :(
     pub const fn new() -> Self {
-        Self { db: None, insp: NoOpInspector, spec: SpecId::PRAGUE, precompiles: None }
+        Self {
+            insp: NoOpInspector,
+            spec: SpecId::PRAGUE,
+            precompiles: None,
+            state: BuilderNeedsDb { _private: () },
+        }
     }
 }
 
-impl<Db, Insp> TrevmBuilder<Db, Insp> {
+impl<Insp, State> TrevmBuilder<Insp, State> {
     /// Set the database for the EVM.
-    pub fn with_db<Odb>(self, db: Odb) -> TrevmBuilder<Odb, Insp>
+    pub fn with_db<Odb>(self, db: Odb) -> TrevmBuilder<Insp, BuilderReady<Odb>>
     where
-        Db: Database,
+        Odb: Database,
     {
         TrevmBuilder {
-            db: Some(db),
             insp: self.insp,
             spec: self.spec,
             precompiles: self.precompiles,
+            state: BuilderReady { db },
         }
     }
 
     /// Set the inspector for the EVM.
     ///
     /// Equivalent to [`Self::with_inspector`].
-    pub fn with_insp<OInsp>(self, insp: OInsp) -> TrevmBuilder<Db, OInsp> {
-        TrevmBuilder { db: self.db, insp, spec: self.spec, precompiles: self.precompiles }
+    pub fn with_insp<OInsp>(self, insp: OInsp) -> TrevmBuilder<OInsp, State> {
+        TrevmBuilder { insp, spec: self.spec, precompiles: self.precompiles, state: self.state }
     }
 
     /// Set the inspector for the EVM.
     ///
     /// Equivalent to [`Self::with_insp`].
-    pub fn with_inspector<OInsp>(self, insp: OInsp) -> TrevmBuilder<Db, OInsp> {
+    pub fn with_inspector<OInsp>(self, insp: OInsp) -> TrevmBuilder<OInsp, State> {
         self.with_insp(insp)
     }
 
@@ -79,14 +96,16 @@ impl<Db, Insp> TrevmBuilder<Db, Insp> {
         self.precompiles = Some(Precompiles::new(self.spec.into()));
         self
     }
+}
 
+impl<Insp, Db> TrevmBuilder<Insp, BuilderReady<Db>> {
     /// Build the Trevm instance.
-    pub fn build_trevm(self) -> Result<EvmNeedsCfg<Db, Insp>, TrevmBuilderError>
+    pub fn build_trevm(self) -> EvmNeedsCfg<Db, Insp>
     where
         Db: Database,
         Insp: Inspector<Ctx<Db>>,
     {
-        let db = self.db.ok_or(TrevmBuilderError::DatabaseNotSet)?;
+        let db = self.state.db;
         let ctx = Ctx::new(db, self.spec);
 
         let mut evm = ctx.build_mainnet_with_inspector(self.insp);
@@ -95,7 +114,7 @@ impl<Db, Insp> TrevmBuilder<Db, Insp> {
             evm.precompiles = EthPrecompiles { precompiles, spec: self.spec };
         }
 
-        Ok(Trevm::from(evm))
+        Trevm::from(evm)
     }
 }
 
