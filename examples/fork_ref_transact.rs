@@ -60,7 +60,7 @@ async fn main() -> eyre::Result<()> {
     // initialise an empty (default) EVM
     let evm = TrevmBuilder::new()
         .with_db(cache_db)
-        .build_trevm()?
+        .build_trevm()
         .fill_cfg(&NoopCfg)
         .fill_block(&NoopBlock)
         .fill_tx(&GetReservesFiller)

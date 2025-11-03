@@ -35,7 +35,6 @@ mod test {
             .with_db(InMemoryDB::default())
             .with_insp(inspector)
             .build_trevm()
-            .unwrap()
             .fill_cfg(&NoopCfg)
             .fill_block(&NoopBlock);
 

@@ -264,8 +264,7 @@ mod tests {
         let log_address = Address::repeat_byte(0x32);
 
         // Set up trevm, and test balances.
-        let mut trevm =
-            TrevmBuilder::new().with_db(db).with_spec_id(SpecId::PRAGUE).build_trevm().unwrap();
+        let mut trevm = TrevmBuilder::new().with_db(db).with_spec_id(SpecId::PRAGUE).build_trevm();
         let _ = trevm.test_set_balance(ALICE.address(), U256::from(ETH_TO_WEI));
         let _ = trevm.set_bytecode_unchecked(log_address, Bytecode::new_raw(LOG_DEPLOYED_BYTECODE));
 
