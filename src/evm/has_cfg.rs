@@ -7,6 +7,16 @@ where
     Insp: Inspector<Ctx<Db>>,
     TrevmState: HasCfg,
 {
+    /// Get a reference to the current EVM configuration.
+    pub fn cfg(&self) -> &revm::context::CfgEnv {
+        self.inner.ctx.cfg()
+    }
+
+    /// Get the current chain ID.
+    pub fn chain_id(&self) -> u64 {
+        self.cfg().chain_id
+    }
+
     /// Set the [EIP-170] contract code size limit. By default this is set to
     /// 0x6000 bytes (~25KiB). Contracts whose bytecode is larger than this
     /// limit cannot be deployed and will produce a [`CreateInitCodeSizeLimit`]
