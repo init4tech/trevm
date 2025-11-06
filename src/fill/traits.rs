@@ -27,6 +27,13 @@ pub trait Tx: Send + Sync {
     {
         evm.ctx.modify_tx(|tx_env| self.fill_tx_env(tx_env));
     }
+
+    /// Create a new [`TxEnv`] filled by this filler.
+    fn to_tx_env(&self) -> TxEnv {
+        let mut tx_env = TxEnv::default();
+        self.fill_tx_env(&mut tx_env);
+        tx_env
+    }
 }
 
 impl Tx for TxEnv {
@@ -82,6 +89,13 @@ pub trait Block: Send + Sync {
     /// memory pre-allocation during block execution.
     fn tx_count_hint(&self) -> Option<usize> {
         None
+    }
+
+    /// Create a new [`BlockEnv`] filled by this filler.
+    fn to_block_env(&self) -> BlockEnv {
+        let mut block_env = BlockEnv::default();
+        self.fill_block_env(&mut block_env);
+        block_env
     }
 }
 
@@ -141,6 +155,13 @@ pub trait Cfg: Send + Sync {
         Self: Sized,
     {
         evm.ctx.modify_cfg(|cfg_env| self.fill_cfg_env(cfg_env));
+    }
+
+    /// Create a new [`CfgEnv`] filled by this filler.
+    fn to_cfg_env(&self) -> CfgEnv {
+        let mut cfg_env = CfgEnv::default();
+        self.fill_cfg_env(&mut cfg_env);
+        cfg_env
     }
 }
 
