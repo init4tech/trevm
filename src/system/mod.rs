@@ -59,6 +59,9 @@ pub const MAX_BLOB_GAS_PER_BLOCK_CANCUN: u64 = 786_432;
 /// The maximum blob gas limit for a block in Prague.
 pub const MAX_BLOB_GAS_PER_BLOCK_PRAGUE: u64 = 1_179_648;
 
+/// The maximum blob gas limit for a block in Osaka, pre BPO-1.
+pub const MAX_BLOB_GAS_PER_BLOCK_OSAKA: u64 = 1_749_648;
+
 use crate::{
     helpers::{Ctx, Evm},
     EvmExtUnchecked, Tx,

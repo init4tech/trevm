@@ -1,8 +1,11 @@
 use crate::{helpers::Ctx, EvmErrored, HasBlock, HasCfg, HasTx, Trevm, Tx};
-use alloy::primitives::{Address, Bytes, U256};
+use alloy::{
+    eips::eip7825::MAX_TX_GAS_LIMIT_OSAKA,
+    primitives::{Address, Bytes, U256},
+};
 use revm::{
     context::{result::EVMError, ContextSetters, ContextTr, Transaction as _, TxEnv},
-    primitives::TxKind,
+    primitives::{hardfork::SpecId, TxKind},
     state::AccountInfo,
     Database, DatabaseRef, Inspector,
 };
@@ -212,7 +215,26 @@ where
     /// The gas limit after the operation.
     pub fn cap_tx_gas(&mut self) -> Result<u64, EVMError<<Db as Database>::Error>> {
         self.cap_tx_gas_to_block_limit();
+
+        // If the currently active SpecId is Osaka or greater, also attempt to cap the gas limit to the EIP-7825 limit.
+        if self.spec_id() >= SpecId::OSAKA {
+            self.cap_tx_gas_to_eip7825();
+        }
+
         self.cap_tx_gas_to_allowance()
+    }
+
+    /// Cap the gas limit of the transaction to the [`EIP-7825`] limit.
+    ///
+    /// # Returns
+    ///
+    /// The gas limit after the operation.
+    ///
+    /// [`EIP-7825`]: https://eips.ethereum.org/EIPS/eip-7825
+    pub fn cap_tx_gas_to_eip7825(&mut self) -> u64 {
+        self.inner.modify_tx(|tx| tx.gas_limit = tx.gas_limit.min(MAX_TX_GAS_LIMIT_OSAKA));
+
+        self.tx().gas_limit
     }
 }
 
@@ -264,7 +286,7 @@ mod tests {
         let log_address = Address::repeat_byte(0x32);
 
         // Set up trevm, and test balances.
-        let mut trevm = TrevmBuilder::new().with_db(db).with_spec_id(SpecId::PRAGUE).build_trevm();
+        let mut trevm = TrevmBuilder::new().with_db(db).with_spec_id(SpecId::OSAKA).build_trevm();
         let _ = trevm.test_set_balance(ALICE.address(), U256::from(ETH_TO_WEI));
         let _ = trevm.set_bytecode_unchecked(log_address, Bytecode::new_raw(LOG_DEPLOYED_BYTECODE));
 
