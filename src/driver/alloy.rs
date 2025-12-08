@@ -1,6 +1,8 @@
 use crate::{
     helpers::Ctx,
-    system::{MAX_BLOB_GAS_PER_BLOCK_CANCUN, MAX_BLOB_GAS_PER_BLOCK_PRAGUE},
+    system::{
+        MAX_BLOB_GAS_PER_BLOCK_CANCUN, MAX_BLOB_GAS_PER_BLOCK_OSAKA, MAX_BLOB_GAS_PER_BLOCK_PRAGUE,
+    },
     trevm_bail, trevm_ensure, trevm_try, Block, BundleDriver, DriveBundleResult,
 };
 use alloy::{
@@ -592,6 +594,7 @@ where
             let mbg = match trevm.spec_id() {
                 SpecId::CANCUN => MAX_BLOB_GAS_PER_BLOCK_CANCUN,
                 SpecId::PRAGUE => MAX_BLOB_GAS_PER_BLOCK_PRAGUE,
+                SpecId::OSAKA => MAX_BLOB_GAS_PER_BLOCK_OSAKA,
                 _ => 0,
             };
             trevm_ensure!(
@@ -690,6 +693,7 @@ where
         let mbg = match trevm.spec_id() {
             SpecId::CANCUN => MAX_BLOB_GAS_PER_BLOCK_CANCUN,
             SpecId::PRAGUE => MAX_BLOB_GAS_PER_BLOCK_PRAGUE,
+            SpecId::OSAKA => MAX_BLOB_GAS_PER_BLOCK_OSAKA,
             _ => 0,
         };
         trevm_ensure!(
