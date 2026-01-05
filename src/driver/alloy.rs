@@ -38,9 +38,9 @@ pub enum BundleError<Db: Database> {
     /// An unsupported transaction type was encountered.
     UnsupportedTransactionType,
     /// An error occurred while decoding a transaction contained in the bundle.
-    TransactionDecodingError(alloy::eips::eip2718::Eip2718Error),
+    TransactionDecoding(alloy::eips::eip2718::Eip2718Error),
     /// An error occurred while recovering the sender of a transaction.
-    TransactionSenderRecoveryError(alloy::consensus::crypto::RecoveryError),
+    TransactionSenderRecovery(alloy::consensus::crypto::RecoveryError),
     /// An error occurred while running the EVM.
     EVMError {
         /// The error that occurred while running the EVM.
@@ -59,8 +59,8 @@ impl<Db: Database> core::fmt::Display for BundleError<Db> {
             Self::BundleEmpty => write!(f, "bundle has no transactions"),
             Self::Eip4844BlobGasExceeded => write!(f, "max blob gas limit exceeded"),
             Self::UnsupportedTransactionType => write!(f, "unsupported transaction type"),
-            Self::TransactionDecodingError(err) => write!(f, "transaction decoding error: {err}"),
-            Self::TransactionSenderRecoveryError(err) => {
+            Self::TransactionDecoding(err) => write!(f, "transaction decoding error: {err}"),
+            Self::TransactionSenderRecovery(err) => {
                 write!(f, "transaction sender recovery error: {err}")
             }
             Self::EVMError { inner } => write!(f, "internal EVM error: {inner}"),
@@ -70,13 +70,13 @@ impl<Db: Database> core::fmt::Display for BundleError<Db> {
 
 impl<Db: Database> From<alloy::eips::eip2718::Eip2718Error> for BundleError<Db> {
     fn from(err: alloy::eips::eip2718::Eip2718Error) -> Self {
-        Self::TransactionDecodingError(err)
+        Self::TransactionDecoding(err)
     }
 }
 
 impl<Db: Database> From<alloy::primitives::SignatureError> for BundleError<Db> {
     fn from(err: alloy::primitives::SignatureError) -> Self {
-        Self::TransactionSenderRecoveryError(err.into())
+        Self::TransactionSenderRecovery(err.into())
     }
 }
 
@@ -89,8 +89,8 @@ impl<Db: Database> From<EVMError<Db::Error>> for BundleError<Db> {
 impl<Db: Database> std::error::Error for BundleError<Db> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::TransactionDecodingError(err) => Some(err),
-            Self::TransactionSenderRecoveryError(err) => Some(err),
+            Self::TransactionDecoding(err) => Some(err),
+            Self::TransactionSenderRecovery(err) => Some(err),
             _ => None,
         }
     }
@@ -98,7 +98,7 @@ impl<Db: Database> std::error::Error for BundleError<Db> {
 
 impl<Db: Database> From<RecoveryError> for BundleError<Db> {
     fn from(err: RecoveryError) -> Self {
-        Self::TransactionSenderRecoveryError(err)
+        Self::TransactionSenderRecovery(err)
     }
 }
 
@@ -109,10 +109,10 @@ impl<Db: Database> core::fmt::Debug for BundleError<Db> {
             Self::BlockNumberMismatch => write!(f, "BlockNumberMismatch"),
             Self::BundleEmpty => write!(f, "BundleEmpty"),
             Self::BundleReverted => write!(f, "BundleReverted"),
-            Self::TransactionDecodingError(e) => write!(f, "TransactionDecodingError({e:?})"),
+            Self::TransactionDecoding(e) => write!(f, "TransactionDecodingError({e:?})"),
             Self::UnsupportedTransactionType => write!(f, "UnsupportedTransactionType"),
             Self::Eip4844BlobGasExceeded => write!(f, "Eip4844BlobGasExceeded"),
-            Self::TransactionSenderRecoveryError(e) => {
+            Self::TransactionSenderRecovery(e) => {
                 write!(f, "TransactionSenderRecoveryError({e:?})")
             }
             Self::EVMError { .. } => write!(f, "EVMError"),
@@ -120,7 +120,7 @@ impl<Db: Database> core::fmt::Debug for BundleError<Db> {
     }
 }
 
-/// A bundle processor which can be used to drive a bundle with a [BundleDriver], accumulate the results of the bundle and dispatch
+/// A bundle processor which can be used to drive a bundle with a [`BundleDriver`], accumulate the results of the bundle and dispatch
 /// a response.
 #[derive(Debug)]
 pub struct BundleProcessor<B, R> {
@@ -156,7 +156,8 @@ where
 }
 
 impl<B, R> BundleProcessor<B, R> {
-    /// Decode and validate the transactions in the bundle, performing EIP4844 gas checks.
+    /// Decode and validate the transactions in the bundle, performing EIP4844
+    /// gas checks.
     pub fn decode_and_validate_txs<Db: Database + DatabaseCommit>(
         txs: &[Bytes],
     ) -> Result<Vec<TxEnvelope>, BundleError<Db>> {
@@ -190,7 +191,8 @@ impl BundleProcessor<EthCallBundle, EthCallBundleResponse> {
         Self::new(bundle)
     }
 
-    /// Process a bundle transaction and accumulate the results into a [EthCallBundleTransactionResult].
+    /// Process a bundle transaction and accumulate the results into a
+    /// [`EthCallBundleTransactionResult`].
     pub fn process_call_bundle_tx<Db: Database + DatabaseCommit>(
         tx: &TxEnvelope,
         pre_sim_coinbase_balance: U256,
@@ -273,6 +275,10 @@ where
     Insp: Inspector<Ctx<Db>>,
 {
     type Error = BundleError<Db>;
+
+    fn transactions(&self) -> impl IntoIterator<Item = &[u8]> {
+        self.bundle.txs.iter().map(|b| b.as_ref())
+    }
 
     fn run_bundle(
         &mut self,
@@ -410,6 +416,10 @@ where
     Insp: Inspector<Ctx<Db>>,
 {
     type Error = BundleError<Db>;
+
+    fn transactions(&self) -> impl IntoIterator<Item = &[u8]> {
+        self.bundle.txs.iter().map(|b| b.as_ref())
+    }
 
     fn run_bundle(
         &mut self,
@@ -555,6 +565,10 @@ where
 {
     type Error = BundleError<Db>;
 
+    fn transactions(&self) -> impl IntoIterator<Item = &[u8]> {
+        self.txs.iter().map(|b| b.as_ref())
+    }
+
     fn run_bundle(
         &mut self,
         trevm: crate::EvmNeedsTx<Db, Insp>,
@@ -637,15 +651,21 @@ where
     }
 }
 
-/// An implementation of [BundleDriver] for [EthSendBundle].
-/// This allows us to drive a bundle of transactions and accumulate the resulting state in the EVM.
-/// Allows to simply take an [EthSendBundle] and get the resulting EVM state.
+/// An implementation of [`BundleDriver`] for [`EthSendBundle`].
+/// This allows us to drive a bundle of transactions and accumulate the
+/// resulting state in the EVM.
+///
+/// Allows to simply take an [`EthSendBundle`] and get the resulting EVM state.
 impl<Db, Insp> BundleDriver<Db, Insp> for EthSendBundle
 where
     Db: Database + DatabaseCommit,
     Insp: Inspector<Ctx<Db>>,
 {
     type Error = BundleError<Db>;
+
+    fn transactions(&self) -> impl IntoIterator<Item = &[u8]> {
+        self.txs.iter().map(|b| b.as_ref())
+    }
 
     fn run_bundle(
         &mut self,
