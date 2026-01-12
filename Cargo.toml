@@ -34,7 +34,7 @@ name = "fork_ref_transact"
 required-features = ["alloy-db"]
 
 [dependencies]
-alloy = { version = "1.0.35", default-features = false, features = [
+alloy = { version = "1.4.0", default-features = false, features = [
     "consensus",
     "rpc-types-mev",
     "eips",
