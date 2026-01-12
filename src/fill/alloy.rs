@@ -2,8 +2,8 @@ use crate::{Block, Tx};
 use alloy::{
     consensus::{
         transaction::{Recovered, SignerRecoverable},
-        BlobTransactionSidecar, EthereumTxEnvelope, Signed, TxEip4844, TxEip4844WithSidecar,
-        TxEnvelope, TxType,
+        BlobTransactionSidecar, BlobTransactionSidecarVariant, EthereumTxEnvelope, Signed,
+        TxEip4844, TxEip4844WithSidecar, TxEnvelope, TxType,
     },
     eips::eip7594::BlobTransactionSidecarEip7594,
     primitives::U256,
@@ -47,6 +47,7 @@ delegate_alloy_txs!(alloy::consensus::TxEip1559);
 delegate_alloy_txs!(alloy::consensus::TxEip4844);
 delegate_alloy_txs!(alloy::consensus::TxEip4844WithSidecar<BlobTransactionSidecar>);
 delegate_alloy_txs!(alloy::consensus::TxEip4844WithSidecar<BlobTransactionSidecarEip7594>);
+delegate_alloy_txs!(alloy::consensus::TxEip4844WithSidecar<BlobTransactionSidecarVariant>);
 delegate_alloy_txs!(alloy::consensus::TxEip4844Variant);
 delegate_alloy_txs!(alloy::consensus::TxEip7702);
 
@@ -55,6 +56,9 @@ delegate_alloy_txs!(@envelope EthereumTxEnvelope<TxEip4844>);
 delegate_alloy_txs!(@envelope EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecar>>);
 delegate_alloy_txs!(
     @envelope EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarEip7594>>
+);
+delegate_alloy_txs!(
+    @envelope EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>
 );
 
 impl Tx for Recovered<&alloy::consensus::TxLegacy> {
@@ -197,75 +201,48 @@ impl Tx for Recovered<&alloy::consensus::TxEip4844> {
     }
 }
 
-impl Tx for Recovered<&alloy::consensus::TxEip4844WithSidecar<BlobTransactionSidecar>> {
-    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
-        let TxEnv {
-            tx_type,
-            caller,
-            gas_limit,
-            gas_price,
-            kind,
-            value,
-            data,
-            nonce,
-            chain_id,
-            access_list,
-            gas_priority_fee,
-            blob_hashes,
-            max_fee_per_blob_gas,
-            authorization_list,
-        } = tx_env;
-        *tx_type = TxType::Eip4844 as u8;
-        *caller = self.signer();
-        *gas_limit = self.inner().tx.gas_limit;
-        *gas_price = self.inner().tx.max_fee_per_gas;
-        *kind = self.inner().tx.to.into();
-        *value = self.inner().tx.value;
-        *data = self.inner().tx.input.clone();
-        *nonce = self.inner().tx.nonce;
-        *chain_id = Some(self.inner().tx.chain_id);
-        access_list.clone_from(&self.inner().tx.access_list);
-        *gas_priority_fee = Some(self.inner().tx.max_priority_fee_per_gas);
-        blob_hashes.clone_from(&self.inner().tx.blob_versioned_hashes);
-        *max_fee_per_blob_gas = self.inner().tx.max_fee_per_blob_gas;
-        authorization_list.clear();
-    }
+macro_rules! impl_tx_eip4844_with_sidecar {
+    ($target:ty) => {
+        impl Tx for Recovered<&alloy::consensus::TxEip4844WithSidecar<$target>> {
+            fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+                let TxEnv {
+                    tx_type,
+                    caller,
+                    gas_limit,
+                    gas_price,
+                    kind,
+                    value,
+                    data,
+                    nonce,
+                    chain_id,
+                    access_list,
+                    gas_priority_fee,
+                    blob_hashes,
+                    max_fee_per_blob_gas,
+                    authorization_list,
+                } = tx_env;
+                *tx_type = TxType::Eip4844 as u8;
+                *caller = self.signer();
+                *gas_limit = self.inner().tx.gas_limit;
+                *gas_price = self.inner().tx.max_fee_per_gas;
+                *kind = self.inner().tx.to.into();
+                *value = self.inner().tx.value;
+                *data = self.inner().tx.input.clone();
+                *nonce = self.inner().tx.nonce;
+                *chain_id = Some(self.inner().tx.chain_id);
+                access_list.clone_from(&self.inner().tx.access_list);
+                *gas_priority_fee = Some(self.inner().tx.max_priority_fee_per_gas);
+                blob_hashes.clone_from(&self.inner().tx.blob_versioned_hashes);
+                *max_fee_per_blob_gas = self.inner().tx.max_fee_per_blob_gas;
+                authorization_list.clear();
+            }
+        }
+    };
 }
 
-impl Tx for Recovered<&alloy::consensus::TxEip4844WithSidecar<BlobTransactionSidecarEip7594>> {
-    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
-        let TxEnv {
-            tx_type,
-            caller,
-            gas_limit,
-            gas_price,
-            kind,
-            value,
-            data,
-            nonce,
-            chain_id,
-            access_list,
-            gas_priority_fee,
-            blob_hashes,
-            max_fee_per_blob_gas,
-            authorization_list,
-        } = tx_env;
-        *tx_type = TxType::Eip4844 as u8;
-        *caller = self.signer();
-        *gas_limit = self.inner().tx.gas_limit;
-        *gas_price = self.inner().tx.max_fee_per_gas;
-        *kind = self.inner().tx.to.into();
-        *value = self.inner().tx.value;
-        *data = self.inner().tx.input.clone();
-        *nonce = self.inner().tx.nonce;
-        *chain_id = Some(self.inner().tx.chain_id);
-        access_list.clone_from(&self.inner().tx.access_list);
-        *gas_priority_fee = Some(self.inner().tx.max_priority_fee_per_gas);
-        blob_hashes.clone_from(&self.inner().tx.blob_versioned_hashes);
-        *max_fee_per_blob_gas = self.inner().tx.max_fee_per_blob_gas;
-        authorization_list.clear();
-    }
-}
+impl_tx_eip4844_with_sidecar!(BlobTransactionSidecar);
+impl_tx_eip4844_with_sidecar!(BlobTransactionSidecarEip7594);
+impl_tx_eip4844_with_sidecar!(BlobTransactionSidecarVariant);
 
 impl Tx for Recovered<&alloy::consensus::TxEip4844Variant> {
     fn fill_tx_env(&self, tx_env: &mut TxEnv) {
@@ -363,49 +340,35 @@ impl Tx for Recovered<&EthereumTxEnvelope<TxEip4844>> {
     }
 }
 
-impl Tx for Recovered<&EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecar>>> {
-    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
-        match self.inner() {
-            EthereumTxEnvelope::Legacy(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip2930(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip1559(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip4844(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip7702(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
+macro_rules! impl_tx_eip4744_envelope_with_sidecar {
+    ($target:ty) => {
+        impl Tx for Recovered<&EthereumTxEnvelope<TxEip4844WithSidecar<$target>>> {
+            fn fill_tx_env(&self, tx_env: &mut TxEnv) {
+                match self.inner() {
+                    EthereumTxEnvelope::Legacy(t) => {
+                        Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
+                    }
+                    EthereumTxEnvelope::Eip2930(t) => {
+                        Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
+                    }
+                    EthereumTxEnvelope::Eip1559(t) => {
+                        Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
+                    }
+                    EthereumTxEnvelope::Eip4844(t) => {
+                        Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
+                    }
+                    EthereumTxEnvelope::Eip7702(t) => {
+                        Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
+                    }
+                }
             }
         }
-    }
+    };
 }
 
-impl Tx for Recovered<&EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarEip7594>>> {
-    fn fill_tx_env(&self, tx_env: &mut TxEnv) {
-        match self.inner() {
-            EthereumTxEnvelope::Legacy(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip2930(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip1559(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip4844(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-            EthereumTxEnvelope::Eip7702(t) => {
-                Recovered::new_unchecked(t, self.signer()).fill_tx_env(tx_env)
-            }
-        }
-    }
-}
+impl_tx_eip4744_envelope_with_sidecar!(BlobTransactionSidecar);
+impl_tx_eip4744_envelope_with_sidecar!(BlobTransactionSidecarEip7594);
+impl_tx_eip4744_envelope_with_sidecar!(BlobTransactionSidecarVariant);
 
 impl Block for alloy::consensus::Header {
     fn fill_block_env(&self, block_env: &mut BlockEnv) {
