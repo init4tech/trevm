@@ -205,7 +205,7 @@ where
         self.step_end = true;
     }
 
-    fn log(&mut self, _interp: &mut Interpreter<Int>, _context: &mut Ctx, log: Log) {
+    fn log(&mut self, _context: &mut Ctx, log: Log) {
         tracing::info!(?log, "log");
         self.log = true;
     }

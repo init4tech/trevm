@@ -88,9 +88,9 @@ where
         self.inner.step_end(interp, context);
     }
 
-    fn log(&mut self, interp: &mut Interpreter<Int>, context: &mut Ctx, log: Log) {
-        self.outer.log(interp, context, log.clone());
-        self.inner.log(interp, context, log);
+    fn log(&mut self, context: &mut Ctx, log: Log) {
+        self.outer.log(context, log.clone());
+        self.inner.log(context, log);
     }
 
     fn call(&mut self, context: &mut Ctx, inputs: &mut CallInputs) -> Option<CallOutcome> {

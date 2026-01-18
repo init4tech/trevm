@@ -87,8 +87,8 @@ where
         self.inspectors.iter_mut().for_each(|i| i.step_end(interp, context));
     }
 
-    fn log(&mut self, interp: &mut Interpreter<Int>, context: &mut Ctx, log: Log) {
-        self.inspectors.iter_mut().for_each(|i| i.log(interp, context, log.clone()));
+    fn log(&mut self, context: &mut Ctx, log: Log) {
+        self.inspectors.iter_mut().for_each(|i| i.log(context, log.clone()));
     }
 
     fn call(&mut self, context: &mut Ctx, inputs: &mut CallInputs) -> Option<CallOutcome> {
