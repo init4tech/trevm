@@ -15,4 +15,5 @@ pub mod cow;
 pub mod alloy;
 
 /// Test utilities for databases.
+#[doc(hidden)]
 pub mod test_utils;

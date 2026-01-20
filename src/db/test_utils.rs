@@ -7,6 +7,7 @@ use revm::{
 };
 
 /// Test utilities for databases.
+#[doc(hidden)]
 pub trait DbTestExt: Database + DatabaseCommit {
     /// Modify an account via closure, creating it if it doesn't exist.
     fn test_modify_account<F>(&mut self, address: Address, f: F)
@@ -69,6 +70,7 @@ pub trait DbTestExt: Database + DatabaseCommit {
 impl<Db: Database + DatabaseCommit> DbTestExt for Db {}
 
 /// Test utilities for databases that support fallible commits.
+#[doc(hidden)]
 pub trait TryDbTestExt: Database + TryDatabaseCommit {
     /// Modify an account via closure, creating it if it doesn't exist.
     fn test_try_modify_account<F>(
