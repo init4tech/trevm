@@ -13,3 +13,6 @@ pub mod cow;
 #[cfg(feature = "alloy-db")]
 /// Alloy-powered revm Database implementation that fetches data over the network.
 pub mod alloy;
+
+/// Test utilities for databases.
+pub mod test_utils;

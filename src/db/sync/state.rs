@@ -477,6 +477,89 @@ mod test {
             U256::from(100)
         );
     }
+
+    #[test]
+    fn test_increment_balances() {
+        let addr = Address::repeat_byte(10);
+        let mut state = ConcurrentState::new(EmptyDB::new(), Default::default());
+
+        state.increment_balances([(addr, 1000)]).unwrap();
+        assert_eq!(state.basic(addr).unwrap().unwrap().balance, U256::from(1000));
+
+        state.increment_balances([(addr, 500)]).unwrap();
+        assert_eq!(state.basic(addr).unwrap().unwrap().balance, U256::from(1500));
+    }
+
+    #[test]
+    fn test_drain_balances() {
+        let addr = Address::repeat_byte(11);
+        let mut state = ConcurrentState::new(EmptyDB::new(), Default::default());
+
+        state.increment_balances([(addr, 1000)]).unwrap();
+        let drained = state.drain_balances([addr]).unwrap();
+        assert_eq!(drained, vec![1000]);
+        assert_eq!(state.basic(addr).unwrap().unwrap().balance, U256::ZERO);
+    }
+
+    #[test]
+    fn test_insert_account() {
+        let addr = Address::repeat_byte(12);
+        let mut state = ConcurrentState::new(EmptyDB::new(), Default::default());
+
+        let info = AccountInfo { balance: U256::from(999), nonce: 42, ..Default::default() };
+        state.insert_account(addr, info);
+
+        let loaded = state.basic(addr).unwrap().unwrap();
+        assert_eq!(loaded.balance, U256::from(999));
+        assert_eq!(loaded.nonce, 42);
+    }
+
+    #[test]
+    fn test_child_isolation() {
+        let addr = Address::repeat_byte(14);
+        let parent = Arc::new(ConcurrentState::new(EmptyDB::new(), Default::default()));
+
+        // Use increment_balances which properly handles account loading
+        let mut child = parent.child();
+        child.increment_balances([(addr, 500)]).unwrap();
+
+        // Child sees balance
+        assert_eq!(
+            child.info.cache.accounts.get(&addr).unwrap().account_info().unwrap().balance,
+            U256::from(500)
+        );
+        // Parent sees account loaded but with zero balance (from EmptyDB lookup)
+        assert_eq!(
+            parent.info.cache.accounts.get(&addr).unwrap().account_info(),
+            None // Not existing account loaded
+        );
+
+        // After merge, parent sees child's value
+        let mut parent = parent;
+        parent.merge_child(child).unwrap();
+        assert_eq!(parent.basic_ref(addr).unwrap().unwrap().balance, U256::from(500));
+    }
+
+    #[test]
+    fn test_child_merge_accumulates() {
+        let addr = Address::repeat_byte(15);
+        let mut parent = Arc::new(ConcurrentState::new(EmptyDB::new(), Default::default()));
+
+        // Set initial balance on parent
+        Arc::get_mut(&mut parent).unwrap().increment_balances([(addr, 100)]).unwrap();
+
+        let mut child = parent.child();
+        child.increment_balances([(addr, 50)]).unwrap();
+
+        // Child sees accumulated balance
+        assert_eq!(child.basic(addr).unwrap().unwrap().balance, U256::from(150));
+        // Parent sees original
+        assert_eq!(parent.basic_ref(addr).unwrap().unwrap().balance, U256::from(100));
+
+        // After merge
+        parent.merge_child(child).unwrap();
+        assert_eq!(parent.basic_ref(addr).unwrap().unwrap().balance, U256::from(150));
+    }
 }
 
 // Some code above and documentation is adapted from the revm crate, and is
