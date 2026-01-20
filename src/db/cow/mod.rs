@@ -173,11 +173,15 @@ impl<Db: DatabaseRef> Database for CacheOnWrite<Db> {
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        if let Some(storage) =
-            self.cache.accounts.get(&address).map(|a| a.storage.get(&index).cloned())
-        {
-            return Ok(storage.unwrap_or_default());
+        // Check if account exists in cache
+        if let Some(account) = self.cache.accounts.get(&address) {
+            // If the specific storage slot is in cache, return it
+            if let Some(value) = account.storage.get(&index) {
+                return Ok(*value);
+            }
+            // Account is in cache but storage slot is not - fall through to query inner DB
         }
+        // Cache miss (no account) or partial cache miss (no storage slot) - query inner DB
         self.inner.storage_ref(address, index)
     }
 
@@ -207,11 +211,15 @@ impl<Db: DatabaseRef> DatabaseRef for CacheOnWrite<Db> {
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        if let Some(storage) =
-            self.cache.accounts.get(&address).map(|a| a.storage.get(&index).cloned())
-        {
-            return Ok(storage.unwrap_or_default());
+        // Check if account exists in cache
+        if let Some(account) = self.cache.accounts.get(&address) {
+            // If the specific storage slot is in cache, return it
+            if let Some(value) = account.storage.get(&index) {
+                return Ok(*value);
+            }
+            // Account is in cache but storage slot is not - fall through to query inner DB
         }
+        // Cache miss (no account) or partial cache miss (no storage slot) - query inner DB
         self.inner.storage_ref(address, index)
     }
 
