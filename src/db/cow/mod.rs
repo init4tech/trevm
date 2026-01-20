@@ -166,30 +166,15 @@ impl<Db: DatabaseRef> Database for CacheOnWrite<Db> {
     }
 
     fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        if let Some(code) = self.cache.contracts.get(&code_hash) {
-            return Ok(code.clone());
-        }
-        self.inner.code_by_hash_ref(code_hash)
+        Self::code_by_hash_ref(self, code_hash)
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        // Check if account exists in cache
-        if let Some(account) = self.cache.accounts.get(&address) {
-            // If the specific storage slot is in cache, return it
-            if let Some(value) = account.storage.get(&index) {
-                return Ok(*value);
-            }
-            // Account is in cache but storage slot is not - fall through to query inner DB
-        }
-        // Cache miss (no account) or partial cache miss (no storage slot) - query inner DB
-        self.inner.storage_ref(address, index)
+        Self::storage_ref(self, address, index)
     }
 
     fn block_hash(&mut self, number: u64) -> Result<B256, Self::Error> {
-        if let Some(hash) = self.cache.block_hashes.get(&U256::from(number)) {
-            return Ok(*hash);
-        }
-        self.inner.block_hash_ref(number)
+        Self::block_hash_ref(self, number)
     }
 }
 
@@ -211,13 +196,12 @@ impl<Db: DatabaseRef> DatabaseRef for CacheOnWrite<Db> {
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        // Check if account exists in cache
-        if let Some(account) = self.cache.accounts.get(&address) {
-            // If the specific storage slot is in cache, return it
-            if let Some(value) = account.storage.get(&index) {
-                return Ok(*value);
-            }
-            // Account is in cache but storage slot is not - fall through to query inner DB
+        // Check if account exists in cache, and the storage state is occupied
+        // in the cache
+        if let Some(storage) =
+            self.cache.accounts.get(&address).and_then(|a| a.storage.get(&index).cloned())
+        {
+            return Ok(storage);
         }
         // Cache miss (no account) or partial cache miss (no storage slot) - query inner DB
         self.inner.storage_ref(address, index)
@@ -268,6 +252,73 @@ impl<Db> DatabaseCommit for CacheOnWrite<Db> {
                 account.storage.into_iter().map(|(key, value)| (key, value.present_value())),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use revm::{
+        database::InMemoryDB,
+        state::{AccountStatus, EvmStorageSlot},
+    };
+
+    #[test]
+    fn state_isolation_regression() {
+        let mut mem_db = InMemoryDB::default();
+
+        let address = Address::with_last_byte(42);
+
+        // Write an account with storage at index 0 to the underlying DB
+        let account = Account {
+            info: AccountInfo { balance: U256::from(5000), ..Default::default() },
+            storage: [(U256::from(0), EvmStorageSlot::new_changed(U256::ZERO, U256::from(42), 0))]
+                .into_iter()
+                .collect(),
+            transaction_id: 0,
+            status: AccountStatus::Touched,
+        };
+
+        let mut changes: std::collections::HashMap<
+            Address,
+            Account,
+            revm::primitives::map::DefaultHashBuilder,
+        > = Default::default();
+        changes.insert(address, account);
+        mem_db.commit(changes);
+
+        // Read the items at index 1 and index 0 from the COW DB
+        assert_eq!(mem_db.storage(address, U256::from(0)).unwrap(), U256::from(42));
+        assert_eq!(mem_db.storage(address, U256::from(1)).unwrap(), U256::ZERO);
+
+        // Stand up the COW DB on top of the underlying DB
+        let mut cow_db = CacheOnWrite::new(mem_db);
+
+        // Read the items at index 1 and index 0 from the COW DB
+        assert_eq!(cow_db.storage(address, U256::from(0)).unwrap(), U256::from(42));
+        assert_eq!(cow_db.storage(address, U256::from(1)).unwrap(), U256::ZERO);
+
+        // Write a storage item at index 1 to the COW DB
+        let account = Account {
+            info: AccountInfo { balance: U256::from(5000), ..Default::default() },
+            storage: [(U256::from(1), EvmStorageSlot::new_changed(U256::ZERO, U256::from(42), 0))]
+                .into_iter()
+                .collect(),
+            transaction_id: 0,
+            status: AccountStatus::Touched,
+        };
+
+        let mut changes: std::collections::HashMap<
+            Address,
+            Account,
+            revm::primitives::map::DefaultHashBuilder,
+        > = Default::default();
+        changes.insert(address, account);
+        cow_db.commit(changes);
+
+        // Read the items at index 1 and index 0 from the COW DB
+        assert_eq!(cow_db.storage(address, U256::from(0)).unwrap(), U256::from(42));
+        assert_eq!(cow_db.storage(address, U256::from(1)).unwrap(), U256::from(42));
     }
 }
 
