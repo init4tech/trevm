@@ -258,7 +258,9 @@ impl<Db> DatabaseCommit for CacheOnWrite<Db> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::test_utils::DbTestExt;
     use revm::{
+        bytecode::Bytecode,
         database::InMemoryDB,
         state::{AccountStatus, EvmStorageSlot},
     };
@@ -319,6 +321,100 @@ mod tests {
         // Read the items at index 1 and index 0 from the COW DB
         assert_eq!(cow_db.storage(address, U256::from(0)).unwrap(), U256::from(42));
         assert_eq!(cow_db.storage(address, U256::from(1)).unwrap(), U256::from(42));
+    }
+
+    #[test]
+    fn test_set_balance() {
+        let addr = Address::repeat_byte(1);
+        let mut cow = CacheOnWrite::new(InMemoryDB::default());
+
+        cow.test_set_balance(addr, U256::from(1000));
+        assert_eq!(cow.basic(addr).unwrap().unwrap().balance, U256::from(1000));
+
+        cow.test_increase_balance(addr, U256::from(500));
+        assert_eq!(cow.basic(addr).unwrap().unwrap().balance, U256::from(1500));
+
+        cow.test_decrease_balance(addr, U256::from(200));
+        assert_eq!(cow.basic(addr).unwrap().unwrap().balance, U256::from(1300));
+    }
+
+    #[test]
+    fn test_set_nonce() {
+        let addr = Address::repeat_byte(2);
+        let mut cow = CacheOnWrite::new(InMemoryDB::default());
+
+        cow.test_set_nonce(addr, 42);
+        assert_eq!(cow.basic(addr).unwrap().unwrap().nonce, 42);
+    }
+
+    #[test]
+    fn test_set_storage() {
+        let addr = Address::repeat_byte(3);
+        let mut cow = CacheOnWrite::new(InMemoryDB::default());
+
+        cow.test_set_storage(addr, U256::from(10), U256::from(999));
+        assert_eq!(cow.storage(addr, U256::from(10)).unwrap(), U256::from(999));
+
+        // Set another slot, verify first slot still readable
+        cow.test_set_storage(addr, U256::from(20), U256::from(888));
+        assert_eq!(cow.storage(addr, U256::from(10)).unwrap(), U256::from(999));
+        assert_eq!(cow.storage(addr, U256::from(20)).unwrap(), U256::from(888));
+    }
+
+    #[test]
+    fn test_set_bytecode() {
+        let addr = Address::repeat_byte(4);
+        let mut cow = CacheOnWrite::new(InMemoryDB::default());
+        let code =
+            Bytecode::new_raw(alloy::primitives::Bytes::from_static(&[0x60, 0x00, 0x60, 0x00]));
+        let code_hash = code.hash_slow();
+
+        cow.test_set_bytecode(addr, code.clone());
+
+        let info = cow.basic(addr).unwrap().unwrap();
+        assert_eq!(info.code_hash, code_hash);
+        assert_eq!(cow.code_by_hash(code_hash).unwrap(), code);
+    }
+
+    #[test]
+    fn test_cow_isolates_writes_from_inner() {
+        let addr = Address::repeat_byte(5);
+        let mut inner = InMemoryDB::default();
+        inner.test_set_balance(addr, U256::from(100));
+
+        let mut cow = CacheOnWrite::new(inner);
+        cow.test_set_balance(addr, U256::from(500));
+
+        // COW sees updated balance
+        assert_eq!(cow.basic(addr).unwrap().unwrap().balance, U256::from(500));
+        // Inner still has original via ref
+        assert_eq!(cow.inner().basic_ref(addr).unwrap().unwrap().balance, U256::from(100));
+    }
+
+    #[test]
+    fn test_nested_cow_flatten() {
+        let addr1 = Address::repeat_byte(6);
+        let addr2 = Address::repeat_byte(7);
+        let mut inner = InMemoryDB::default();
+        inner.test_set_balance(addr1, U256::from(100));
+
+        let mut cow = CacheOnWrite::new(inner);
+        cow.test_set_balance(addr2, U256::from(50));
+
+        let mut nested = cow.nest();
+        nested.test_set_balance(addr1, U256::from(200));
+
+        // Flatten nested -> cow
+        let mut cow = nested.flatten();
+        // addr1 was overwritten in nested layer
+        assert_eq!(cow.basic(addr1).unwrap().unwrap().balance, U256::from(200));
+        // addr2 untouched in nested, visible from cow layer
+        assert_eq!(cow.basic(addr2).unwrap().unwrap().balance, U256::from(50));
+
+        // Flatten cow -> inner
+        let inner = cow.flatten();
+        assert_eq!(inner.basic_ref(addr1).unwrap().unwrap().balance, U256::from(200));
+        assert_eq!(inner.basic_ref(addr2).unwrap().unwrap().balance, U256::from(50));
     }
 }
 
