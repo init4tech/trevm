@@ -23,6 +23,7 @@ macro_rules! delegate_alloy_txs {
         delegate_alloy_txs!(@owned $target);
 
         impl Tx for Signed<$target> {
+            #[track_caller]
             fn fill_tx_env(&self, tx_env: &mut TxEnv) {
                 let t = self.try_to_recovered_ref().unwrap();
                 t.fill_tx_env(tx_env);
@@ -34,6 +35,7 @@ macro_rules! delegate_alloy_txs {
         delegate_alloy_txs!(@owned $target);
 
         impl Tx for $target {
+            #[track_caller]
             fn fill_tx_env(&self, tx_env: &mut TxEnv) {
                 self.try_to_recovered_ref().unwrap().fill_tx_env(tx_env);
             }
@@ -445,21 +447,8 @@ impl Tx for alloy::rpc::types::TransactionRequest {
         *caller = self.from.unwrap_or_default();
 
         // Determine the minimal tx type usable.
-        *tx_type = {
-            if self.transaction_type.is_some() {
-                self.transaction_type.unwrap()
-            } else if self.authorization_list.is_some() {
-                TxType::Eip7702 as u8
-            } else if self.has_eip4844_fields() {
-                TxType::Eip4844 as u8
-            } else if self.has_eip1559_fields() {
-                TxType::Eip1559 as u8
-            } else if self.access_list.is_some() {
-                TxType::Eip2930 as u8
-            } else {
-                TxType::Legacy as u8
-            }
-        };
+        *tx_type = self.transaction_type.unwrap_or_else(|| self.preferred_type() as u8);
+
         *gas_limit = self.gas.unwrap_or(u64::MAX);
         *gas_price =
             self.gas_price.unwrap_or_default().max(self.max_fee_per_gas.unwrap_or_default());
