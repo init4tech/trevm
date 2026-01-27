@@ -499,6 +499,7 @@ impl JournalDecode for AccountInfo {
             balance: JournalDecode::decode(buf)?,
             nonce: JournalDecode::decode(buf)?,
             code_hash: JournalDecode::decode(buf)?,
+            account_id: None,
             code: None,
         })
     }
@@ -578,7 +579,7 @@ impl JournalDecode for Bytecode {
 
         match tag {
             TAG_BYTECODE_RAW => Ok(Self::new_raw(raw)),
-            TAG_BYTECODE_7702 => Ok(Self::Eip7702(Eip7702Bytecode::new_raw(raw)?)),
+            TAG_BYTECODE_7702 => Ok(Self::Eip7702(Eip7702Bytecode::new_raw(raw)?.into())),
             _ => Err(JournalDecodeError::InvalidTag { ty_name: "Bytecode", tag, max_expected: 2 }),
         }
     }
@@ -658,6 +659,7 @@ mod test {
             nonce: 38238923,
             code_hash: B256::repeat_byte(0xa),
             code: None,
+            account_id: None,
         };
         roundtrip(&acc_info);
         let created_outcome = InfoOutcome::Created(Cow::Owned(acc_info));
@@ -669,12 +671,14 @@ mod test {
                 nonce: 38,
                 code_hash: B256::repeat_byte(0xab),
                 code: None,
+                account_id: None,
             }),
             new: Cow::Owned(AccountInfo {
                 balance: U256::from(38238923),
                 nonce: 38238923,
                 code_hash: B256::repeat_byte(0xa),
                 code: None,
+                account_id: None,
             }),
         };
         roundtrip(&diff_outcome);

@@ -272,8 +272,10 @@ mod tests {
         let address = Address::with_last_byte(42);
 
         // Write an account with storage at index 0 to the underlying DB
+        let original_info = AccountInfo { balance: U256::from(5000), ..Default::default() };
         let account = Account {
-            info: AccountInfo { balance: U256::from(5000), ..Default::default() },
+            original_info: Box::new(original_info.clone()),
+            info: original_info,
             storage: [(U256::from(0), EvmStorageSlot::new_changed(U256::ZERO, U256::from(42), 0))]
                 .into_iter()
                 .collect(),
@@ -301,8 +303,10 @@ mod tests {
         assert_eq!(cow_db.storage(address, U256::from(1)).unwrap(), U256::ZERO);
 
         // Write a storage item at index 1 to the COW DB
+        let original_info = AccountInfo { balance: U256::from(5000), ..Default::default() };
         let account = Account {
-            info: AccountInfo { balance: U256::from(5000), ..Default::default() },
+            original_info: Box::new(original_info.clone()),
+            info: original_info,
             storage: [(U256::from(1), EvmStorageSlot::new_changed(U256::ZERO, U256::from(42), 0))]
                 .into_iter()
                 .collect(),
