@@ -16,11 +16,8 @@ pub trait EvmExtUnchecked<Db: Database> {
     fn account(&mut self, address: Address) -> Result<Account, Db::Error> {
         let info = self.db_mut_ext().basic(address)?.unwrap_or_default();
         let created = info.is_empty();
-        let mut acct = Account {
-            original_info: Box::new(info.clone()),
-            info,
-            ..Default::default()
-        };
+        let mut acct =
+            Account { original_info: Box::new(info.clone()), info, ..Default::default() };
         if created {
             acct.mark_created();
         }
