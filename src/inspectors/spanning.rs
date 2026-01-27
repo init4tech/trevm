@@ -146,10 +146,10 @@ impl SpanningInspector {
         runtime_level_span!(
             self.level,
             "create",
-            caller = %inputs.caller,
-            value = %inputs.value,
-            gas_limit = inputs.gas_limit,
-            scheme = ?inputs.scheme,
+            caller = %inputs.caller(),
+            value = %inputs.value(),
+            gas_limit = inputs.gas_limit(),
+            scheme = ?inputs.scheme(),
         )
     }
 

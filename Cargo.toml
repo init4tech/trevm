@@ -44,8 +44,8 @@ alloy = { version = "1.4.0", default-features = false, features = [
     "sol-types",
 ] }
 
-revm = { version = "33", default-features = false }
-revm-inspectors = { version = "0.33", optional = true }
+revm = { version = "34", default-features = false }
+revm-inspectors = { version = "0.34", optional = true }
 
 dashmap = { version = "6.1.0", optional = true }
 tracing = { version = "0.1.41", optional = true }
@@ -54,10 +54,10 @@ thiserror = "2.0.11"
 tokio = { version = "1.44", optional = true }
 
 [dev-dependencies]
-revm = { version = "33", features = ["serde-json", "std", "alloydb"] }
+revm = { version = "34", features = ["serde-json", "std", "alloydb"] }
 trevm = { path = ".", features = ["test-utils"] }
 
-alloy = { version = "1.0.35", features = ["providers", "transports"] }
+alloy = { version = "1.4.0", features = ["providers", "transports"] }
 
 # misc
 eyre = "0.6"

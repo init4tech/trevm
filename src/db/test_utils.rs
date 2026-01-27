@@ -14,10 +14,12 @@ pub trait DbTestExt: Database + DatabaseCommit {
     where
         F: FnOnce(&mut AccountInfo),
     {
-        let mut info = self.basic(address).ok().flatten().unwrap_or_default();
+        let original_info = self.basic(address).ok().flatten().unwrap_or_default();
+        let mut info = original_info.clone();
         f(&mut info);
         let account = Account {
             info,
+            original_info: Box::new(original_info),
             storage: Default::default(),
             status: AccountStatus::Touched,
             transaction_id: 0,
@@ -54,7 +56,13 @@ pub trait DbTestExt: Database + DatabaseCommit {
         let info = self.basic(address).ok().flatten().unwrap_or_default();
         let storage =
             HashMap::from_iter([(slot, EvmStorageSlot::new_changed(U256::ZERO, value, 0))]);
-        let account = Account { info, storage, status: AccountStatus::Touched, transaction_id: 0 };
+        let account = Account {
+            info: info.clone(),
+            original_info: Box::new(info),
+            storage,
+            status: AccountStatus::Touched,
+            transaction_id: 0,
+        };
         self.commit(HashMap::from_iter([(address, account)]));
     }
 
@@ -81,10 +89,12 @@ pub trait TryDbTestExt: Database + TryDatabaseCommit {
     where
         F: FnOnce(&mut AccountInfo),
     {
-        let mut info = self.basic(address).ok().flatten().unwrap_or_default();
+        let original_info = self.basic(address).ok().flatten().unwrap_or_default();
+        let mut info = original_info.clone();
         f(&mut info);
         let account = Account {
             info,
+            original_info: Box::new(original_info),
             storage: Default::default(),
             status: AccountStatus::Touched,
             transaction_id: 0,
@@ -142,7 +152,13 @@ pub trait TryDbTestExt: Database + TryDatabaseCommit {
         let info = self.basic(address).ok().flatten().unwrap_or_default();
         let storage =
             HashMap::from_iter([(slot, EvmStorageSlot::new_changed(U256::ZERO, value, 0))]);
-        let account = Account { info, storage, status: AccountStatus::Touched, transaction_id: 0 };
+        let account = Account {
+            info: info.clone(),
+            original_info: Box::new(info),
+            storage,
+            status: AccountStatus::Touched,
+            transaction_id: 0,
+        };
         self.try_commit(HashMap::from_iter([(address, account)]))
     }
 

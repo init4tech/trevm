@@ -11,7 +11,7 @@ use alloy::{
 use core::convert::Infallible;
 use revm::{
     bytecode::opcode::DIFFICULTY,
-    context::{result::EVMError, Cfg as _, ContextTr},
+    context::{result::EVMError, ContextTr},
     handler::EthPrecompiles,
     inspector::NoOpInspector,
     interpreter::instructions::block_info,
@@ -155,7 +155,7 @@ where
 
     /// Get the id of the currently running hardfork spec.
     pub fn spec_id(&self) -> SpecId {
-        self.inner.ctx.cfg().spec()
+        *self.inner.ctx.cfg().spec()
     }
 
     /// Set the [SpecId], modifying the EVM handlers accordingly. This function
