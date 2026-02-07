@@ -1,2 +1,4 @@
 /target
 Cargo.lock
+.claude/*.local.*
+CLAUDE.local.md

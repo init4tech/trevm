@@ -1,0 +1,14 @@
+[advisories]
+ignore = [
+    # `ark-relations` is an unactivated optional transitive dep (via `ark-bn254`'s`r1cs` feature)
+    # that is never compiled but still appears in Cargo.lock, and hence gets considered by `cargo
+    # audit`. There is an upstream fix for `ark-relations`, but it's not yet published to crates.io.
+    # See https://github.com/arkworks-rs/snark/issues/413.
+    "RUSTSEC-2025-0055",
+
+    # `derivative` is unmaintained; transitive dep via revm's `ark-ff`.
+    "RUSTSEC-2024-0388",
+
+    # `paste` is unmaintained; transitive dep via revm's `ark-ff` and alloy's `syn-solidity`.
+    "RUSTSEC-2024-0436",
+]
