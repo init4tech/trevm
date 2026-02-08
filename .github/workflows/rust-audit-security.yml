@@ -1,0 +1,19 @@
+name: Security Audit
+# This workflow uses rustsec/audit-check to check for security vulnerabilities
+# On scheduled runs: automatically creates GitHub issues for findings
+# On push/PR: creates status checks that fail when vulnerabilities are found
+
+on:
+  schedule:
+    # Run daily at 09:00 UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allow manual runs
+
+permissions: # these permissions are required for the workflow to run
+  contents: read  # Required to checkout the repository
+  issues: write   # Required to create issues (scheduled runs)
+  checks: write   # Required to create status checks (push/PR)
+
+jobs:
+  security-audit:
+    uses: init4tech/actions/.github/workflows/rust-audit-security.yml@main
