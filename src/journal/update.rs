@@ -3,7 +3,7 @@ use alloy::primitives::{keccak256, Bytes, B256};
 use std::sync::OnceLock;
 
 /// Journal associated with a block
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct BlockUpdate<'a> {
     /// The height of the block.
     height: u64,
@@ -93,5 +93,35 @@ impl JournalDecode for BlockUpdate<'static> {
             serialized: OnceLock::from(Bytes::copy_from_slice(original)),
             hash: OnceLock::from(keccak256(original)),
         })
+    }
+}
+
+impl PartialEq for BlockUpdate<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self.hash.get(), other.hash.get()) {
+            (Some(lhs), Some(rhs)) => lhs == rhs,
+            _ => {
+                self.height == other.height
+                    && self.prev_journal_hash == other.prev_journal_hash
+                    && self.journal == other.journal
+            }
+        }
+    }
+}
+
+impl Eq for BlockUpdate<'_> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn block_update_eq_with_one_populated_hash() {
+        let update_a = BlockUpdate::new(1, B256::ZERO, BundleStateIndex::default());
+        let update_b = BlockUpdate::new(1, B256::ZERO, BundleStateIndex::default());
+        update_a.journal_hash();
+        assert!(update_a.hash.get().is_some());
+        assert!(update_b.hash.get().is_none());
+        assert_eq!(update_a, update_b);
     }
 }

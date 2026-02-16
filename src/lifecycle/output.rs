@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 ///
 /// This struct is used to collect the results of executing a block of
 /// transactions. It accumulates the receipts and senders of the transactions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct BlockOutput<T: TxReceipt = ReceiptEnvelope> {
     /// The receipts of the transactions in the block, in order.
     receipts: Vec<T>,
@@ -117,5 +117,28 @@ impl<T: TxReceipt<Log = alloy::primitives::Log>> BlockOutput<T> {
     pub fn into_parts(self) -> (Vec<T>, Vec<Address>, Bloom) {
         let bloom = self.logs_bloom();
         (self.receipts, self.senders, bloom)
+    }
+}
+
+impl<T: TxReceipt + PartialEq> PartialEq for BlockOutput<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.receipts == other.receipts && self.senders == other.senders
+    }
+}
+
+impl<T: TxReceipt + Eq> Eq for BlockOutput<T> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn block_output_eq_with_one_populated_bloom() {
+        let output_a = BlockOutput::default();
+        let output_b = BlockOutput::default();
+        output_a.logs_bloom();
+        assert!(output_a.bloom.get().is_some());
+        assert!(output_b.bloom.get().is_none());
+        assert_eq!(output_a, output_b);
     }
 }
