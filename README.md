@@ -1,3 +1,17 @@
+[![Crates.io][crates-badge]][crates-url]
+[![docs.rs][docs-badge]][docs-url]
+[![CI][ci-badge]][ci-url]
+[![License: MIT][license-badge]][license-url]
+
+[crates-badge]: https://img.shields.io/crates/v/trevm.svg
+[crates-url]: https://crates.io/crates/trevm
+[docs-badge]: https://img.shields.io/docsrs/trevm
+[docs-url]: https://docs.rs/trevm/latest/trevm/
+[ci-badge]: https://github.com/init4tech/trevm/actions/workflows/rust-ci.yml/badge.svg
+[ci-url]: https://github.com/init4tech/trevm/actions/workflows/rust-ci.yml
+[license-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license-url]: https://github.com/init4tech/trevm/blob/main/LICENSE
+
 ## Trevm
 
 Trevm is a [typestate] API wrapper for [revm]. It provides an ergonomic way to
@@ -62,5 +76,4 @@ ready.
 
 [typestate]: https://cliffle.com/blog/rust-typestate/
 [revm]: https://github.com/bluealloy/revm
-[docs.rs]: https://docs.rs/trevm/latest/trevm/
 [documentation on docs.rs]: https://docs.rs/trevm/latest/trevm/
