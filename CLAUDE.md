@@ -1,14 +1,13 @@
-# Trevm
+# trevm
 
 ## Commands
 
 - `cargo +nightly fmt` - format
-- `cargo clippy --all-features --all-targets` - lint with features
-- `cargo clippy --no-default-features --all-targets` - lint without
-- `cargo t --all-features` - test with all features
-- `cargo t --no-default-features` - test without features
+- `cargo clippy -p trevm --all-features --all-targets` - lint with features
+- `cargo clippy -p trevm --no-default-features --all-targets` - lint without
+- `cargo t -p trevm` - test
 
-Pre-commit: clippy (both feature sets) + fmt. Never use `cargo check/build`.
+Pre-push: clippy (both feature sets) + fmt. Never use `cargo check/build`.
 
 ## Style
 
@@ -31,3 +30,10 @@ Pre-commit: clippy (both feature sets) + fmt. Never use `cargo check/build`.
 - Extensive feature flags: test with both `--all-features` and `--no-default-features`
 - Key features: `call`, `concurrent-db`, `estimate_gas`, `tracing-inspectors`, `alloy-db`, `test-utils`
 - Uses `#[cfg_attr(docsrs, doc(cfg(...)))]` for feature-gated documentation
+
+## Versioning
+
+Trevm uses semver. While pre-1.0, the MINOR version tracks revm's MAJOR
+version (e.g. trevm `0.34.x` targets revm `34.x.x`). Breaking changes go
+in PATCH versions to preserve this relationship, documented in GitHub
+release notes. Always bump the patch version for breaking changes.
