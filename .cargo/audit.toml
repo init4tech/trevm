@@ -11,4 +11,9 @@ ignore = [
 
     # `paste` is unmaintained; transitive dep via revm's `ark-ff` and alloy's `syn-solidity`.
     "RUSTSEC-2024-0436",
+
+    # `rand` 0.8.5 unsoundness when `log` + `thread_rng` features are both enabled and a custom
+    # logger calls `rand::rng()` during reseeding. Our 0.8.5 (transitive via alloy-consensus)
+    # has neither feature enabled; our 0.9.4 is already patched.
+    "RUSTSEC-2026-0097",
 ]
