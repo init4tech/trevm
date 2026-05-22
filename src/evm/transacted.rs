@@ -1,6 +1,6 @@
-use crate::{
-    helpers::Ctx, EvmErrored, EvmNeedsTx, EvmReady, EvmTransacted, NeedsTx, TransactedState, Trevm,
-};
+#[cfg(feature = "estimate_gas")]
+use crate::EvmReady;
+use crate::{helpers::Ctx, EvmErrored, EvmNeedsTx, EvmTransacted, NeedsTx, TransactedState, Trevm};
 use alloy::primitives::Bytes;
 use revm::{
     context::{

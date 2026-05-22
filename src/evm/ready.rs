@@ -2,11 +2,11 @@ use crate::{
     helpers::Ctx, ErroredState, EvmErrored, EvmNeedsTx, EvmReady, EvmTransacted, TransactedState,
     Trevm,
 };
-use revm::{
-    context::result::{EVMError, ExecutionResult},
-    interpreter::gas::calculate_initial_tx_gas_for_tx,
-    Database, InspectEvm, Inspector,
-};
+#[cfg(feature = "estimate_gas")]
+use revm::context::result::EVMError;
+#[cfg(feature = "call")]
+use revm::context::result::ExecutionResult;
+use revm::{interpreter::gas::calculate_initial_tx_gas_for_tx, Database, InspectEvm, Inspector};
 
 impl<Db, Insp> EvmReady<Db, Insp>
 where

@@ -1,4 +1,6 @@
-use crate::{helpers::Ctx, EvmErrored, HasBlock, HasCfg, HasTx, Trevm, Tx};
+use crate::{helpers::Ctx, EvmErrored, HasTx, Trevm, Tx};
+#[cfg(feature = "call")]
+use crate::{HasBlock, HasCfg};
 use alloy::{
     eips::eip7825::MAX_TX_GAS_LIMIT_OSAKA,
     primitives::{Address, Bytes, U256},
