@@ -5,10 +5,9 @@ use crate::{
     EvmTransacted, Tx,
 };
 use alloy::rpc::types::BlockOverrides;
-use revm::{
-    context::{result::ExecutionResult, ContextTr},
-    Database, DatabaseCommit, Inspector,
-};
+#[cfg(feature = "call")]
+use revm::context::result::ExecutionResult;
+use revm::{context::ContextTr, Database, DatabaseCommit, Inspector};
 
 impl<Db, Insp> EvmNeedsTx<Db, Insp>
 where

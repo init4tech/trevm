@@ -1,6 +1,6 @@
 [package]
 name = "trevm"
-version = "0.34.2"
+version = "0.34.3"
 rust-version = "1.83.0"
 edition = "2021"
 authors = ["init4"]
@@ -48,7 +48,7 @@ revm = { version = "34", default-features = false }
 revm-inspectors = { version = "0.34", optional = true }
 
 dashmap = { version = "6.1.0", optional = true }
-tracing = { version = "0.1.41", optional = true }
+tracing = "0.1.41"
 thiserror = "2.0.11"
 
 tokio = { version = "1.44", optional = true }
@@ -74,7 +74,6 @@ default = [
     "revm/std",
     "revm/c-kzg",
     "revm/blst",
-    "revm/portable",
     "revm/secp256k1",
 ]
 
@@ -85,7 +84,7 @@ call = ["optional_eip3607", "optional_no_base_fee"]
 
 concurrent-db = ["dep:dashmap"]
 
-estimate_gas = ["optional_eip3607", "optional_no_base_fee", "dep:tracing"]
+estimate_gas = ["optional_eip3607", "optional_no_base_fee"]
 
 test-utils = ["revm/std", "revm/serde-json", "revm/alloydb", "alloy/signers", "alloy/signer-local"]
 

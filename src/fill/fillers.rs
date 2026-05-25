@@ -1,5 +1,11 @@
-use crate::fill::traits::{Cfg, Tx};
-use revm::context::{BlockEnv, CfgEnv, TxEnv};
+use crate::fill::traits::Cfg;
+#[cfg(any(feature = "estimate_gas", feature = "call"))]
+use crate::fill::traits::Tx;
+#[cfg(feature = "call")]
+use revm::context::BlockEnv;
+use revm::context::CfgEnv;
+#[cfg(any(feature = "estimate_gas", feature = "call"))]
+use revm::context::TxEnv;
 
 /// A [`Cfg`] that disables gas-related checks and payment of the
 /// beneficiary reward, while leaving other cfg options unchanged.
