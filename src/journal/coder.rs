@@ -340,7 +340,10 @@ impl JournalEncode for AcctDiff<'_> {
 
     fn encode(&self, buf: &mut dyn BufMut) {
         self.outcome.encode(buf);
-        buf.put_u32(self.storage_diff.len() as u32);
+        // Only changed slots are serialized, so the count prefix must exclude unchanged slots to
+        // match the entries written below (and `serialized_size`).
+        let changed = self.storage_diff.values().filter(|slot| slot.is_changed()).count();
+        buf.put_u32(changed as u32);
         for (slot, value) in &self.storage_diff {
             if value.is_changed() {
                 slot.encode(buf);
@@ -961,5 +964,92 @@ mod test {
         buf.extend_from_slice(&[0u8; 32]);
         let error = StorageSlot::decode(&mut buf.as_slice()).unwrap_err();
         assert_eq!(error, JournalDecodeError::UnchangedStorage);
+    }
+
+    // Regression: `AcctDiff::encode` must write the count of *changed* slots, not the full map
+    // length. Unchanged slots are never serialized (and would panic in `StorageSlot::encode`),
+    // so a count that includes them makes the decoder read phantom slots: an overrun for a
+    // standalone diff, or silent corruption of the trailing data inside a `BundleStateIndex`.
+    #[test]
+    fn acct_diff_encode_drops_unchanged_storage() {
+        let changed = StorageSlot::new_changed(U256::from(1), U256::from(2));
+        let unchanged = StorageSlot::new(U256::from(7));
+
+        let with_unchanged = AcctDiff {
+            outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+            storage_diff: vec![
+                (U256::from(3), Cow::Owned(changed)),
+                (U256::from(4), Cow::Owned(unchanged)),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        // Only the changed slot is on the wire, so the decoded diff omits the unchanged slot.
+        let expected = AcctDiff {
+            outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+            storage_diff: vec![(U256::from(3), Cow::Owned(changed))].into_iter().collect(),
+        };
+
+        let enc = with_unchanged.encoded();
+        // `serialized_size` already excludes unchanged slots; the encoding must agree.
+        assert_eq!(enc.len(), with_unchanged.serialized_size());
+        let decoded = <AcctDiff<'static> as JournalDecode>::decode(&mut enc.as_ref())
+            .expect("diff with an unchanged slot should decode");
+        assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn bundle_state_index_encode_drops_unchanged_storage() {
+        let changed = StorageSlot::new_changed(U256::from(1), U256::from(2));
+        let unchanged = StorageSlot::new(U256::from(7));
+
+        let bsi = BundleStateIndex {
+            state: vec![(
+                Address::repeat_byte(0xa),
+                AcctDiff {
+                    outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+                    storage_diff: vec![
+                        (U256::from(3), Cow::Owned(changed)),
+                        (U256::from(4), Cow::Owned(unchanged)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            // Trailing contracts that an over-large slot count would consume as phantom storage.
+            new_contracts: vec![(
+                B256::repeat_byte(0xb),
+                Cow::Owned(Bytecode::new_raw(Bytes::from(vec![1, 2, 3]))),
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let expected = BundleStateIndex {
+            state: vec![(
+                Address::repeat_byte(0xa),
+                AcctDiff {
+                    outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+                    storage_diff: vec![(U256::from(3), Cow::Owned(changed))].into_iter().collect(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            new_contracts: vec![(
+                B256::repeat_byte(0xb),
+                Cow::Owned(Bytecode::new_raw(Bytes::from(vec![1, 2, 3]))),
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let enc = bsi.encoded();
+        assert_eq!(enc.len(), bsi.serialized_size());
+        let decoded = <BundleStateIndex<'static> as JournalDecode>::decode(&mut enc.as_ref())
+            .expect("index with an unchanged slot should decode");
+        assert_eq!(decoded, expected);
     }
 }
