@@ -340,7 +340,10 @@ impl JournalEncode for AcctDiff<'_> {
 
     fn encode(&self, buf: &mut dyn BufMut) {
         self.outcome.encode(buf);
-        buf.put_u32(self.storage_diff.len() as u32);
+        // Only changed slots are serialized, so the count prefix must exclude unchanged slots to
+        // match the entries written below (and `serialized_size`).
+        let changed = self.storage_diff.values().filter(|slot| slot.is_changed()).count();
+        buf.put_u32(changed as u32);
         for (slot, value) in &self.storage_diff {
             if value.is_changed() {
                 slot.encode(buf);
@@ -553,9 +556,9 @@ impl JournalDecode for StorageSlot {
 
 impl JournalDecode for AcctDiff<'static> {
     fn decode(buf: &mut &[u8]) -> Result<Self> {
+        check_len!(buf, "AcctDiff", ACCT_DIFF_MIN_BYTES);
         let outcome = JournalDecode::decode(buf)?;
 
-        check_len!(buf, "StorageDiffLen", ACCT_DIFF_MIN_BYTES);
         let storage_diff_len: u32 = JournalDecode::decode(buf)?;
 
         let mut storage_diff = BTreeMap::new();
@@ -645,6 +648,34 @@ mod test {
         assert_eq!(&dec, expected, "{ty_name}");
     }
 
+    /// A non-trivial [`AccountInfo`] used to build test fixtures.
+    fn sample_info() -> AccountInfo {
+        AccountInfo {
+            balance: U256::from(38238923),
+            nonce: 38238923,
+            code_hash: B256::repeat_byte(0xa),
+            code: None,
+            account_id: None,
+        }
+    }
+
+    /// Assert that the full encoding of `value` decodes, while every strict prefix of it is
+    /// rejected. Truncating a valid buffer must always overrun, so this pins the length-check
+    /// boundary of every decode path and guards against mis-ordered or off-by-one checks - the
+    /// class of the empty-storage `AcctDiff` regression.
+    #[track_caller]
+    fn assert_truncation_rejected<T: JournalDecode>(value: &T) {
+        let enc = JournalEncode::encoded(value);
+        let ty_name = core::any::type_name::<T>();
+        T::decode(&mut enc.as_ref()).expect("full buffer should decode");
+        for len in 0..enc.len() {
+            let mut prefix = &enc[..len];
+            if T::decode(&mut prefix).is_ok() {
+                panic!("{ty_name}: prefix of length {len} must be rejected but decoded");
+            }
+        }
+    }
+
     #[test]
     fn roundtrips() {
         roundtrip(&Cow::<'static, u8>::Owned(1u8));
@@ -725,5 +756,300 @@ mod test {
                 .collect(),
         };
         roundtrip(&bsi);
+    }
+
+    #[test]
+    fn empty_storage_diff_roundtrips() {
+        let acc_info = AccountInfo {
+            balance: U256::from(1),
+            nonce: 1,
+            code_hash: B256::repeat_byte(0xa),
+            code: None,
+            account_id: None,
+        };
+
+        // Standalone AcctDiff with zero storage slots, for both single-info outcomes.
+        let created = AcctDiff {
+            outcome: InfoOutcome::Created(Cow::Owned(acc_info.clone())),
+            storage_diff: BTreeMap::new(),
+        };
+        roundtrip(&created);
+        let destroyed = AcctDiff {
+            outcome: InfoOutcome::Destroyed(Cow::Owned(acc_info)),
+            storage_diff: BTreeMap::new(),
+        };
+        roundtrip(&destroyed);
+
+        // A BundleStateIndex whose only account has empty storage and which has no new
+        // contracts - the trailing bytes after the account's outcome are just the two u32
+        // length prefixes, far fewer than ACCT_DIFF_MIN_BYTES.
+        let bsi = BundleStateIndex {
+            state: vec![(Address::repeat_byte(0xa), created)].into_iter().collect(),
+            new_contracts: BTreeMap::new(),
+        };
+        roundtrip(&bsi);
+    }
+
+    #[test]
+    fn additional_roundtrips() {
+        // The `Option` codec is part of the public trait surface but is not exercised by the
+        // composite types above, so cover both variants directly.
+        roundtrip(&Option::<u8>::None);
+        roundtrip(&Some(42u8));
+
+        // Only the legacy bytecode variant is covered by `roundtrips`; cover the EIP-7702
+        // delegation variant and the empty-bytecode edge case here.
+        roundtrip(&Bytecode::new_eip7702(Address::repeat_byte(0xb)));
+        roundtrip(&Bytecode::new_raw(Bytes::new()));
+
+        // Only created/diff outcomes are covered by `roundtrips`; cover a standalone destroyed
+        // outcome here.
+        roundtrip(&InfoOutcome::Destroyed(Cow::Owned(sample_info())));
+
+        // An empty index has neither state nor contracts.
+        roundtrip(&BundleStateIndex::default());
+
+        // The header codec delegates to alloy RLP.
+        roundtrip(&Header::default());
+    }
+
+    #[test]
+    fn truncated_buffers_are_rejected() {
+        assert_truncation_rejected(&7u8);
+        assert_truncation_rejected(&7u32);
+        assert_truncation_rejected(&7u64);
+        assert_truncation_rejected(&B256::repeat_byte(0xa));
+        assert_truncation_rejected(&Address::repeat_byte(0xa));
+        assert_truncation_rejected(&U256::from(38238923));
+        assert_truncation_rejected(&sample_info());
+
+        assert_truncation_rejected(&Option::<u8>::None);
+        assert_truncation_rejected(&Some(7u8));
+
+        // Every `InfoOutcome` variant.
+        assert_truncation_rejected(&InfoOutcome::Created(Cow::Owned(sample_info())));
+        assert_truncation_rejected(&InfoOutcome::Destroyed(Cow::Owned(sample_info())));
+        assert_truncation_rejected(&InfoOutcome::Diff {
+            old: Cow::Owned(sample_info()),
+            new: Cow::Owned(sample_info()),
+        });
+
+        // Every `StorageSlot` variant: created, changed, deleted.
+        assert_truncation_rejected(&StorageSlot::new_changed(U256::ZERO, U256::from(9)));
+        assert_truncation_rejected(&StorageSlot::new_changed(U256::from(9), U256::from(3)));
+        assert_truncation_rejected(&StorageSlot::new_changed(U256::from(9), U256::ZERO));
+
+        // `AcctDiff` at its minimum size (empty storage) and populated, for both the single-info
+        // and two-info outcomes.
+        assert_truncation_rejected(&AcctDiff {
+            outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+            storage_diff: BTreeMap::new(),
+        });
+        assert_truncation_rejected(&AcctDiff {
+            outcome: InfoOutcome::Diff {
+                old: Cow::Owned(sample_info()),
+                new: Cow::Owned(sample_info()),
+            },
+            storage_diff: vec![(
+                U256::from(3),
+                Cow::Owned(StorageSlot::new_changed(U256::ZERO, U256::from(9))),
+            )]
+            .into_iter()
+            .collect(),
+        });
+
+        // `Bytecode`: legacy, empty, and EIP-7702.
+        assert_truncation_rejected(&Bytecode::new_raw(Bytes::from(vec![1, 2, 3])));
+        assert_truncation_rejected(&Bytecode::new_raw(Bytes::new()));
+        assert_truncation_rejected(&Bytecode::new_eip7702(Address::repeat_byte(0xb)));
+
+        // `BundleStateIndex`: empty and populated.
+        assert_truncation_rejected(&BundleStateIndex::default());
+        assert_truncation_rejected(&BundleStateIndex {
+            state: vec![(
+                Address::repeat_byte(0xa),
+                AcctDiff {
+                    outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+                    storage_diff: BTreeMap::new(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            new_contracts: vec![(
+                B256::repeat_byte(0xa),
+                Cow::Owned(Bytecode::new_raw(Bytes::from(vec![1, 2, 3]))),
+            )]
+            .into_iter()
+            .collect(),
+        });
+    }
+
+    #[test]
+    fn acct_diff_minimum_size_boundary() {
+        let created = AcctDiff {
+            outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+            storage_diff: BTreeMap::new(),
+        };
+        let enc = created.encoded();
+
+        // An empty-storage created/destroyed diff is exactly the minimum encodable size.
+        assert_eq!(enc.len(), ACCT_DIFF_MIN_BYTES);
+
+        // Exactly the minimum decodes...
+        let decoded =
+            <AcctDiff<'static> as JournalDecode>::decode(&mut enc.as_ref()).expect("min decodes");
+        assert_eq!(decoded, created);
+
+        // ...and one byte short overruns against the whole `AcctDiff` via the up-front length
+        // check, not against a phantom second outcome. This is the exact regression the fix
+        // guards: previously the check ran after the outcome was consumed and demanded another
+        // `ACCT_DIFF_MIN_BYTES`, rejecting this valid minimum diff.
+        let mut short = &enc[..enc.len() - 1];
+        let error = <AcctDiff<'static> as JournalDecode>::decode(&mut short).unwrap_err();
+        assert_eq!(
+            error,
+            JournalDecodeError::Overrun {
+                ty_name: "AcctDiff",
+                expected: ACCT_DIFF_MIN_BYTES,
+                remaining: ACCT_DIFF_MIN_BYTES - 1,
+            }
+        );
+    }
+
+    #[test]
+    fn invalid_tags_are_rejected() {
+        // `InfoOutcome` accepts only tags 0..=2; the tag is checked before any payload.
+        let error = <InfoOutcome<'static> as JournalDecode>::decode(&mut &[3u8][..]).unwrap_err();
+        assert_eq!(
+            error,
+            JournalDecodeError::InvalidTag { ty_name: "InfoOutcome", tag: 3, max_expected: 2 }
+        );
+
+        // `StorageSlot` validates its tag only after consuming the 32-byte present value, so the
+        // buffer must carry that value for the tag check to be reached.
+        let mut slot_buf = vec![4u8];
+        slot_buf.extend_from_slice(&[0u8; 32]);
+        let error = StorageSlot::decode(&mut slot_buf.as_slice()).unwrap_err();
+        assert_eq!(
+            error,
+            JournalDecodeError::InvalidTag { ty_name: "StorageSlot", tag: 4, max_expected: 3 }
+        );
+
+        // `Bytecode` uses tags 0 and 2; 1 and 3 are invalid. The body length prefix must be
+        // present and consumable before the tag is validated.
+        let error = Bytecode::decode(&mut &[1u8, 0, 0, 0, 0][..]).unwrap_err();
+        assert_eq!(
+            error,
+            JournalDecodeError::InvalidTag { ty_name: "Bytecode", tag: 1, max_expected: 2 }
+        );
+        let error = Bytecode::decode(&mut &[3u8, 0, 0, 0, 0][..]).unwrap_err();
+        assert_eq!(
+            error,
+            JournalDecodeError::InvalidTag { ty_name: "Bytecode", tag: 3, max_expected: 2 }
+        );
+
+        // `Option` accepts only tags 0 and 1.
+        let error = <Option<u8> as JournalDecode>::decode(&mut &[2u8][..]).unwrap_err();
+        assert_eq!(
+            error,
+            JournalDecodeError::InvalidTag { ty_name: "Option<T>", tag: 2, max_expected: 1 }
+        );
+    }
+
+    #[test]
+    fn unchanged_storage_slot_is_rejected() {
+        // The journal must never contain unchanged storage; decoding one is a hard error. As
+        // above, the tag is only reached after the present value is consumed.
+        let mut buf = vec![TAG_STORAGE_UNCHANGED];
+        buf.extend_from_slice(&[0u8; 32]);
+        let error = StorageSlot::decode(&mut buf.as_slice()).unwrap_err();
+        assert_eq!(error, JournalDecodeError::UnchangedStorage);
+    }
+
+    // Regression: `AcctDiff::encode` must write the count of *changed* slots, not the full map
+    // length. Unchanged slots are never serialized (and would panic in `StorageSlot::encode`),
+    // so a count that includes them makes the decoder read phantom slots: an overrun for a
+    // standalone diff, or silent corruption of the trailing data inside a `BundleStateIndex`.
+    #[test]
+    fn acct_diff_encode_drops_unchanged_storage() {
+        let changed = StorageSlot::new_changed(U256::from(1), U256::from(2));
+        let unchanged = StorageSlot::new(U256::from(7));
+
+        let with_unchanged = AcctDiff {
+            outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+            storage_diff: vec![
+                (U256::from(3), Cow::Owned(changed)),
+                (U256::from(4), Cow::Owned(unchanged)),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        // Only the changed slot is on the wire, so the decoded diff omits the unchanged slot.
+        let expected = AcctDiff {
+            outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+            storage_diff: vec![(U256::from(3), Cow::Owned(changed))].into_iter().collect(),
+        };
+
+        let enc = with_unchanged.encoded();
+        // `serialized_size` already excludes unchanged slots; the encoding must agree.
+        assert_eq!(enc.len(), with_unchanged.serialized_size());
+        let decoded = <AcctDiff<'static> as JournalDecode>::decode(&mut enc.as_ref())
+            .expect("diff with an unchanged slot should decode");
+        assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn bundle_state_index_encode_drops_unchanged_storage() {
+        let changed = StorageSlot::new_changed(U256::from(1), U256::from(2));
+        let unchanged = StorageSlot::new(U256::from(7));
+
+        let bsi = BundleStateIndex {
+            state: vec![(
+                Address::repeat_byte(0xa),
+                AcctDiff {
+                    outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+                    storage_diff: vec![
+                        (U256::from(3), Cow::Owned(changed)),
+                        (U256::from(4), Cow::Owned(unchanged)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            // Trailing contracts that an over-large slot count would consume as phantom storage.
+            new_contracts: vec![(
+                B256::repeat_byte(0xb),
+                Cow::Owned(Bytecode::new_raw(Bytes::from(vec![1, 2, 3]))),
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let expected = BundleStateIndex {
+            state: vec![(
+                Address::repeat_byte(0xa),
+                AcctDiff {
+                    outcome: InfoOutcome::Created(Cow::Owned(sample_info())),
+                    storage_diff: vec![(U256::from(3), Cow::Owned(changed))].into_iter().collect(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            new_contracts: vec![(
+                B256::repeat_byte(0xb),
+                Cow::Owned(Bytecode::new_raw(Bytes::from(vec![1, 2, 3]))),
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let enc = bsi.encoded();
+        assert_eq!(enc.len(), bsi.serialized_size());
+        let decoded = <BundleStateIndex<'static> as JournalDecode>::decode(&mut enc.as_ref())
+            .expect("index with an unchanged slot should decode");
+        assert_eq!(decoded, expected);
     }
 }
